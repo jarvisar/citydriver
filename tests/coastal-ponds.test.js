@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import * as THREE from 'three';
 import { CoastalChunk } from '../src/world/environment.js';
 import { pondAt, pondRadius, terrainCell, CHUNK_LENGTH } from '../src/world/route.js';
 
@@ -24,6 +25,45 @@ test('pond banks retain hillside-sized faces instead of a ring of tiny subdivisi
   assert.ok(areas[Math.floor(areas.length / 2)] > 35, 'typical pond-bank facets must remain broad');
 });
 
+test('damp pond margins and shoreline sedges stay grounded on the rendered bank', () => {
+  let plants = 0, margins = 0;
+  for (const index of [-1, 0, 4]) {
+    const pond = pondAt(246 + index * 704);
+    for (let i = Math.floor((pond.center - pond.rs * 1.5) / CHUNK_LENGTH); i <= Math.floor((pond.center + pond.rs * 1.5) / CHUNK_LENGTH); i++) {
+      const chunk = new CoastalChunk(i);
+      try {
+        const bank = chunk.group.getObjectByName(`pond-damp-bank-${index}`);
+        if (bank) {
+          const positions = bank.geometry.attributes.position;
+          for (let v = 0; v < positions.count; v += 3) {
+            const center = new THREE.Vector3();
+            for (let j = 0; j < 3; j++) center.add(new THREE.Vector3().fromBufferAttribute(positions, v + j));
+            center.multiplyScalar(1 / 3);
+            const height = chunk.sampleGround(center.x, center.z);
+            assert.notEqual(height, null);
+            assert.ok(Math.abs(center.y - height - .025) < .002, 'damp margin must follow the terrain plane');
+            assert.ok(center.y >= pond.level && center.y < pond.level + .52, 'damp earth stays beside the waterline');
+            margins++;
+          }
+        }
+        const sedges = chunk.group.getObjectByName('pond-shore-sedges');
+        if (!sedges) continue;
+        assert.equal(sedges.castShadow, false);
+        assert.equal(sedges.userData.ambientOcclusion, false);
+        const matrix = new THREE.Matrix4(), position = new THREE.Vector3();
+        for (let plant = 0; plant < sedges.count; plant++) {
+          sedges.getMatrixAt(plant, matrix); position.setFromMatrixPosition(matrix);
+          const height = chunk.sampleGround(position.x, position.z);
+          assert.notEqual(height, null);
+          assert.ok(Math.abs(position.y - height + .08) < .002, 'sedge roots must touch the rendered ground');
+          plants++;
+        }
+      } finally { chunk.dispose(); }
+    }
+  }
+  assert.ok(plants > 20 && margins > 20, 'several ponds must carry grounded shore detail');
+});
+
 test('pond water closes against the rendered bank without detached grid edges or streaming gaps', () => {
   for (const index of [-2, -1, 0, 1, 4, 17]) {
     const pond = pondAt(246 + index * 704), chunks = [];
@@ -31,7 +71,22 @@ test('pond water closes against the rendered bank without detached grid edges or
     try {
       const edges = new Map();
       let area = 0;
-      const key = p => `${p.x.toFixed(3)},${p.z.toFixed(3)}`;
+      // Adjacent chunks store z relative to different origins in Float32.
+      // Weld within a fraction of a millimetre instead of rounding either
+      // side of an arbitrary decimal boundary into two disconnected keys.
+      const buckets = new Map(); let nextVertex = 0;
+      const key = p => {
+        const x = Math.floor(p.x * 1000), z = Math.floor(p.z * 1000);
+        for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) {
+          for (const other of buckets.get(`${x + dx},${z + dz}`) ?? []) {
+            if (Math.hypot(other.x - p.x, other.z - p.z) < .00015) return other.id;
+          }
+        }
+        const bucket = `${x},${z}`;
+        if (!buckets.has(bucket)) buckets.set(bucket, []);
+        const id = nextVertex++;
+        buckets.get(bucket).push({...p, id}); return id;
+      };
       for (const chunk of chunks) {
         const mesh = chunk.group.getObjectByName(`inland-pond-${index}`);
         if (!mesh) continue;

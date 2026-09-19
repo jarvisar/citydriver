@@ -1,16 +1,17 @@
 import * as THREE from 'three';
 import { registerChunkResources } from './chunk-resources.js';
-import { bridgeAt, pondAt, pondRadius, roadHeight, groundHeight, positionAt, terrainCell, terrainColumns, randomAt, TERRAIN_STEP, CHUNK_LENGTH } from './route.js';
+import { bridgeAt, pondAt, pondRadius, roadHeight, groundHeight, positionAt, terrainCell, terrainColumns, randomAt, smoothstep, TERRAIN_STEP, CHUNK_LENGTH } from './route.js';
 import { createPondMaterial } from './water.js';
 
 const bridgeMaterial = new THREE.MeshStandardMaterial({ color: '#d8c9ab', emissive: '#766b54', emissiveIntensity: .08, roughness: 1, flatShading: true, side: THREE.DoubleSide });
 const lakeMaterial = createPondMaterial();
-registerChunkResources('landmarks', { bridgeMaterial, lakeMaterial });
+const bankMaterial = new THREE.MeshStandardMaterial({vertexColors: true, flatShading: true, roughness: 1, transparent: true, depthWrite: false});
+registerChunkResources('landmarks', { bridgeMaterial, lakeMaterial, bankMaterial });
 
-function geometry(vertices, colors) {
+function geometry(vertices, colors, colorSize = 3) {
   const result = new THREE.BufferGeometry();
   result.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
-  if (colors) result.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+  if (colors) result.setAttribute('color', new THREE.Float32BufferAttribute(colors, colorSize));
   result.computeVertexNormals(); result.computeBoundingSphere(); return result;
 }
 
@@ -53,8 +54,23 @@ function buildBridge(chunk, bridge) {
 
 function buildPond(chunk, pond) {
   if (pond.center + pond.rs * 1.5 < chunk.start || pond.center - pond.rs * 1.5 > chunk.start + CHUNK_LENGTH) return;
-  const vertices = [], colors = [];
-  const shallow = new THREE.Color('#5cacb3'), deep = new THREE.Color('#317f99');
+  const vertices = [], colors = [], bankVertices = [], bankColors = [];
+  const shallow = new THREE.Color('#6eaaa2'), deep = new THREE.Color('#397d88');
+  const dampEarth = new THREE.Color('#697b4b');
+  const marginWidth = p => .28 + .2 * Math.sin(p.s / 11 + p.u / 7);
+  const clip = (polygon, distance) => {
+    const result = [];
+    for (let i = 0; i < polygon.length; i++) {
+      const a = polygon[i], b = polygon[(i + 1) % polygon.length], da = distance(a), db = distance(b);
+      if (da >= 0) result.push(a);
+      if ((da >= 0) !== (db >= 0)) {
+        const t = da / (da - db), p = {};
+        for (const axis of ['x', 'y', 'z', 's', 'u']) p[axis] = a[axis] + (b[axis] - a[axis]) * t;
+        result.push(p);
+      }
+    }
+    return result;
+  };
   // Slice the actual terrain faces at the waterline. An independent square
   // water grid left exposed teeth and detached patches beyond the coarse bank.
   // Using the terrain's global rows also matches its jittered streaming seams.
@@ -63,22 +79,24 @@ function buildPond(chunk, pond) {
     for (let col = 15; col < terrainColumns(row * TERRAIN_STEP).length - 1; col++) {
       for (const triangle of terrainCell(row, col)) {
         if (!triangle.some(p => p.y < pond.level && pondRadius(p.s, p.u, pond) < 1.12)) continue;
-        const polygon = [];
-        for (let i = 0; i < 3; i++) {
-          const a = triangle[i], b = triangle[(i + 1) % 3];
-          const wetA = a.y < pond.level, wetB = b.y < pond.level;
-          if (wetA) polygon.push(a);
-          if (wetA !== wetB) {
-            const t = (pond.level - a.y) / (b.y - a.y);
-            polygon.push({ x: a.x + (b.x - a.x) * t, y: pond.level, z: a.z + (b.z - a.z) * t });
-          }
+        // A narrow damp margin lies on the same terrain planes. Its width
+        // varies along the shore; it is not a separate raised oval rim.
+        const bank = clip(clip(triangle, p => p.y - pond.level),
+          p => pond.level + marginWidth(p) - p.y);
+        for (let i = 1; i < bank.length - 1; i++) for (const p of [bank[0], bank[i + 1], bank[i]]) {
+          // Show the underlying meadow through the damp margin and fade all
+          // the way out at its dry edge, rather than drawing a colored outline.
+          const alpha = .24 * (1 - smoothstep(0, marginWidth(p), p.y - pond.level));
+          bankVertices.push(p.x, p.y + .025, p.z + chunk.start);
+          bankColors.push(dampEarth.r, dampEarth.g, dampEarth.b, alpha);
         }
+        const polygon = clip(triangle, p => pond.level - p.y);
         if (polygon.length < 3) continue;
         // Broad, quiet color facets follow the same faces as the hillside.
         // Avoid a smooth cyan halo that makes the pond look airbrushed in.
         const depth = polygon.reduce((sum, p) => sum + pond.level - p.y, 0) / polygon.length;
-        const color = shallow.clone().lerp(deep, Math.min(1, depth / 2.4));
-        color.multiplyScalar(.97 + randomAt(row, col + 2201) * .06);
+        const color = shallow.clone().lerp(deep, .28 + Math.min(1, depth / 2.8) * .65);
+        color.multiplyScalar(.985 + randomAt(row, col + 2201) * .03);
         for (let i = 1; i < polygon.length - 1; i++) {
           // Terrain cells wind downward; the water is viewed from above.
           for (const p of [polygon[0], polygon[i + 1], polygon[i]]) {
@@ -92,6 +110,11 @@ function buildPond(chunk, pond) {
   const mesh = chunk.addMesh(geometry(vertices, colors), lakeMaterial);
   mesh.name = `inland-pond-${pond.index}`;
   mesh.geometry.boundingSphere.radius += .3;
+  if (bankVertices.length) {
+    const bank = chunk.addMesh(geometry(bankVertices, bankColors, 4), bankMaterial);
+    bank.name = `pond-damp-bank-${pond.index}`;
+    bank.userData.ambientOcclusion = false;
+  }
   chunk.features.ponds.push(pond.index);
 }
 

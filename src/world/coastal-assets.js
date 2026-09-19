@@ -123,6 +123,32 @@ export const coastalPines = [pine(1), pine(2)];
 export const coastalCypress = coastalTree();
 export const coastalMontereyPine = coastalTree(true);
 
+function sedge() {
+  const vertices = [], colors = [];
+  for (let blade = 0; blade < 9; blade++) {
+    const angle = blade * 2.4, height = .5 + randomAt(blade, 2271) * .55;
+    const x = Math.cos(angle), z = Math.sin(angle), width = .065;
+    const base = [x * .12, -.08, z * .12];
+    const left = [base[0] - z * width, 0, base[2] + x * width];
+    const right = [base[0] + z * width, 0, base[2] - x * width];
+    const mid = [x * .3, height * .64, z * .3], tip = [x * .55, height, z * .55];
+    for (const triangle of [[left, right, mid], [right, tip, mid]]) {
+      for (const p of [...triangle, ...triangle.toReversed()]) {
+        vertices.push(...p);
+        const light = .78 + Math.max(0, p[1]) * .22;
+        colors.push(light, light, light * .91);
+      }
+    }
+  }
+  const g = geometry(vertices, colors);
+  // Both sides receive sky light. Flipped card normals make the far-facing
+  // half of a clump black even though these narrow leaves transmit daylight.
+  const normals = g.attributes.normal;
+  for (let i = 0; i < normals.count; i++) normals.setXYZ(i, 0, 1, 0);
+  return g;
+}
+export const coastalSedge = sedge();
+
 // Bucket projected terrain triangles once; grounding hundreds of plants then
 // only visits a few nearby faces instead of raycasting the whole chunk.
 export function terrainSampler(mesh) {

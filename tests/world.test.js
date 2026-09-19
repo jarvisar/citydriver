@@ -120,9 +120,17 @@ test('pond basins contain their water, including where landmark intervals overla
     assert.ok(groundHeight(pond.center, pond.u) < pond.level - 1);
     for (let step = 0; step < 24; step++) {
       const angle = step / 24 * Math.PI * 2;
-      const shape = 1 + .09 * Math.sin(angle * 3 + pond.index) + .045 * Math.sin(angle * 5);
-      const s = pond.center + Math.cos(angle) * pond.rs * shape * 1.12;
-      const u = pond.u + Math.sin(angle) * pond.ru * shape * 1.12;
+      // Follow the actual bent basin instead of assuming a symmetric oval.
+      // Every ray must reach a dry retaining bank before leaving the basin.
+      let low = .4, high = 1.8;
+      for (let i = 0; i < 20; i++) {
+        const radius = (low + high) / 2;
+        const s = pond.center + Math.cos(angle) * pond.rs * radius;
+        const u = pond.u + Math.sin(angle) * pond.ru * radius;
+        if (pondRadius(s, u, pond) < 1.12) low = radius; else high = radius;
+      }
+      const s = pond.center + Math.cos(angle) * pond.rs * high;
+      const u = pond.u + Math.sin(angle) * pond.ru * high;
       assert.ok(groundHeight(s, u) > pond.level + .5, `pond ${index} leaks through its bank`);
     }
   }
