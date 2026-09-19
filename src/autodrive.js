@@ -2,6 +2,8 @@ import { clamp } from './world/route.js';
 
 const LANE = 2.4;
 const CLEARANCE = 12;
+const LATERAL = 2.8;   // metres per second of lane change
+const MARGIN = 1.8;    // seconds still to spare once the pass ends; lower passes more often
 
 // Two lanes, one passing target. Wait behind traffic until the whole pass fits.
 export class Autodrive {
@@ -35,8 +37,11 @@ export class Autodrive {
               (car.s - last.s) * frame.scale < (car.spec.length + last.spec.length) / 2 + CLEARANCE * 2) last = car;
           }
         }
+        // Time to draw level and pull back in, plus half the run-up to top
+        // speed -- the car covers ground while it accelerates, so charging the
+        // whole ramp on top of the overtake refuses passes that comfortably fit.
         const time = (ahead(last) + halfLength(last) + CLEARANCE) / Math.max(1, topSpeed - last.speed)
-          + Math.max(0, topSpeed - player.speed) / acceleration + 3;
+          + Math.max(0, topSpeed - player.speed) / (2 * acceleration) + MARGIN;
         const clear = cars.every(car => car.u > 0 || ahead(car) < -halfLength(car) - CLEARANCE ||
           ahead(car) > (topSpeed + Math.max(car.speed, car.cruiseSpeed)) * time + halfLength(car) + CLEARANCE);
         if (clear && topSpeed > last.speed + 2) this.passing = last;
@@ -45,19 +50,23 @@ export class Autodrive {
 
     const lane = this.passing ? -LANE : LANE;
     let speed = topSpeed;
-    // While changing lanes, keep braking for anything still in our footprint.
+    // Brake only for cars we would still be sharing a lane with on arrival, not
+    // for ones the lane change clears first -- otherwise pulling out behind the
+    // car being passed brakes hard at the exact moment the pass needs the speed.
     // Following uses relative stopping distance, allowing a steady matching speed.
     for (const car of cars) {
-      if (Math.abs(car.u - player.u) > (car.spec.width + player.spec.width) / 2 + .35) continue;
       const gap = ahead(car) - halfLength(car);
       if (gap < -halfLength(car) * 2) continue;
       const moving = car.direction > 0 ? car.speed : 0;
+      const reach = Math.max(0, gap) / Math.max(.5, player.speed - car.direction * car.speed);
+      const u = player.u + clamp(lane - player.u, -LATERAL * reach, LATERAL * reach);
+      if (Math.abs(car.u - u) > (car.spec.width + player.spec.width) / 2 + .35) continue;
       speed = Math.min(speed, Math.sqrt(moving * moving + 2 * touchBraking * Math.max(0, gap - CLEARANCE)));
       if (gap < CLEARANCE) speed = Math.min(speed, moving * Math.max(0, gap) / CLEARANCE);
     }
     // Reuse the existing assisted driving input for acceleration, braking and
     // road-relative steering. Lateral speed is bounded for smooth lane changes.
-    const across = clamp((lane - player.u) * 1.6, -2.8, 2.8) / Math.max(4, player.speed);
+    const across = clamp((lane - player.u) * 1.6, -LATERAL, LATERAL) / Math.max(4, player.speed);
     return { touchDrive: {
       amount: speed / topSpeed,
       along: Math.sqrt(1 - across * across) / frame.scale,
