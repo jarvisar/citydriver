@@ -30,35 +30,46 @@ export function createPondMaterial() {
 }
 
 export function createWaterMaterial(lake = false) {
+  return animatedWaterMaterial({ lake });
+}
+
+export function createRiverMaterial() {
+  return animatedWaterMaterial({ lake: true, river: true });
+}
+
+function animatedWaterMaterial({ lake = false, river = false }) {
   const material = createPondMaterial();
   material.onBeforeCompile = shader => {
     shader.uniforms.coastTime = waterClock.time; shader.uniforms.coastOrigin = waterClock.origin;
-    shader.vertexShader = declarations + shader.vertexShader;
+    shader.vertexShader = declarations + (river ? 'attribute vec2 riverCoord;\n' : '') + shader.vertexShader;
     shader.vertexShader = shader.vertexShader.replace('#include <begin_vertex>', `
       #include <begin_vertex>
       vec4 waterWorld = modelMatrix * vec4(position, 1.0);
-      vWaterCoord = vec2(waterWorld.x, waterWorld.z - coastOrigin);
+      vWaterCoord = ${river ? 'riverCoord' : 'vec2(waterWorld.x, waterWorld.z - coastOrigin)'};
       ${lake ? '// Pond ripples stay in the surface shading so the clipped shoreline stays sealed.' : 'transformed.y += swell(vWaterCoord) * 0.19;'}
     `);
     shader.fragmentShader = declarations + shader.fragmentShader;
     shader.fragmentShader = shader.fragmentShader.replace('#include <color_fragment>', `
       #include <color_fragment>
-      vec2 q = vWaterCoord * 0.0015339807879;
-      vec2 drift = vWaterCoord / 64.0 + vec2(-coastTime * 0.013, coastTime * 0.007);
+      // River coordinates follow the banks. Advect every layer together at
+      // 0.55 metres per second, so the highlights travel with the current.
+      vec2 waterCoord = vWaterCoord ${river ? '- vec2(0.0, coastTime * 0.55)' : ''};
+      vec2 q = waterCoord * 0.0015339807879;
+      vec2 drift = waterCoord / 64.0 ${river ? '' : '+ vec2(-coastTime * 0.013, coastTime * 0.007)'};
       float bend = waterNoise(drift * 2.0);
       float detail = waterNoise(drift * 4.0 + vec2(19.3, 7.1));
       // Distort the crests and break them into uneven patches instead of
       // intersecting regularly spaced sine bands (which read as a grid).
-      float phase = q.x * 284.0 + q.y * 92.0 - coastTime * 1.3
+      float phase = q.x * 284.0 + q.y * 92.0 ${river ? '' : '- coastTime * 1.3'}
         + (bend - 0.5) * 4.0 + (detail - 0.5) * 1.2;
       float wave = sin(phase);
       float crestPatch = waterNoise(drift * 8.0 + vec2(bend * 1.7, 11.6));
       float glint = pow(max(0.0, wave), 24.0) * smoothstep(0.38, 0.73, crestPatch);
-      diffuseColor.rgb *= 0.97 + 0.035 * swell(vWaterCoord);
+      diffuseColor.rgb *= 0.97 + 0.035 * ${river ? '(sin(q.x * 83.0 + q.y * 29.0) + 0.45 * sin(q.x * 47.0 - q.y * 53.0))' : 'swell(vWaterCoord)'};
       diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.79, 0.94, 0.91), glint * ${lake ? '0.035' : '0.055'});
     `);
   };
-  material.customProgramCacheKey = () => `coast-water-${lake ? 'lake' : 'ocean'}-v4`;
+  material.customProgramCacheKey = () => `coast-water-${river ? 'river' : lake ? 'lake' : 'ocean'}-v5`;
   return material;
 }
 

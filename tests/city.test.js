@@ -130,6 +130,15 @@ test('rain wraps around the car, pauses with the clock, and lightning is rare an
   for (let i = 1; i < 300; i += 3) if (later[i] < first[i]) fell++;
   assert.ok(fell > 80);
   assert.equal(rain.points.position.z, anchor.z + 1024 - 1024);
+  // Rain keeps falling vertically even after a long drive; horizontal wind
+  // must not accumulate or oscillate faster as the scene clock grows.
+  for (const time of [1.5, 300, 3600]) {
+    rain.update(time, anchor, 0);
+    for (let i = 0; i < first.length; i += 3) {
+      assert.equal(rain.geometry.attributes.position.array[i], first[i], 'rain drifts sideways');
+      assert.equal(rain.geometry.attributes.position.array[i + 2], first[i + 2], 'rain drifts along the road');
+    }
+  }
   rain.dispose();
   let lit = 0, peak = 0;
   for (let t = 0; t < 600; t += .05) { const f = lightning(t); if (f > .05) lit++; peak = Math.max(peak, f); }
