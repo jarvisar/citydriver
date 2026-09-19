@@ -55,7 +55,7 @@ export class GamepadInput {
     this.state = paused ? {} : state;
     const pause = pressed(9), view = pressed(2), reset = pressed(3), nextJourney = pressed(5);
     const journey = pressed(8), fullscreen = pressed(4), fps = pressed(11), car = pressed(10);
-    const back = pressed(1), confirm = pressed(0);
+    const back = pressed(1), confirm = pressed(0), autodrive = pressed(12);
     const previous = pressed(14) || pressed(17), next = pressed(15) || pressed(18);
     const up = pressed(12) || pressed(19), down = pressed(13) || pressed(20);
     this.previousButtons = buttons;
@@ -91,6 +91,7 @@ export class GamepadInput {
       return;
     }
     if (state.forward || state.brake) this.onAction('drive');
+    if (autodrive) this.onAction('autodrive');
     if (view) this.onAction('view');
     if (reset) this.onAction('reset');
   }

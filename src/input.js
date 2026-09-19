@@ -48,6 +48,7 @@ export class Input {
         if (e.code === 'KeyR') onAction('reset');
         if (e.code === 'KeyV') onAction('view');
         if (e.code === 'KeyM') onAction('sound');
+        if (e.code === 'KeyH' && !e.ctrlKey && !e.metaKey && !e.altKey) onAction('autodrive');
         if (e.code === 'KeyO' && !e.ctrlKey && !e.metaKey && !e.altKey) onAction('ambientOcclusion');
         if (e.code === 'KeyN' && !e.ctrlKey && !e.metaKey && !e.altKey) onAction('nextJourney');
         if (['KeyC', 'KeyG'].includes(e.code) && !e.ctrlKey && !e.metaKey && !e.altKey) onAction('car');

@@ -65,6 +65,18 @@ test('scene shortcut works paused and consumes presses made in a modal', () => {
   assert.deepEqual(actions, ['nextJourney', 'nextJourney']);
 });
 
+test('D-pad Up toggles autodrive once while driving and remains navigation in menus', () => {
+  const { input, device, actions } = fixture();
+  hold(device, 12); input.update(); input.update();
+  assert.deepEqual(actions, ['autodrive']);
+  hold(device, 12, 0); input.update();
+  hold(device, 12); input.update({ paused: true, menu: 'pause' });
+  assert.deepEqual(actions, ['autodrive', 'menuUp']);
+  hold(device, 12, 0); input.update();
+  hold(device, 12); input.update({ menu: true });
+  assert.deepEqual(actions, ['autodrive', 'menuUp', 'menuUp']);
+});
+
 test('chooser routes controller inputs to navigation without driving', () => {
   const { input, device, actions } = fixture();
   for (const [index, action] of [[15, 'menuNext'], [14, 'menuPrevious'], [12, 'menuUp'], [13, 'menuDown'], [0, 'menuConfirm'], [1, 'menuClose'], [8, 'menuClose'], [10, 'menuClose'], [4, 'fullscreen']]) {

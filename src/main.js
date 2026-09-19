@@ -16,6 +16,7 @@ import { ChunkWorker } from './world/chunk-source.js';
 import { setResidentWindow } from './world/resident.js';
 import { DrivingController } from './vehicle.js';
 import { Traffic } from './traffic.js';
+import { Autodrive } from './autodrive.js';
 import { Input } from './input.js';
 import { touchDrivingInput, thirdPersonDrivingInput } from './touch-stick.js';
 import { DriveAudio } from './audio.js';
@@ -29,7 +30,7 @@ const MENU_MOVES = ['menuNext', 'menuPrevious', 'menuUp', 'menuDown'];
 // A chooser's ring holds its cards and paint chips; the pause screen's holds
 // resume, the garage and every driving, sound and graphics setting.
 const MENU_CARDS = '[data-journey], [data-car], [data-paint]';
-const PAUSE_CONTROLS = '#resume, #change-car, #traffic, #sound, #fullscreen, [data-quality], #soft-shading, .pwa-install-button';
+const PAUSE_CONTROLS = '#resume, #change-car, #autodrive, #traffic, #sound, #fullscreen, [data-quality], #soft-shading, .pwa-install-button';
 const mileageFormat = new Intl.NumberFormat('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 let paused = false, started = false, time = 0, hudTime = 0;
 const frameClock = new FrameClock();
@@ -86,6 +87,8 @@ async function boot() {
     const openPauseMenu = () => paused && !pauseOverlay.hidden ? pauseOverlay : null;
     scene.add(vehicle.car);
     const traffic = new Traffic(scene, vehicle.route, vehicle.s);
+    const autodrive = new Autodrive();
+    $('#autodrive').addEventListener('click', () => action('autodrive'));
     const trafficStorageKey = 'coastline-traffic';
     try { traffic.setEnabled(localStorage.getItem(trafficStorageKey) !== 'false', vehicle); } catch { /* Storage is optional. */ }
     $('#traffic').setAttribute('aria-pressed', String(traffic.enabled));
@@ -99,6 +102,7 @@ async function boot() {
     function start() { if (paused || changingJourney) return; if (!started) { started = true; $('#welcome').classList.add('hidden'); } }
     function setPaused(value) {
       paused = value; input.clear(); frameClock.suspend();
+      if (!paused && autodrive.enabled) start();
       if (paused) { clearTimeout(toastTimer); $('#toast').classList.remove('show'); }
       audio.setPaused(paused);
       pauseOverlay.hidden = !paused; $('#pause').setAttribute('aria-pressed', String(paused)); $('#pause').setAttribute('aria-label', paused ? 'Resume' : 'Pause');
@@ -191,6 +195,7 @@ async function boot() {
       carId = id;
       try { localStorage.setItem(carStorageKey, id); } catch { /* Still drive it for this visit. */ }
       vehicle.setCar(id, { paint }); vehicle.render(1, world.origin);
+      autodrive.reset();
       rendering.update(vehicle.car, 0, world.origin);
       updateCarUi(); updateHud(); needsRender = true;
       toast(`${carEntry(id).name} selected`);
@@ -232,6 +237,7 @@ async function boot() {
         savedJourneys[id] = nextState;
         if (regenerate) { time = 0; hudTime = 0; vehicle.wheelSpin = 0; }
         vehicle.setRoute(JOURNEYS[id].route, nextState);
+        autodrive.reset();
         vehicle.setAppearance(id);
         vehicle.setLights(id === 'snow' ? 1 : id === 'city' ? .35 : 0);
         traffic.reset(vehicle.route, vehicle.s, id); traffic.render(1, world.origin);
@@ -316,6 +322,14 @@ async function boot() {
       }
       if (name === 'journey') { openJourneys(); return; }
       if (name === 'car') { openCars(); return; }
+      if (name === 'autodrive') {
+        const enabled = autodrive.toggle();
+        if (enabled) input.clear();
+        $('#autodrive').setAttribute('aria-pressed', String(enabled));
+        if (enabled) start();
+        toast(`Autodrive ${enabled ? 'on' : 'off'}`);
+        return;
+      }
       if (name === 'drive') start();
       if (name === 'pause') setPaused(!paused);
       if (name === 'reset') { await changeJourney(journey, { regenerate: true }); return; }
@@ -457,7 +471,9 @@ async function boot() {
       $('#touch-stick').setAttribute('aria-label', thirdPerson ? 'Virtual joystick: up to accelerate, left and right to steer, down to brake or reverse, release to stop' : 'Virtual joystick');
     }
     const simulate = dt => {
-      const state = started ? input.state : {};
+      let state = started ? input.state : {};
+      if (autodrive.enabled && (state.forward || state.brake || state.left || state.right || state.handbrake || state.touchStick)) action('autodrive');
+      if (autodrive.enabled && started) state = autodrive.update(vehicle, traffic);
       if (state.touchStick) {
         if (rendering.camera.isPerspectiveCamera) Object.assign(state, thirdPersonDrivingInput(state.touchStick));
         else state.touchDrive = touchDrivingInput(state.touchStick, rendering.camera, vehicle.route, vehicle.s, vehicle.u, world.origin);

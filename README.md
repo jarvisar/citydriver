@@ -100,6 +100,8 @@ A change made by Auto says so in a toast, so the picture never changes without e
 
 ## Controls
 
+**Autodrive:** press **H**, press **D-pad Up** while driving, or toggle **Autodrive** in the pause menu. It aims for the selected car's top speed, passes slower traffic when the opposite lane has enough room, and follows behind until it can pass. Steering, throttle, or braking returns control to you. Autodrive stays enabled through pauses; resume to continue.
+
 Free driving is a hidden keyboard toggle, off by default. Enter **↑ ↑ ↓ ↓ ← → ← → B A** to enable it across all six journeys. Enter the same code again to turn it off and return to the road at the current route position. While enabled, road-distance limits are removed and lane assistance stops pulling the car toward the road when exploring off-road. The mode lasts for the current page session, including car changes, route changes, and Reset; reloading turns it off. There is no menu, touch, or controller shortcut for enabling it.
 
 The interface uses US English, miles per hour (mph) where speeds are quoted, miles, and Fahrenheit (°F). Driving physics and world geometry use meters internally; displayed measurements are converted to US units.
