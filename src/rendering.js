@@ -164,7 +164,7 @@ export function createRendering(canvas, graphics = new Graphics()) {
       scene.background.set('#adb7bf'); updateFog();
       sky.color.set('#d8e0e6'); sky.groundColor.set('#5c6369'); sky.intensity = 2;
       sun.color.set('#e2e9ef'); sun.intensity = 1.3; sunOffset.set(-150, 210, 110);
-      renderer.toneMappingExposure = .64;
+      renderer.toneMappingExposure = .52;
       return;
     }
     const desert = id === 'desert';
