@@ -16,7 +16,7 @@ export const FORMULA_WHEEL = { radius: .38, width: .34, rearWidth: .42, hubRadiu
 const CARBON = '#2e3538', DARK = '#161b1d', SUIT = '#e7e3d5';
 
 export function createFormulaCar(entry) {
-  const parts = { paint: [], details: [], headlights: [], taillights: [] };
+  const parts = { paint: [], details: [], taillights: [] };
   function add(geometry, location, category = 'paint', color) {
     geometry.deleteAttribute('uv');
     geometry.translate(...location);
@@ -79,15 +79,12 @@ export function createFormulaCar(entry) {
     for (const y of [.3, .56]) box([.62, .05, .07], [side * .42, y, z], 'details', CARBON);
     box([.07, .05, .5], [side * .42, .43, z + (z < 0 ? .3 : -.3)], 'details', CARBON);
   }
-  // Running lamps in the nose and a rain light above the diffuser, so the
-  // racer is as legible on the midnight route as every other car.
-  for (const side of [-1, 1]) box([.11, .07, .05], [side * .07, .38, -2.59], 'headlights');
+  // A rear rain light keeps the racer visible on the midnight route.
   box([.14, .12, .05], [0, .92, 2.28], 'taillights');
 
   const mat = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: .58, flatShading: true, ...extra });
   const paint = mat(entry.paint);
   const trim = mat('#ffffff', { vertexColors: true });
-  const front = mat('#fff5cf', { emissive: '#e9cc84', emissiveIntensity: .3 });
   const rear = mat('#8e3328', { emissive: '#e02a12', emissiveIntensity: .15 });
   const tireMaterial = mat('#23282b', { roughness: .9 }), hubMaterial = mat('#c8ccbe', { metalness: .25 });
   const shells = Object.entries(parts).map(([key, geometries]) => [key, mergeGeometries(geometries)]);
@@ -96,7 +93,7 @@ export function createFormulaCar(entry) {
   const car = new THREE.Group(); car.name = 'car-formula';
   const body = new THREE.Group(); car.add(body);
   for (const [key, geometry] of shells) {
-    const mesh = new THREE.Mesh(geometry, { paint, details: trim, headlights: front, taillights: rear }[key]);
+    const mesh = new THREE.Mesh(geometry, { paint, details: trim, taillights: rear }[key]);
     mesh.castShadow = true; mesh.receiveShadow = true; body.add(mesh);
   }
   const { radius, width, rearWidth, hubRadius, x } = FORMULA_WHEEL;
@@ -115,14 +112,14 @@ export function createFormulaCar(entry) {
   car.traverse(stableShadowDepth);
   return {
     car, body, wheels,
-    nightLights: [{ material: front, day: .3, night: 2.2 }, { material: rear, day: .15, night: 2.6 }],
+    nightLights: [{ material: rear, day: .15, night: 2.6 }],
     // A chosen car keeps its own paint and kit on every route.
     applyTrim() {},
     paintCar(color) { paint.color.set(color || entry.paint); },
     disposeModel() {
       for (const [, geometry] of shells) geometry.dispose();
       for (const geometry of [frontTire, rearTire, hubGeometry]) geometry.dispose();
-      for (const material of [paint, trim, front, rear, tireMaterial, hubMaterial]) material.dispose();
+      for (const material of [paint, trim, rear, tireMaterial, hubMaterial]) material.dispose();
     },
   };
 }

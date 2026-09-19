@@ -24,7 +24,7 @@ test('every car builds a solid, steerable model', () => {
     const model = createCar(id);
     assert.equal(model.wheels.length, 4, `${id} needs four wheels`);
     assert.equal(model.wheels.filter(wheel => wheel.front).length, 2, `${id} needs two steered wheels`);
-    assert.equal(model.nightLights.length, 2, `${id} needs head and tail lamps`);
+    assert.equal(model.nightLights.length, id === 'formula' ? 1 : 2, `${id} needs its running lamps`);
     let meshes = 0;
     model.car.traverse(object => {
       if (!object.isMesh) return;
