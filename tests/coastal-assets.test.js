@@ -96,7 +96,7 @@ test('paved overlooks sit above the rendered terrain through entrances and strea
   for (let index = -5; index <= 5; index++) {
     const overlook = overlookAt(index * 1936 + 80);
     if (!overlook.enabled) continue;
-    for (let chunkIndex = Math.floor((overlook.center - 28) / CHUNK_LENGTH); chunkIndex <= Math.floor((overlook.center + 28) / CHUNK_LENGTH); chunkIndex++) {
+    for (let chunkIndex = Math.floor((overlook.center - 32) / CHUNK_LENGTH); chunkIndex <= Math.floor((overlook.center + 32) / CHUNK_LENGTH); chunkIndex++) {
       const chunk = new CoastalChunk(chunkIndex);
       const neighbors = [chunk, new CoastalChunk(chunkIndex - 1), new CoastalChunk(chunkIndex + 1)];
       try {

@@ -56,7 +56,7 @@ export function overlookAt(s) {
 }
 export function overlookWidth(s) {
   const overlook = overlookAt(s);
-  return 6.05 + (overlook.enabled ? 10 * (1 - smoothstep(12, 28, Math.abs(s - overlook.center))) : 0);
+  return 6.05 + (overlook.enabled ? 10 * (1 - smoothstep(12, 32, Math.abs(s - overlook.center))) : 0);
 }
 export function beachWidth(s) {
   const cell = Math.floor(s / 176);

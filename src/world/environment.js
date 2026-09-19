@@ -258,37 +258,39 @@ export class CoastalChunk {
     for (const [low, high] of ranges) for (let s = this.start; s < this.start + CHUNK_LENGTH; s += 2) {
       if (dashed && Math.floor(s / 4) % 3 === 2) continue;
       const point = (t, u) => { const f = roadFrame(t); return positionAt(t, u, f.y + lift); };
-      const a = point(s, low), b = point(s + 2, low), c = point(s, high), d = point(s + 2, high);
+      const edge = (value, t) => typeof value === 'function' ? value(t) : value;
+      const a = point(s, edge(low, s)), b = point(s + 2, edge(low, s + 2)), c = point(s, edge(high, s)), d = point(s + 2, edge(high, s + 2));
       addTriangle(positions, null, a, b, c, null, this.start); addTriangle(positions, null, b, d, c, null, this.start);
     }
     this.addMesh(geometryFrom(positions), material);
   }
   buildRoad() {
-    this.ribbon([[-6.05, 6.05]], .045, shoulderMaterial);
+    // Carry the shoulder around the pullout instead of through its entrance.
+    this.ribbon([[s => -overlookWidth(s), 6.05]], .045, shoulderMaterial);
     this.ribbon([[-5.5, 5.5]], .075, roadMaterial);
     // Matching markings share geometry and a draw call within each chunk.
     this.ribbon([[-5.05, -4.89], [4.89, 5.05]], .09, lineMaterial);
     this.ribbon([[-.21, -.07], [.07, .21]], .093, centerMaterial);
-    const pavement = [], border = [], markings = [];
+    const pavement = [], markings = [];
     const point = (s, u, lift) => positionAt(s, u, roadFrame(s).y + lift);
-    const strip = (array, s, low, high, endLow = low, endHigh = high, lift = .078) => {
+    const strip = (array, s, low, high, endLow = low, endHigh = high, lift = .075) => {
       const a = point(s, low, lift), b = point(s + 2, endLow, lift), c = point(s, high, lift), d = point(s + 2, endHigh, lift);
       addTriangle(array, null, a, b, c, null, this.start); addTriangle(array, null, b, d, c, null, this.start);
     };
     for (let s = this.start; s < this.start + CHUNK_LENGTH; s += 2) {
       const width = overlookWidth(s), endWidth = overlookWidth(s + 2);
       if (Math.max(width, endWidth) <= 6.06) continue;
-      strip(border, s, -width - .45, -5.8, -endWidth - .45, -5.8, .048);
-      strip(pavement, s, -width, -5.8, -endWidth, -5.8);
+      // Share the road's exact edge, height, and sampling so no pale seam or
+      // overlapping asphalt separates the turnout from the driving surface.
+      strip(pavement, s, -width + .55, -5.5, -endWidth + .55, -5.5);
       if (Math.min(width, endWidth) > 15.8 && Math.floor(s / 2) % 3 === 0) {
         // Short bay dividers on the seaward edge leave room to pull through.
-        const a = point(s, -15.25, .098), b = point(s + .12, -15.25, .098);
+        const a = point(s, -14.85, .098), b = point(s + .12, -14.85, .098);
         const c = point(s, -10.5, .098), d = point(s + .12, -10.5, .098);
         addTriangle(markings, null, a, b, c, null, this.start); addTriangle(markings, null, b, d, c, null, this.start);
       }
     }
     if (pavement.length) {
-      this.addMesh(geometryFrom(border), shoulderMaterial).name = 'overlook-shoulder';
       this.addMesh(geometryFrom(pavement), roadMaterial).name = 'paved-ocean-overlook';
       this.addMesh(geometryFrom(markings), lineMaterial).name = 'overlook-parking-bays';
     }
