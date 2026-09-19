@@ -12,9 +12,11 @@ import { terrainSampler } from './coastal-assets.js';
 import { cityAssets, cityTrees, parkedCars, PARKED_PAINTS } from './city-assets.js';
 import { dressBuilding, buildShopfront, rooftopTank } from './city-architecture.js';
 import { buildPromenade } from './city-promenade.js';
+import { buildCityParking, cityParkingAt } from './city-parking.js';
+import { cityParkLayout, paintCityPark } from './city-surfaces.js';
 import { buildCityRoads } from './city-roads.js';
 import { buildNeighborhoods } from './city-neighborhoods.js';
-import { cityDiscoveries, cityDiscoveryClears, cityLotClears } from './city-discoveries.js';
+import { cityDiscoveries, cityDiscoveryClears, cityLotClears, cityBuildingSpans } from './city-discoveries.js';
 import { buildCityDiscoveries } from './city-discovery-scenery.js';
 import { Rainfall } from './rainfall.js';
 
@@ -92,7 +94,7 @@ export class CityChunk {
     this.discoveries = cityDiscoveries(this.start - 160, this.start + CHUNK_LENGTH + 160);
     this.scenery = { blocks: { vertices: [], colors: [] }, details: { vertices: [], colors: [] }, streets: { vertices: [], colors: [] }, lit: { vertices: [], colors: [] }, skyline: { vertices: [], colors: [] },
       boxes: [], furniture: new Map(), parked: new Map(), bark: new Map(), leaves: new Map() };
-    this.buildTerrain(); this.buildRoad(); this.buildRiver(); this.buildBlocks(); this.buildStreets(); buildPromenade(this); buildCityRoads(this); buildNeighborhoods(this);
+    this.buildTerrain(); this.buildRoad(); this.buildRiver(); this.buildBlocks(); this.buildStreets(); buildPromenade(this); buildCityParking(this); buildCityRoads(this); buildNeighborhoods(this);
     buildCityDiscoveries(this, this.discoveries);
     this.finishScenery();
     finalizeChunkTransforms(this.group);
@@ -112,6 +114,7 @@ export class CityChunk {
   at(s, u, y) { const p = cityPosition(s, u, y); return { x: p.x, y: p.y, z: p.z + this.start }; }
   buildTerrain() {
     const vertices = [], colors = [], cache = new Map();
+    const parks = this.discoveries.filter(site => site.kind === 'square').map(site => ({ site, layout: cityParkLayout(site) }));
     const vertex = (row, col) => {
       const key = `${row},${col}`;
       if (!cache.has(key)) {
@@ -143,14 +146,24 @@ export class CityChunk {
       for (let col = 0; col < CITY_COLUMN_COUNT - 1; col++) {
         const a = vertex(row, col), b = vertex(next, col), c = vertex(row, col + 1), d = vertex(next, col + 1);
         const tris = (row + col) % 2 ? [[a, b, c], [b, d, c]] : [[a, b, d], [a, d, c]];
-        tris.forEach((tri, i) => triangle(vertices, colors, ...tri, this.facetColor(tri, row, col, i), this.start));
+        tris.forEach((tri, i) => {
+          const park = parks.find(({ site }) => tri.some(p => p.s > site.s - site.halfS) && tri.some(p => p.s < site.s + site.halfS) &&
+            tri.some(p => p.u > site.u0) && tri.some(p => p.u < site.u1));
+          if (!park) { triangle(vertices, colors, ...tri, this.facetColor(tri, row, col, i), this.start); return; }
+          const s = tri.reduce((sum, p) => sum + p.s, 0) / 3, u = tri.reduce((sum, p) => sum + p.u, 0) / 3;
+          const grass = lawn.clone().lerp(lawnWet, .5 + .5 * Math.sin(s / 9 + u / 7));
+          paintCityPark(tri, park.layout, (polygon, surface) => {
+            const color = surface === 'grass' ? grass : surface === 'paving' ? paving : this.facetColor(polygon, row, col, i);
+            for (let j = 1; j < polygon.length - 1; j++) triangle(vertices, colors, polygon[0], polygon[j], polygon[j + 1], color, this.start);
+          });
+        });
       }
     }
     this.terrain = this.addMesh(geometry(vertices, colors), terrainMaterial, 'city-ground', true);
     this.sampleGround = terrainSampler(this.terrain);
   }
   facetColor(tri, row, col, i) {
-    const s = tri.reduce((sum, p) => sum + p.s, 0) / 3, u = tri.reduce((sum, p) => sum + p.u, 0) / 3, cross = Math.abs(u);
+    const s = tri.reduce((sum, p) => sum + p.s, 0) / tri.length, u = tri.reduce((sum, p) => sum + p.u, 0) / tri.length, cross = Math.abs(u);
     const facet = randomAt(row * 2 + i, col + 3041);
     let color;
     // Secondary asphalt has its own precisely clipped mesh. Its terrain
@@ -158,11 +171,7 @@ export class CityChunk {
     if (cross <= KERB + .3) color = asphalt.clone();
     else if (cross < 6.6) color = gutter.clone();
     else if (u > 0) {
-      const square = this.discoveries.find(site => site.kind === 'square' && Math.abs(s - site.s) < site.halfS && u > site.u0 && u < site.u1);
-      if (square) {
-        const paved = Math.hypot(s - square.s, u - square.u) < 11.5 || Math.abs(s - square.s) < 2.5 || Math.abs(u - square.u) < 2.5;
-        color = paved ? paving.clone() : lawn.clone().lerp(lawnWet, .5 + .5 * Math.sin(s / 9 + u / 7));
-      } else if (onCrossStreet(s, u) || (u > BANDS[0].back && u < BANDS[1].front) || (u > BANDS[1].back && u < BANDS[2].front) || u < 13) color = pavement.clone();
+      if (onCrossStreet(s, u) || (u > BANDS[0].back && u < BANDS[1].front) || (u > BANDS[1].back && u < BANDS[2].front) || u < 13) color = pavement.clone();
       else if (u < BANDS[2].back) color = lots.clone();
       else if (u < SKYLINE_FROM) color = vacant.clone();
       else color = far.clone().lerp(fog, smoothstep(180, 420, u) * .6);
@@ -190,8 +199,8 @@ export class CityChunk {
   }
   buildRoad() {
     this.ribbon([[-5.5, 5.5]], .075, roadMaterial, 'city-road');
-    this.ribbon([[-6.7, -6.05], [6.05, 6.7]], PAVEMENT_LIFT + .02, kerbMaterial, 'kerbs', onCrossStreet);
-    this.ribbon([[-5.05, -4.89], [4.89, 5.05]], .09, edgeMaterial, 'road-edges', (s, u) => onCrossStreet(s, Math.sign(u) * 7));
+    this.ribbon([[-6.7, -6.05], [6.05, 6.7]], PAVEMENT_LIFT + .02, kerbMaterial, 'kerbs', (s, u) => onCrossStreet(s, u) || (u < 0 && cityParkingAt(s)));
+    this.ribbon([[-5.05, -4.89], [4.89, 5.05]], .09, edgeMaterial, 'road-edges', (s, u) => onCrossStreet(s, Math.sign(u) * 7) || (u < 0 && cityParkingAt(s)));
     this.ribbon([[-.21, -.07], [.07, .21]], .093, centerMaterial, 'center-lines', s => Math.abs(s - crossStreetAt(s).center) < STREET_HALF_WIDTH + 6);
   }
   // The river: one level plane from the far bank to just inside the quay
@@ -297,6 +306,13 @@ export class CityChunk {
     const y0 = Math.min(...heights) - .25, y1 = Math.max(...heights) + b.height;
     const color = new THREE.Color(b.wall);
     this.prism(blocks, s0, s1, u0, u1, y0, y1, color, { top: b.roof !== 'gable', shade: b.shade });
+    if (b.simple) {
+      // Infill uses the existing batch, with a roof cap and broad window
+      // bays instead of shopfronts, stone trim or rooftop equipment.
+      this.prism(blocks, s0, s1, u0, u1, y1, y1 + .35, new THREE.Color(b.roofColor));
+      this.windows(b, y0, seed, 'ribbon');
+      return;
+    }
     if (b.roof === 'gable') {
       const ridge = y1 + (u1 - u0) * .32, um = (u0 + u1) / 2, roof = new THREE.Color(b.roofColor);
       this.quad(blocks, [this.at(s0 - .3, u0 - .3, y1 - .15), this.at(s1 + .3, u0 - .3, y1 - .15), this.at(s1 + .3, um, ridge), this.at(s0 - .3, um, ridge)], roof, [-1, 1, 0]);
@@ -349,18 +365,20 @@ export class CityChunk {
     for (let block = first; block <= last; block++) {
       const start = blockBoundary(block) + STREET_HALF_WIDTH + 1.5, end = blockBoundary(block + 1) - STREET_HALF_WIDTH - 1.5;
       for (const [band, range] of BANDS.entries()) {
-        for (const lot of this.lotsFor(block, band, start, end)) {
+        const spans = cityBuildingSpans(start, end, range.front, range.back, this.discoveries);
+        for (const span of spans) for (const lot of this.lotsFor(block, band, span.s0, span.s1)) {
           const center = (lot.s0 + lot.s1) / 2;
           if (!this.inChunk(center)) continue;
           const seed = (block * 16 + band * 5) * 41 + lot.i, r = k => randomAt(seed, 3121 + k);
-          if (r(0) > [.94, .88, .74][band]) continue;
-          const depth = band === 0 ? 16 + r(1) * 6 : band === 1 ? 18 + r(1) * 18 : 20 + r(1) * 30;
+          if (r(0) > [.98, .95, .94][band]) continue;
+          const simple = r(0) > [.94, .88, .74][band];
+          const depth = band === 0 ? 16 + r(1) * 6 : band === 1 ? 18 + r(1) * 18 : 34 + r(1) * 20;
           const u0 = range.front + (band ? r(2) * 4 : 0), u1 = Math.min(range.back, u0 + depth);
           if (!cityLotClears(lot.s0, lot.s1, u0, u1, this.discoveries)) continue;
-          const storeys = band === 0 ? 3 + Math.floor(r(3) * 4) : band === 1 ? 5 + Math.floor(r(3) * 7) : 8 + Math.floor(r(3) * 11);
+          const storeys = simple ? 3 + Math.floor(r(3) * (band === 2 ? 5 : 3)) : band === 0 ? 3 + Math.floor(r(3) * 4) : band === 1 ? 5 + Math.floor(r(3) * 7) : 8 + Math.floor(r(3) * 11);
           const gable = band === 0 && storeys <= 4 && r(4) < .35;
           this.building({ s0: lot.s0, s1: lot.s1, u0, u1, height: storeys * 3.2 + 1.2, wall: WALLS[Math.floor(r(5) * WALLS.length)], roofColor: ROOFS[Math.floor(r(6) * ROOFS.length)],
-            roof: gable ? 'gable' : 'flat', windows: band === 2 && r(7) < .5 ? 'ribbon' : 'punched', shop: band < 2 && r(8) < (band ? .35 : .85), lit: [.11, .08, .05][band], shade: .96 + r(9) * .08 }, seed);
+            roof: simple ? 'flat' : gable ? 'gable' : 'flat', windows: band === 2 && r(7) < .5 ? 'ribbon' : 'punched', shop: !simple && band < 2 && r(8) < (band ? .35 : .85), lit: [.11, .08, .05][band], shade: .96 + r(9) * .08, simple }, seed);
         }
       }
     }
@@ -424,22 +442,26 @@ export class CityChunk {
     for (let s = Math.ceil((this.start - 4) / 26) * 26 + 5; s < this.start + CHUNK_LENGTH + 4; s += 26) {
       if (!this.inChunk(s) || street(s)) continue;
       if (this.clearAt(s, 7.4)) this.furniture('lamp', s, 7.4, yaw(s));
-      if (this.clearAt(s, -7.4)) this.furniture('lamp', s, -7.4, yaw(s) + Math.PI);
+      const u = cityParkingAt(s, 3) ? -17.2 : -7.4;
+      if (this.clearAt(s, u)) this.furniture('lamp', s, u, yaw(s) + Math.PI);
     }
     for (let s = Math.ceil((this.start - 4) / 18) * 18 + 9; s < this.start + CHUNK_LENGTH + 4; s += 18) {
       const t = s + (randomAt(Math.round(s), 3201) - .5) * 4;
       if (!this.inChunk(t) || street(t)) continue;
-      if (randomAt(Math.round(s), 3202) < .8 && this.clearAt(t, -10.4, 2)) this.tree(t, -10.4, 5.5 + randomAt(Math.round(s), 3203) * 3, TREE_GREENS[Math.abs(Math.round(s / 18)) % 4], random() * 6.28);
+      const u = cityParkingAt(t, 4) ? -17.2 : -10.4;
+      if (randomAt(Math.round(s), 3202) < .8 && this.clearAt(t, u, 2)) this.tree(t, u, 5.5 + randomAt(Math.round(s), 3203) * 3, TREE_GREENS[Math.abs(Math.round(s / 18)) % 4], random() * 6.28);
       if (randomAt(Math.round(s), 3204) < .65 && this.clearAt(t, 10.2, 2)) this.tree(t, 10.2, 5 + randomAt(Math.round(s), 3205) * 2.5, TREE_GREENS[(Math.abs(Math.round(s / 18)) + 1) % 4], random() * 6.28);
     }
     for (let s = Math.ceil((this.start - 4) / 36) * 36 + 20; s < this.start + CHUNK_LENGTH + 4; s += 36) {
-      if (!this.inChunk(s) || street(s) || randomAt(Math.round(s), 3211) > .65 || !this.clearAt(s, -12.8, 1.5)) continue;
-      this.furniture('bench', s, -12.8, yaw(s));
+      const u = cityParkingAt(s, 3) ? -18.4 : -12.8;
+      if (!this.inChunk(s) || street(s) || randomAt(Math.round(s), 3211) > .65 || !this.clearAt(s, u, 1.5)) continue;
+      this.furniture('bench', s, u, yaw(s));
     }
     for (let s = Math.ceil((this.start - 4) / 176) * 176 + 60; s < this.start + CHUNK_LENGTH + 4; s += 176) {
       if (!this.inChunk(s) || street(s)) continue;
       if (randomAt(Math.round(s), 3221) < .7 && this.clearAt(s, 8.6, 2.5)) this.furniture('shelter', s, 8.6, yaw(s));
-      if (randomAt(Math.round(s), 3222) < .5 && this.clearAt(s, -8.6, 2.5)) this.furniture('shelter', s, -8.6, yaw(s) + Math.PI);
+      const u = cityParkingAt(s, 4) ? -18.2 : -8.6;
+      if (randomAt(Math.round(s), 3222) < .5 && this.clearAt(s, u, 2.5)) this.furniture('shelter', s, u, yaw(s) + Math.PI);
     }
     // The quay railing follows the wandering embankment in four-metre runs.
     for (let s = this.start; s < this.start + CHUNK_LENGTH; s += 4) {
@@ -478,18 +500,13 @@ export class CityChunk {
         this.parkedCar(s, u, across(s), index * 100 + Math.round(u) + k * 7, .075);
       }
     }
-    // Cars in the alleys behind the building line, and rows nose-to-river on
-    // the wider stretches of embankment.
+    // Cars in the alleys behind the building line. Waterfront cars belong
+    // to the pull-offs so their placement always agrees with the bay markings.
     for (const alley of [(BANDS[0].back + BANDS[1].front) / 2]) {
       for (let s = Math.ceil((this.start - 4) / 22) * 22 + 6; s < this.start + CHUNK_LENGTH + 4; s += 22) {
         if (!this.inChunk(s) || street(s) || randomAt(Math.round(s), Math.round(alley) + 3241) > .4 || !this.clearAt(s, alley, 2)) continue;
         this.parkedCar(s, alley - 1.6, yaw(s) + (randomAt(Math.round(s), 3242) < .5 ? 0 : Math.PI), Math.round(s) * 3 + Math.round(alley), .075);
       }
-    }
-    for (let s = Math.ceil(this.start / 3.4) * 3.4; s < this.start + CHUNK_LENGTH; s += 3.4) {
-      const q = quayOffset(s);
-      if (q > -35 || randomAt(Math.round(s * 10), 3251) > .6 || street(s) || !this.clearAt(s, q + 6, 2.2)) continue;
-      this.parkedCar(s, q + 6.2, across(s), Math.round(s * 10));
     }
     // Manholes sit flush with the wet asphalt.
     for (let k = 0; k < 2; k++) {

@@ -6,6 +6,7 @@ import { CITY_STEP, CITY_COLUMN_COUNT, KERB, cityColumns, cityVertex, cityHeight
   quayOffset, QUAY_NEAR, QUAY_FAR, QUAY_WALL, RIVER_LEVEL, RIVER_BED, FAR_BANK, FAR_BANK_TOP, farBankHeight, blockBoundary, blockAt, crossStreetAt, onCrossStreet,
   STREET_HALF_WIDTH, BANDS, BANK_ROADS, nearStreet, bankStreetRange, cityPosition, cityStreetHeight, bridgeSurfaceHeight } from '../src/world/city-route.js';
 import { crossRoadHeight } from '../src/world/city-roads.js';
+import { cityParkingForBlock, cityParkingWidth, cityParkingHeight } from '../src/world/city-parking.js';
 import { CityWorld, CityChunk, lightning } from '../src/world/city.js';
 import { Rainfall } from '../src/world/rainfall.js';
 import { DrivingController } from '../src/vehicle.js';
@@ -321,5 +322,39 @@ test('alley asphalt stays inside its curbs instead of bleeding through the surro
         assert.ok(colors.getY(hit.face.a) > .2, `asphalt-colored terrain beyond the sidewalk at ${s}, ${u}`);
       }
     } finally { chunk.dispose(); }
+  }
+});
+
+test('waterfront pull-offs meet the road, stay above the terrain, and join across chunk seams', () => {
+  const sites = Array.from({ length: 120 }, (_, i) => cityParkingForBlock(i - 60)).filter(Boolean);
+  const selected = [-1, 1].map(sign => sites.find(site => Math.sign(site.from) === sign &&
+    Math.floor(site.from / CHUNK_LENGTH) !== Math.floor(site.to / CHUNK_LENGTH)));
+  const ray = new THREE.Raycaster(), down = new THREE.Vector3(0, -1, 0);
+  for (const site of selected) {
+    assert.ok(site, 'include pull-offs crossing positive and negative chunk seams');
+    const first = Math.floor(site.from / CHUNK_LENGTH), last = Math.floor(site.to / CHUNK_LENGTH);
+    const chunks = Array.from({ length: last - first + 1 }, (_, i) => new CityChunk(first + i));
+    for (const chunk of chunks) { chunk.group.position.z = -chunk.start; chunk.group.updateMatrixWorld(true); }
+    const roads = chunks.map(chunk => chunk.group.getObjectByName('city-side-roads'));
+    const terrain = chunks.map(chunk => chunk.terrain), kerbs = chunks.map(chunk => chunk.group.getObjectByName('kerbs'));
+    const samples = [site.from + .5, site.from + 3, site.from + 9, site.to - 3, site.to - .5];
+    for (let s = site.from + 12; s < site.to - 9; s += 7) samples.push(s);
+    for (let index = first + 1; index <= last; index++) samples.push(index * CHUNK_LENGTH - .01, index * CHUNK_LENGTH + .01);
+    try {
+      for (const s of samples) {
+        const width = cityParkingWidth(s, site);
+        for (const u of [-5.7, -6.3, -6.9, -10.5, -14.8]) {
+          if (-u >= width - .15) continue;
+          const p = cityPosition(s, u, 150); ray.set(new THREE.Vector3(p.x, p.y, p.z), down);
+          const road = ray.intersectObjects(roads)[0], ground = ray.intersectObjects(terrain)[0];
+          assert.ok(road && Math.abs(road.point.y - cityParkingHeight(s, u)) < .035, `parking gap or step at ${s}, ${u}`);
+          assert.ok(!ground || ground.point.y < road.point.y, 'terrain does not cover the pull-off');
+          assert.equal(ray.intersectObjects(kerbs).length, 0, 'the boulevard kerb does not block the entrance');
+        }
+        const outside = cityPosition(s, -width - .8, 150);
+        ray.set(new THREE.Vector3(outside.x, outside.y, outside.z), down);
+        assert.equal(ray.intersectObjects(roads).length, 0, 'parking asphalt stops before the riverside footpath');
+      }
+    } finally { chunks.forEach(chunk => chunk.dispose()); }
   }
 });

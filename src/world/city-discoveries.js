@@ -40,7 +40,7 @@ function districtSite(index) {
       // The church takes the first lot of a block, on the corner by the side street.
       const block = blockAt(desired), start = blockBoundary(block);
       const s = start + STREET_HALF_WIDTH + 3 + 14;
-      site = { kind, index, block, s, u: BANDS[0].front + 13, side: 1, halfS: 14, u0: BANDS[0].front - 1, u1: BANDS[0].front + 27 };
+      site = { kind, index, block, s, u: BANDS[0].front + 13, side: 1, halfS: 10, u0: BANDS[0].front - 1, u1: BANDS[0].front + 27 };
     }
   }
   sites.set(index, site);
@@ -63,4 +63,20 @@ export function cityDiscoveryClears(s, u, discoveries, radius = 0) {
 }
 export function cityLotClears(s0, s1, u0, u1, discoveries) {
   return discoveries.every(site => s1 <= site.s - site.halfS || s0 >= site.s + site.halfS || u1 <= site.u0 || u0 >= site.u1);
+}
+
+// Divide the available frontage before laying out lots. Rejecting an entire
+// overlapping lot leaves unnecessary empty ground beside a small landmark.
+export function cityBuildingSpans(s0, s1, u0, u1, discoveries) {
+  let spans = [{ s0, s1 }];
+  for (const site of discoveries) {
+    if (u1 <= site.u0 || u0 >= site.u1) continue;
+    const from = site.s - site.halfS - .7, to = site.s + site.halfS + .7;
+    spans = spans.flatMap(span => {
+      if (span.s1 <= from || span.s0 >= to) return [span];
+      return [{ s0: span.s0, s1: Math.min(span.s1, from) }, { s0: Math.max(span.s0, to), s1: span.s1 }]
+        .filter(part => part.s1 - part.s0 > 9);
+    });
+  }
+  return spans;
 }

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { CHUNK_LENGTH, randomAt, lerp } from './route.js';
 import { blockAt, blockBoundary, nearStreet, bankStreetRange, cityGroundHeight, cityStreetHeight, STREET_HALF_WIDTH } from './city-route.js';
+import { drapeCityLawn } from './city-surfaces.js';
 
 const WALLS = ['#887970', '#96968e', '#78878b', '#8a6960', '#a99d85', '#71808a'];
 const ROOFS = ['#555e63', '#626866', '#6b625c'];
@@ -32,7 +33,8 @@ export function buildNeighborhoods(chunk) {
   function green(target, s, u, width, depth, seed) {
     const c = new THREE.Color('#65745b');
     const corners = [[s - width / 2, u - depth / 2], [s + width / 2, u - depth / 2], [s + width / 2, u + depth / 2], [s - width / 2, u + depth / 2]];
-    chunk.quad(target, corners.map(([a, b]) => ground(a, b, .035)), c, [0, 1, 0]);
+    drapeCityLawn(chunk, target, corners, c);
+    if (!chunk.inChunk(s)) return;
     for (const ds of [-width * .27, width * .22]) tree(target, s + ds, u + (randomAt(seed, Math.round(ds) + 3682) - .5) * depth * .35, 4.2 + randomAt(seed, Math.round(ds) + 3683) * 1.8, seed + Math.round(ds));
   }
   function building(target, s0, s1, u0, u1, height, seed) {
@@ -70,13 +72,13 @@ export function buildNeighborhoods(chunk) {
       for (let k = 0; k < count; k++) {
         const seed = block * 131 + lane * 29 + k, r = j => randomAt(seed, 3671 + j);
         const center = start + width * (k + .5);
-        if (!chunk.inChunk(center)) continue;
         const target = front > 0 ? skyline : blocks;
         const u0 = front + r(0) * 4, u1 = Math.min(back - 1, u0 + 15 + r(1) * 9);
         if (r(2) < .2) {
           green(target, center, (front + back) / 2, width - 5, back - front - 4, seed);
           continue;
         }
+        if (!chunk.inChunk(center)) continue;
         const s0 = center - width / 2 + 1.5 + r(3) * 2.5, s1 = center + width / 2 - 2;
         const height = (lane === 1 ? 6 : 8) + Math.floor(r(4) * (lane > 1 ? 5 : 3)) * 3.4;
         building(target, s0, s1, u0, u1, height, seed);
@@ -89,13 +91,12 @@ export function buildNeighborhoods(chunk) {
     const count = Math.max(1, Math.floor((end - start) / 38));
     for (let k = 0; k < count; k++) {
       const s = start + (end - start) * (k + .5) / count, seed = block * 13 + k;
-      if (!chunk.inChunk(s)) continue;
-      tree(blocks, s, -132, 4.2 + randomAt(seed, 3685), seed);
+      if (chunk.inChunk(s)) tree(blocks, s, -132, 4.2 + randomAt(seed, 3685), seed);
       if (randomAt(seed, 3686) < .7) green(details, s, -177.2, 12, 3.4, seed);
     }
     // Where a short side street stops, the former empty outer block becomes
     // a little green court rather than another repeated cross intersection.
-    if (bankStreetRange(block).from > -245 && chunk.inChunk(blockBoundary(block))) green(blocks, blockBoundary(block), -217, 12, 29, block);
+    if (bankStreetRange(block).from > -245) green(blocks, blockBoundary(block), -217, 12, 29, block);
   }
 
   // Continuous riverfront edge. The rail opens only at a real bridge, so

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { CHUNK_LENGTH, randomAt, roadFrame } from './route.js';
 import { blockAt, blockBoundary, crossStreetAt, nearStreet, onCrossStreet, STREET_HALF_WIDTH, pavementHeight, quayOffset, QUAY_WALL, RIVER_LEVEL, RIVER_BED } from './city-route.js';
+import { cityParkingForBlock, cityParkingAt, cityParkingWidth } from './city-parking.js';
 
 const STONE = new THREE.Color('#aaa99e'), JOINT = new THREE.Color('#80888b');
 const GRASS = ['#6b8058', '#71865e', '#627951'];
@@ -34,10 +35,10 @@ export function buildPromenade(chunk) {
     const t = Math.min(s + 8, end), q0 = quayOffset(s), q1 = quayOffset(t);
     const nearCrossing = Math.abs(s - crossStreetAt(s).center) < STREET_HALF_WIDTH;
     if (!nearCrossing) {
-      patch(s, s + .055, q0 + 1.4, -6.75, JOINT);
+      patch(s, s + .055, q0 + 1.4, cityParkingAt(s) ? -cityParkingWidth(s) - .5 : -6.75, JOINT);
       patch(s, s + .055, 6.75, 13.8, JOINT);
     }
-    for (const u of [-13.9, -9.2, 9.2]) if (!onCrossStreet(s + 4, u)) patch(s, t, u, u + .045, JOINT);
+    for (const u of [-13.9, -9.2, 9.2]) if (!onCrossStreet(s + 4, u) && !(u < 0 && cityParkingAt(s + 4) && -u < cityParkingWidth(s + 4) + .5)) patch(s, t, u, u + .045, JOINT);
     const street = crossStreetAt(s + 4);
     const spans = nearStreet(street.index) ? [[s, Math.min(t, street.center - STREET_HALF_WIDTH)], [Math.max(s, street.center + STREET_HALF_WIDTH), t]] : [[s, t]];
     for (const [from, to] of spans) {
@@ -66,7 +67,8 @@ export function buildPromenade(chunk) {
     const count = Math.max(1, Math.floor((to - from) / 44));
     for (let k = 0; k < count; k++) {
       const s = from + (to - from) * (k + .5) / count, q = quayOffset(s), n = block * 3 + k;
-      const u0 = Math.max(q + (q < -35 ? 12 : 4.5), -28), u1 = -14.5, half = Math.min(11, ((to - from) / count - 8) / 2);
+      const parking = cityParkingForBlock(block), shift = parking ? 6 : 0;
+      const u0 = Math.max(q + (parking || q < -35 ? 12 : 4.5), -28) - shift, u1 = -14.5 - shift, half = Math.min(11, ((to - from) / count - 8) / 2);
       if (!chunk.inChunk(s) || u1 - u0 < 2.2 || !chunk.clearAt(s, (u0 + u1) / 2, half + 2)) continue;
       const y = bed(s - half, s + half, u0, u1, n), u = (u0 + u1) / 2;
       for (const ds of [-half * .56, half * .56]) chunk.tree(s + ds, u, 5.8 + randomAt(n, ds + 3610) * 1.4, GRASS[Math.abs(n) % 3], randomAt(n, ds + 3611) * 6.28, y);
@@ -91,15 +93,6 @@ export function buildPromenade(chunk) {
       chunk.tree(s + ds, u + 2.2, 3.8, '#72865b', yaw);
     }
     chunk.furniture('bin', s + 3.6, u - 3, yaw);
-  }
-
-  // Defined parking bays sit beside the water. Cars and gardens use separate
-  // strips of the embankment, leaving a continuous path beside the railing.
-  for (let s = Math.ceil(chunk.start / 3.4) * 3.4; s < end; s += 3.4) {
-    const q = quayOffset(s), crossing = crossStreetAt(s);
-    if (q > -35 || Math.abs(s - crossing.center) < STREET_HALF_WIDTH + 2 || !chunk.clearAt(s, q + 6, 2.2)) continue;
-    patch(s - 1.52, s - 1.43, q + 3.2, q + 9.4, new THREE.Color('#b4b4a6'));
-    patch(s - 1.52, s + 1.52, q + 3.2, q + 3.29, new THREE.Color('#b4b4a6'));
   }
 
   // Tree pits and drains are attached to their existing street layout, so

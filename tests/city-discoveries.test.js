@@ -2,9 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { cityDiscoveries, cityDiscoveryClears, cityLotClears, CITY_DISCOVERY_SPACING } from '../src/world/city-discoveries.js';
-import { blockBoundary, nearStreet, quayOffset, BANDS } from '../src/world/city-route.js';
+import { blockBoundary, nearStreet, quayOffset, BANDS, cityPosition } from '../src/world/city-route.js';
 import { CityChunk } from '../src/world/city.js';
 import { packChunk, unpackChunk } from '../src/world/chunk-transfer.js';
+import { drapeCityLawn } from '../src/world/city-surfaces.js';
 
 test('city discoveries are sparse, varied, on the street grid, and stable across reversed chunk queries', () => {
   const sites = cityDiscoveries(-100000, 100000);
@@ -60,4 +61,50 @@ test('city discovery meshes survive worker transfer with their sites', () => {
       }
     } finally { original.dispose(); restored.dispose(); }
   }
+});
+
+test('park paths and lawn edges stay clean on both sides of terrain and chunk boundaries', () => {
+  const sites = cityDiscoveries(-30000, 30000).filter(site => site.kind === 'square');
+  const selected = [sites.find(site => site.s < 0), sites.find(site => site.s > 0)];
+  const ray = new THREE.Raycaster(), down = new THREE.Vector3(0, -1, 0);
+  for (const site of selected) {
+    const first = Math.floor((site.s - site.halfS - 1) / 128), last = Math.floor((site.s + site.halfS + 1) / 128);
+    const chunks = Array.from({ length: last - first + 1 }, (_, i) => new CityChunk(first + i));
+    for (const chunk of chunks) { chunk.group.position.z = -chunk.start; chunk.group.updateMatrixWorld(true); }
+    const terrain = chunks.map(chunk => chunk.terrain), samples = [];
+    for (let s = site.s - site.halfS + 1; s < site.s + site.halfS - 1; s += 3.7) {
+      if (Math.abs(s - site.s) < 14) continue;
+      for (const du of [-2.8, -2.2, 0, 2.2, 2.8]) samples.push([s, site.u + du, Math.abs(du) < 2.5]);
+    }
+    for (let u = site.u0 + 1; u < site.u1 - 1; u += 3.3) {
+      if (Math.abs(u - site.u) < 14) continue;
+      for (const ds of [-2.8, -2.2, 0, 2.2, 2.8]) samples.push([site.s + ds, u, Math.abs(ds) < 2.5]);
+      for (const side of [-1, 1]) for (const inset of [-.3, .3]) samples.push([site.s + side * (site.halfS + inset), u, inset > 0]);
+    }
+    try {
+      for (const [s, u, paved] of samples) {
+        const p = cityPosition(s, u, 150); ray.set(new THREE.Vector3(p.x, p.y, p.z), down);
+        const hit = ray.intersectObjects(terrain)[0];
+        assert.ok(hit, `park terrain has a hole at ${s}, ${u}`);
+        const colors = hit.object.geometry.attributes.color, ratio = colors.getX(hit.face.a) / colors.getY(hit.face.a);
+        assert.equal(ratio > .85, paved, `ragged grass/path boundary at ${s}, ${u}`);
+      }
+    } finally { chunks.forEach(chunk => chunk.dispose()); }
+  }
+});
+
+test('courtyard grass follows the rendered terrain without intersecting its facets', () => {
+  const chunk = new CityChunk(0), target = { vertices: [], colors: [] };
+  drapeCityLawn(chunk, target, [[18, -230], [80, -230], [80, -204], [18, -204]], new THREE.Color('#65745b'));
+  const geometry = new THREE.BufferGeometry(); geometry.setAttribute('position', new THREE.Float32BufferAttribute(target.vertices, 3));
+  const material = new THREE.MeshBasicMaterial(), lawn = new THREE.Mesh(geometry, material);
+  const ray = new THREE.Raycaster(), down = new THREE.Vector3(0, -1, 0);
+  try {
+    for (let s = 22; s < 76; s += 3.7) for (let u = -227; u < -207; u += 2.9) {
+      const p = chunk.at(s, u, 150); ray.set(new THREE.Vector3(p.x, p.y, p.z), down);
+      const ground = ray.intersectObject(chunk.terrain)[0], grass = ray.intersectObject(lawn)[0];
+      assert.ok(ground && grass, 'the lawn covers its interior');
+      assert.ok(Math.abs(grass.point.y - ground.point.y - .035) < .001, 'terrain cannot poke through a lawn triangle');
+    }
+  } finally { chunk.dispose(); geometry.dispose(); material.dispose(); }
 });

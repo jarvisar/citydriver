@@ -26,7 +26,10 @@ function fountain() {
 function clockTower() {
   const p = new Parts();
   p.box([9, 4, 0], [16, 8, 9], stone);
-  p.gable([9, 0, 0], 9, 16, 8, 12.2, stone, slate, .4);
+  // The nave runs along x; the shared gable builder runs its ridge along z.
+  const roof = new Parts();
+  roof.gable([0, 0, 0], 9, 16, 8, 12.2, stone, slate, .4);
+  p.parts.push(roof.finish().rotateY(Math.PI / 2).translate(9, 0, 0));
   for (const z of [-4.55, 4.55]) for (const x of [4, 8, 12, 16]) p.box([x, 4.4, z], [1, 3.6, .14], '#2f3a44');
   p.box([0, 12, 0], [6.4, 24, 6.4], stone);
   p.box([0, 24.3, 0], [7, .6, 7], darkStone);
