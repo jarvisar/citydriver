@@ -37,6 +37,52 @@ function terrainSampler(chunk, x, z, reach) {
   };
 }
 
+function buildSnowmen(chunk, site) {
+  const parts = new SnowDiscoveryParts();
+  const figures = site.figures.map((figure, i) => {
+    const p = snowPosition(figure.s, figure.u, 0), z = p.z + chunk.start;
+    const ground = terrainSampler(chunk, p.x, z, 4);
+    const y = ground(p.x, z) ?? snowGroundHeight(figure.s, figure.u);
+    // Face the road and approaching drivers. Each figure sits in the rendered
+    // snow, including where its triangles differ from the analytic hillside.
+    const facing = snowPosition(figure.s - 8, 0, 0);
+    const yaw = Math.atan2(facing.x - p.x, facing.z - p.z);
+    const first = parts.parts.length;
+    const coal = '#28333e', scarf = ['#bd493e', '#d29a44', '#467f83'][i];
+    const ball = (position, scale, color) => {
+      const geometry = new THREE.IcosahedronGeometry(1, 1); geometry.scale(...scale);
+      parts.add(geometry, position, color);
+    };
+    ball([0, .72, 0], [.94, .88, .88], '#e6edf2');
+    ball([0, 1.77, 0], [.7, .7, .66], '#edf2f5');
+    ball([0, 2.65, 0], [.49, .5, .47], '#f2f5f6');
+    parts.add(new THREE.CylinderGeometry(.49, .55, .16, 10), [0, 2.23, 0], scarf);
+    parts.box([.26, 1.92, .64], [.22, .65, .1], scarf, [0, 0, -.12]);
+    parts.add(new THREE.CylinderGeometry(.65, .65, .1, 10), [0, 3.05, 0], coal);
+    parts.add(new THREE.CylinderGeometry(.37, .4, .53, 8), [0, 3.34, 0], coal);
+    parts.add(new THREE.CylinderGeometry(.405, .415, .12, 8), [0, 3.15, 0], scarf);
+    for (const x of [-.17, .17]) ball([x, 2.76, .415], [.065, .068, .06], coal);
+    parts.beam(vector(0, 2.62, .42), vector(0, 2.59, .94), .11, '#e88c39', 7, .012);
+    for (const x of [-.21, -.11, 0, .11, .21]) {
+      ball([x, 2.42 + Math.abs(x) * .35, .42], [.035, .035, .035], coal);
+    }
+    for (const h of [1.48, 1.78, 2.04]) ball([0, h, .65], [.075, .075, .05], coal);
+    for (const side of [-1, 1]) {
+      const elbow = vector(side * 1.08, 1.96, 0), tip = vector(side * 1.63, 2.28, .05);
+      parts.beam(vector(side * .58, 1.85, 0), elbow, .065, '#605044', 5, .05);
+      parts.beam(elbow, tip, .05, '#605044', 5, .025);
+      parts.beam(vector(side * 1.36, 2.12, .025), vector(side * 1.38, 2.43, .02), .035, '#605044', 5, .015);
+    }
+    for (const part of parts.parts.slice(first)) {
+      part.scale(figure.scale, figure.scale, figure.scale);
+      part.rotateY(yaw); part.translate(p.x, y - .12, z);
+    }
+    return { ...figure, x: p.x, z: p.z, ground: y };
+  });
+  chunk.addMesh(parts.finish(), snowDiscoveryMaterial, 'snowmen');
+  return { ...site, figures };
+}
+
 function buildCableCar(chunk, site) {
   const parts = new SnowDiscoveryParts(), random = seededRandom(site.index * 31 + 3151);
   const world = (u, y, ds = 0) => { const p = snowPosition(site.s + ds, u, y); return vector(p.x, y, p.z + chunk.start); };
@@ -247,6 +293,6 @@ export function buildSnowDiscoveries(chunk, discoveries) {
   chunk.features = { discoveries: [] };
   for (const site of discoveries) {
     if (site.s < chunk.start || site.s >= chunk.start + CHUNK_LENGTH) continue;
-    chunk.features.discoveries.push(buildCableCar(chunk, site));
+    chunk.features.discoveries.push(site.kind === 'snowmen' ? buildSnowmen(chunk, site) : buildCableCar(chunk, site));
   }
 }

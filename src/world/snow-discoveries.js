@@ -135,18 +135,30 @@ function cableCarAt(s, index) {
   return worstClearance(s, points).clearance >= 0 ? site(points) : null;
 }
 
+function snowmenAt(s, index) {
+  if (nearFixtures(s, 9)) return null;
+  const u = 11.5;
+  const figures = [-4.5, 0, 4.5].map((ds, i) => ({ s: s + ds, u: u + (i === 1 ? .3 : 0), scale: [.8, 1, .65][i] }));
+  if (figures.some(figure => {
+    const footing = footingRange(figure.s, figure.u, 1.2 * figure.scale);
+    return footing.high - footing.low > 1.3 || nearCabin(figure.s, figure.u);
+  })) return null;
+  return { kind: 'snowmen', index, s, u, figures };
+}
+
 function districtSite(index) {
   if (sites.has(index)) return sites.get(index);
   let site = null;
-  // Roughly half the districts host a line, and a line needs a rare combination
-  // of straight road, deep ledge, flat shore and mountain shelf, so most of the
-  // district gets searched before giving up.
+  // Reuse the established terrain-checked discovery schedule, then give each
+  // kind an equal chance. Easier snowman placement must not make discoveries
+  // more common than the existing cable-car encounters.
   if (randomAt(index, 3101) > 1 - DISTRICT_CHANCE) {
     const desired = index * SNOW_DISCOVERY_SPACING + 3072 + (randomAt(index, 3103) - .5) * 1200;
     for (let step = 0; step < 96 && !site; step++) {
       const s = Math.round(desired / 2) * 2 + (step % 2 ? -1 : 1) * Math.ceil(step / 2) * 30;
       site = cableCarAt(s, index);
     }
+    if (site && randomAt(index, 3102) < .5) site = snowmenAt(site.s, index) ?? site;
   }
   sites.set(index, site);
   if (sites.size > 128) sites.delete(sites.keys().next().value);
@@ -162,10 +174,12 @@ export function snowDiscoveries(first, last) {
   return result;
 }
 
-// Keep trees and boulders off the footings and out from under the ropes.
+// Keep trees and boulders away from snowmen, footings and the ropes.
 export function snowDiscoveryClears(s, u, discoveries, radius = 0) {
-  return discoveries.every(site => Math.abs(s - site.s) > CABLE_ROPE_OFFSET + 4.5 + radius
-    || u < site.lower.u - 5 - radius || u > site.upper.u + 5.5 + radius);
+  return discoveries.every(site => site.kind === 'snowmen'
+    ? site.figures.every(figure => Math.hypot(s - figure.s, u - figure.u) > 3 + radius)
+    : Math.abs(s - site.s) > CABLE_ROPE_OFFSET + 4.5 + radius
+      || u < site.lower.u - 5 - radius || u > site.upper.u + 5.5 + radius);
 }
 
 // Jig-back operation: both cabins wait at the stations, then pass mid-line.

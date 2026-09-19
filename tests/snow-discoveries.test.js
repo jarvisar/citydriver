@@ -15,11 +15,11 @@ const groundUnder = (chunk, x, z) => {
   return ray.intersectObject(chunk.terrain, false)[0]?.point.y ?? null;
 };
 
-test('cable car sites stay rare and stable when streamed in either direction', () => {
+test('snow discovery sites stay rare and stable when streamed in either direction', () => {
   const sites = snowDiscoveries(-150000, 150000);
-  // More districts can host a line, but suitable terrain still keeps them sparse.
+  // The existing district chance and terrain requirements keep both types sparse.
   assert.ok(sites.length > 4 && sites.length < 28, `unexpected discovery count ${sites.length}`);
-  assert.deepEqual([...new Set(sites.map(site => site.kind))], ['cable-car']);
+  assert.deepEqual([...new Set(sites.map(site => site.kind))].sort(), ['cable-car', 'snowmen']);
   assert.deepEqual(snowDiscoveries(-150000, 0).concat(snowDiscoveries(0, 150000)), sites);
   // Adjacent populated districts can search toward one another by up to 2 km each.
   for (let i = 1; i < sites.length; i++) assert.ok(sites[i].s - sites[i - 1].s > 2000, 'leave kilometers between encounters');
@@ -31,6 +31,15 @@ test('cable car sites stay rare and stable when streamed in either direction', (
     for (let i = Math.floor((site.s - 70) / LAMP_SPACING); i * LAMP_SPACING < site.s + 70; i++) {
       const lamp = lampAt(i);
       assert.ok(lamp.hidden || Math.abs(lamp.s - site.s) > 9, `lamp crowds the discovery at ${site.s}`);
+    }
+    if (site.kind === 'snowmen') {
+      for (const figure of site.figures) {
+        assert.ok(figure.u - figure.scale > 9, 'snowmen stand clear of the road and snowbanks');
+        assert.equal(snowDiscoveryClears(figure.s, figure.u, [site]), false);
+        assert.equal(snowDiscoveryClears(figure.s, figure.u + 4, [site], 2), false, 'clear space for nearby tree crowns');
+      }
+      assert.ok(snowDiscoveryClears(site.s + 40, site.u, [site]));
+      continue;
     }
     // The line runs from the lake shore, over the road, up to a mountain shelf.
     assert.ok(site.lower.u < alpineLake(site.s).near + 9 && site.lower.u > alpineLake(site.s).near);
@@ -49,6 +58,40 @@ test('cable car sites stay rare and stable when streamed in either direction', (
       const chord = a.y + (b.y - a.y) * (u - a.u) / (b.u - a.u);
       assert.ok(y > chord, 'a pylon presses the rope up; it cannot hold it down');
     }
+  }
+});
+
+test('snowmen and cable cars occur at comparable rarity over a long route', () => {
+  const sites = snowDiscoveries(-1500000, 1500000);
+  const snowmen = sites.filter(site => site.kind === 'snowmen').length;
+  assert.ok(snowmen / sites.length > .35 && snowmen / sites.length < .65,
+    `${snowmen} snowman discoveries among ${sites.length} encounters`);
+});
+
+test('snowmen sit on rendered snow and survive worker transfer', () => {
+  const sites = nearest(snowDiscoveries(-150000, 150000), 'snowmen');
+  assert.ok(sites.length > 0);
+  for (const site of sites.slice(0, 3)) {
+    const original = chunkOf(site);
+    let restored;
+    try {
+      const feature = original.features.discoveries[0];
+      assert.equal(feature.kind, 'snowmen');
+      assert.equal(feature.figures.length, 3);
+      for (const figure of feature.figures) {
+        const ground = groundUnder(original, figure.x, figure.z + original.start);
+        assert.ok(ground !== null && Math.abs(ground - figure.ground) < .001, 'snowmen meet the visible terrain');
+      }
+      const mesh = original.group.getObjectByName('snowmen');
+      const positions = mesh.geometry.attributes.position.array.slice();
+      assert.ok([...positions].every(Number.isFinite));
+      const { data, transfers } = packChunk(original);
+      restored = unpackChunk(structuredClone(data, { transfer: transfers }));
+      assert.deepEqual(restored.features, original.features);
+      assert.deepEqual(restored.group.getObjectByName('snowmen').geometry.attributes.position.array, positions);
+      assert.equal(restored.group.getObjectByName('snowmen').material, mesh.material);
+      animateSnowDiscoveries([restored], 20, { s: site.s, speed: 10 });
+    } finally { original.dispose(); restored?.dispose(); }
   }
 });
 

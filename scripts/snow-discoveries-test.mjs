@@ -22,7 +22,7 @@ try {
   const sites = await page.evaluate(async () => {
     const { snowDiscoveries } = await import('/src/world/snow-discoveries.js');
     const all = snowDiscoveries(-150000, 150000);
-    return ['cable-car'].map(kind => all.filter(s => s.kind === kind).sort((a, b) => Math.abs(a.s) - Math.abs(b.s))[0]);
+    return ['cable-car', 'snowmen'].map(kind => all.filter(s => s.kind === kind).sort((a, b) => Math.abs(a.s) - Math.abs(b.s))[0]);
   });
   assert.ok(sites.every(Boolean), 'the discovery appears in the world');
   for (const site of [...sites, sites[0]]) {
@@ -44,12 +44,13 @@ try {
     await page.evaluate(async site => {
       const a = window.__coastline;
       const { snowPosition, snowRoadHeight } = await import('/src/world/snow-route.js');
-      const u = (site.lower.u + site.upper.u) / 2;
+      const snowmen = site.kind === 'snowmen';
+      const u = snowmen ? site.u : (site.lower.u + site.upper.u) / 2;
       const p = snowPosition(site.s, u, 0), z = p.z + a.world.origin;
-      const y = snowRoadHeight(site.s) + 26;
-      const camera = a.rendering.camera, height = 230, aspect = innerWidth / innerHeight;
+      const y = snowRoadHeight(site.s) + (snowmen ? 2 : 26);
+      const camera = a.rendering.camera, height = snowmen ? 16 : 230, aspect = innerWidth / innerHeight;
       camera.left = -height * aspect / 2; camera.right = height * aspect / 2; camera.top = height / 2; camera.bottom = -height / 2;
-      camera.position.set(p.x - 220, y + 245, z + 260); camera.lookAt(p.x, y, z);
+      camera.position.set(p.x - (snowmen ? 24 : 220), y + (snowmen ? 14 : 245), z + (snowmen ? 22 : 260)); camera.lookAt(p.x, y, z);
       camera.updateProjectionMatrix(); a.rendering.render();
     }, site);
     await page.screenshot({ path: `${directory}/${site.kind}-detail.png` });
@@ -87,7 +88,7 @@ try {
   // Leaving the journey takes the discoveries with it.
   await page.evaluate(() => window.__coastline.changeJourney('coast'));
   await page.waitForFunction(() => window.__coastline.journey === 'coast' && !window.__coastline.changingJourney);
-  for (const name of ['cable-car-line', 'cable-car-cabins']) {
+  for (const name of ['cable-car-line', 'cable-car-cabins', 'snowmen']) {
     assert.equal(await page.evaluate(name => !!window.__coastline.rendering.scene.getObjectByName(name), name), false, `${name} outlived the snow route`);
   }
   assert.deepEqual(errors, []);
