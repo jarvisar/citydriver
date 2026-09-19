@@ -35,8 +35,9 @@ const mileageFormat = new Intl.NumberFormat('en-US', { minimumFractionDigits: 1,
 let paused = false, started = false, time = 0, hudTime = 0;
 const frameClock = new FrameClock();
 let toastTimer; let sceneReady = false;
-// The chosen car outlives the visit; routes and mileage do not.
+// The chosen car and scene outlive the visit; positions and mileage do not.
 const carStorageKey = 'coastline-car';
+const journeyStorageKey = 'coastline-journey';
 let carId = DEFAULT_CAR;
 try { const saved = localStorage.getItem(carStorageKey); if (saved && CARS[saved]) carId = saved; } catch { /* Storage is optional. */ }
 // One colour dresses the whole garage and follows the player from car to car.
@@ -75,22 +76,27 @@ async function boot() {
     window.addEventListener('resize', () => { needsRender = true; });
     document.addEventListener('visibilitychange', () => { if (!document.hidden) needsRender = true; });
     let journey = 'coast';
+    try { const saved = localStorage.getItem(journeyStorageKey); if (saved && Object.hasOwn(JOURNEYS, saved)) journey = saved; } catch { /* Storage is optional. */ }
     chunkWorker = new ChunkWorker();
-    let world = new JOURNEYS.coast.World(scene, chunkWorker.source('coast'));
+    let world = new JOURNEYS[journey].World(scene, chunkWorker.source(journey));
     let changingJourney = true, journeyWasPaused = false;
     const savedJourneys = Object.fromEntries(Object.entries(JOURNEYS).map(([id, data]) => [id, journeyStart(Number(data.routeNumber))]));
-    const vehicle = new DrivingController(JOURNEYS.coast.route, savedJourneys.coast, carId, paint); const audio = new DriveAudio();
+    const vehicle = new DrivingController(JOURNEYS[journey].route, savedJourneys[journey], DEFAULT_CAR); const audio = new DriveAudio();
+    vehicle.setAppearance(journey);
+    vehicle.setLights(journey === 'snow' ? 1 : journey === 'city' ? .35 : 0);
+    rendering.setJourney(journey); audio.setJourney(journey);
     const journeyDialog = $('#journey-dialog'), carDialog = $('#car-dialog'), pauseOverlay = $('#pause-overlay');
     const openChooser = () => [journeyDialog, carDialog].find(dialog => dialog.open) ?? null;
     // The pause screen is a menu too: it is up whenever the drive is paused
     // with no chooser over it, and the controller walks it the same way.
     const openPauseMenu = () => paused && !pauseOverlay.hidden ? pauseOverlay : null;
     scene.add(vehicle.car);
-    const traffic = new Traffic(scene, vehicle.route, vehicle.s);
+    const traffic = new Traffic(scene, vehicle.route, vehicle.s, journey);
     const autodrive = new Autodrive();
     $('#autodrive').addEventListener('click', () => action('autodrive'));
     const trafficStorageKey = 'coastline-traffic';
     try { traffic.setEnabled(localStorage.getItem(trafficStorageKey) !== 'false', vehicle); } catch { /* Storage is optional. */ }
+    primeMenuDrive();
     $('#traffic').setAttribute('aria-pressed', String(traffic.enabled));
     $('#traffic').addEventListener('click', () => {
       traffic.setEnabled(!traffic.enabled, vehicle);
@@ -99,7 +105,25 @@ async function boot() {
       try { localStorage.setItem(trafficStorageKey, String(traffic.enabled)); } catch { /* Keep the setting for this visit. */ }
       needsRender = true;
     });
-    function start() { if (paused || changingJourney) return; if (!started) { started = true; $('#welcome').classList.add('hidden'); } }
+    function primeMenuDrive() {
+      if (started) return;
+      // Reveal the menu already cruising, at a speed that respects traffic.
+      vehicle.speed = vehicle.stats.topSpeed;
+      const state = autodrive.update(vehicle, traffic);
+      vehicle.speed = state.touchDrive.amount * vehicle.stats.topSpeed;
+      vehicle.update(0, state);
+    }
+    function start() {
+      if (paused || changingJourney) return;
+      if (!started) {
+        started = true;
+        autodrive.reset();
+        vehicle.setCar(carId, { paint });
+        vehicle.render(1, world.origin);
+        rendering.update(vehicle.car, 0, world.origin);
+        $('#welcome').classList.add('hidden');
+      }
+    }
     function setPaused(value) {
       paused = value; input.clear(); frameClock.suspend();
       if (!paused && autodrive.enabled) start();
@@ -178,7 +202,7 @@ async function boot() {
       const color = value === DEFAULT_PAINT ? null : readPaint(value);
       if (value !== DEFAULT_PAINT && !color) return;
       paint = color;
-      vehicle.setPaint(paint);
+      if (started) vehicle.setPaint(paint);
       paintCards(); updatePaintUi();
       vehicle.render(1, world.origin); rendering.update(vehicle.car, 0, world.origin); needsRender = true;
     }
@@ -194,7 +218,7 @@ async function boot() {
       if (id === carId || !CARS[id]) return;
       carId = id;
       try { localStorage.setItem(carStorageKey, id); } catch { /* Still drive it for this visit. */ }
-      vehicle.setCar(id, { paint }); vehicle.render(1, world.origin);
+      if (started) { vehicle.setCar(id, { paint }); vehicle.render(1, world.origin); }
       autodrive.reset();
       rendering.update(vehicle.car, 0, world.origin);
       updateCarUi(); updateHud(); needsRender = true;
@@ -241,10 +265,12 @@ async function boot() {
         vehicle.setAppearance(id);
         vehicle.setLights(id === 'snow' ? 1 : id === 'city' ? .35 : 0);
         traffic.reset(vehicle.route, vehicle.s, id); traffic.render(1, world.origin);
+        primeMenuDrive();
         rendering.setJourney(id); audio.setJourney(id); updateJourneyUi(); paintCards(); updatePaintUi();
         vehicle.render(1, world.origin);
         rendering.snap(); rendering.update(vehicle.car, 1, world.origin); world.animate(time, vehicle);
         updateHud(); rendering.render();
+        try { localStorage.setItem(journeyStorageKey, id); } catch { /* Still drive it for this visit. */ }
         toast(regenerate ? 'Scene reset · Fresh area ready' : `${JOURNEYS[id].title} selected`);
       } catch (error) {
         if (nextWorld && nextWorld !== world) nextWorld.dispose();
@@ -473,7 +499,9 @@ async function boot() {
     const simulate = dt => {
       let state = started ? input.state : {};
       if (autodrive.enabled && (state.forward || state.brake || state.left || state.right || state.handbrake || state.touchStick)) action('autodrive');
-      if (autodrive.enabled && started) state = autodrive.update(vehicle, traffic);
+      // Cruise behind the welcome menu without toggling the player's setting
+      // or showing a notification. Starting hands control straight to input.
+      if (!started || autodrive.enabled) state = autodrive.update(vehicle, traffic);
       if (state.touchStick) {
         if (rendering.camera.isPerspectiveCamera) Object.assign(state, thirdPersonDrivingInput(state.touchStick));
         else state.touchDrive = touchDrivingInput(state.touchStick, rendering.camera, vehicle.route, vehicle.s, vehicle.u, world.origin);
