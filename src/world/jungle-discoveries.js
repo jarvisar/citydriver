@@ -1,7 +1,8 @@
 import { randomAt, CHUNK_LENGTH } from './route.js';
-import { riverCenter, riverHalfWidth, riverLevel, riverLips, sideFalls, poolAt, gorgeWall, jungleHeight } from './jungle-route.js';
+import { riverCenter, riverHalfWidth, riverLevel, riverLips, sideFalls, poolAt, gorgeWall, jungleHeight, onRiver } from './jungle-route.js';
 
-export const JUNGLE_DISCOVERY_SPACING = 6144;
+// 25% more encounters per kilometer means 80% of the original spacing.
+export const JUNGLE_DISCOVERY_SPACING = 6144 / 1.25;
 export const JUNGLE_PARROT_SPACING = CHUNK_LENGTH * 3;
 const cache = new Map();
 
@@ -11,10 +12,30 @@ function districtSite(index) {
   if (randomAt(index, 2801) > .22) {
     const orders = [[0,1,2], [0,2,1], [1,0,2], [1,2,0], [2,0,1], [2,1,0]];
     const order = orders[Math.floor(randomAt(Math.floor(index / 3), 2802) * orders.length)];
-    // Leave quiet districts between the rare landmarks.
-    const kind = ['rainbow', null, 'rope-bridge'][order[((index % 3) + 3) % 3]];
-    const desired = index * JUNGLE_DISCOVERY_SPACING + 3072 + (randomAt(index, 2803) - .5) * 1200;
-    if (kind === 'rainbow') {
+    const kind = ['rainbow', 'temple', 'rope-bridge'][order[((index % 3) + 3) % 3]];
+    const desired = (index + .5) * JUNGLE_DISCOVERY_SPACING + (randomAt(index, 2803) - .5) * 1200;
+    if (kind === 'temple') {
+      const preferredSide = randomAt(index, 2820) < .5 ? -1 : 1;
+      for (const side of [preferredSide, -preferredSide]) {
+        for (const offset of [0, 48, -48, 96, -96, 144, -144, 192, -192]) {
+          const s = Math.round((desired + offset) / 8) * 8;
+          const inChunk = ((s % CHUNK_LENGTH) + CHUNK_LENGTH) % CHUNK_LENGTH;
+          if (inChunk < 24 || inChunk > CHUNK_LENGTH - 24 || sideFalls(s - 32, s + 32).length) continue;
+          // When the roadside terrace is too steep, use the dry far bank.
+          for (const distance of side < 0 ? [21, 23, 25, 28, 31, 78, 85] : [21, 23, 25, 28, 31]) {
+            const u = side * distance;
+            const footprint = [-9, 0, 9].flatMap(ds => [-9, 0, 9].map(du => ({s: s + ds, u: u + du})));
+            if (footprint.some(p => onRiver(p.s, p.u, 4))) continue;
+            const heights = footprint.map(p => jungleHeight(p.s, p.u));
+            if (Math.max(...heights) - Math.min(...heights) > 3.3) continue;
+            site = {kind, index, s, u, side};
+            break;
+          }
+          if (site) break;
+        }
+        if (site) break;
+      }
+    } else if (kind === 'rainbow') {
       const sides = sideFalls(desired - 320, desired + 320).map(fall => {
         const u = riverCenter(fall.s) + riverHalfWidth(fall.s) + 3;
         const lower = riverLevel(fall.s), upper = jungleHeight(fall.s, u + 4);
@@ -61,6 +82,9 @@ export function jungleDiscoveries(first, last) {
 }
 
 export function jungleDiscoveryClears(s, u, sites, radius = 0) {
-  return sites.every(site => site.kind !== 'rope-bridge' || Math.abs(s-site.s)>3+radius
-    || u<site.farU-3-radius || u>site.nearU+3+radius);
+  return sites.every(site => {
+    if (site.kind === 'temple') return Math.abs(s-site.s)>13+radius || Math.abs(u-site.u)>12+radius;
+    return site.kind !== 'rope-bridge' || Math.abs(s-site.s)>3+radius
+      || u<site.farU-3-radius || u>site.nearU+3+radius;
+  });
 }

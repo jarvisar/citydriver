@@ -1,22 +1,23 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import { jungleDiscoveries, JUNGLE_PARROT_SPACING } from '../src/world/jungle-discoveries.js';
+import { jungleDiscoveries, jungleDiscoveryClears, JUNGLE_DISCOVERY_SPACING, JUNGLE_PARROT_SPACING } from '../src/world/jungle-discoveries.js';
 import { riverLips, sideFalls, riverCenter, riverHalfWidth, onRiver, poolAt } from '../src/world/jungle-route.js';
 import { JungleChunk, JungleWorld } from '../src/world/jungle.js';
 import { packChunk, unpackChunk } from '../src/world/chunk-transfer.js';
 import { waterClock } from '../src/world/water.js';
 
-test('jungle landmarks stay rare while parrots match Pacific flock spacing in both directions',()=>{
+test('jungle landmarks are 25% more frequent while parrot flock spacing stays unchanged',()=>{
   const sites=jungleDiscoveries(-100000,100000);
   const landmarks=sites.filter(site=>site.kind!=='parrots'),flocks=sites.filter(site=>site.kind==='parrots');
-  assert.ok(landmarks.length>5 && landmarks.length<34);
+  assert.ok(landmarks.length>5 && landmarks.length<42);
+  assert.equal(6144/JUNGLE_DISCOVERY_SPACING,1.25);
   assert.equal(JUNGLE_PARROT_SPACING,384);
-  assert.ok(Math.abs(flocks.length-200000/384)<1);
-  for(let i=1;i<flocks.length;i++) assert.equal(flocks[i].s-flocks[i-1].s,384);
-  assert.deepEqual([...new Set(sites.map(site=>site.kind))].sort(),['parrots','rainbow','rope-bridge']);
+  assert.ok(Math.abs(flocks.length-200000/JUNGLE_PARROT_SPACING)<1);
+  for(let i=1;i<flocks.length;i++) assert.ok(Math.abs(flocks[i].s-flocks[i-1].s-JUNGLE_PARROT_SPACING)<1e-9);
+  assert.deepEqual([...new Set(sites.map(site=>site.kind))].sort(),['parrots','rainbow','rope-bridge','temple']);
   assert.deepEqual(jungleDiscoveries(-100000,0).concat(jungleDiscoveries(0,100000)),sites);
-  for(let i=1;i<landmarks.length;i++) assert.ok(landmarks[i].s-landmarks[i-1].s>4000,'leave several kilometers between landmarks');
+  for(let i=1;i<landmarks.length;i++) assert.ok(landmarks[i].s-landmarks[i-1].s>3000,'leave several kilometers between landmarks');
   for(const site of [...sites].reverse()) {
     const start=Math.floor(site.s/128)*128;
     assert.deepEqual(jungleDiscoveries(start,start+128),sites.filter(candidate=>candidate.s>=start&&candidate.s<start+128));
@@ -25,7 +26,7 @@ test('jungle landmarks stay rare while parrots match Pacific flock spacing in bo
       assert.equal(falls.length,1,'rainbows must belong to an actual waterfall');
       assert.ok(site.drop>4.8);
     } else if(site.kind==='parrots') assert.ok(site.count>=2 && site.count<=4);
-    else {
+    else if(site.kind==='rope-bridge') {
       const pool=poolAt(site.s);
       assert.ok(site.s-pool.start>=25 && pool.end-site.s>=25,'bridges stay clear of waterfall lips');
       assert.equal(sideFalls(site.s-35,site.s+35).length,0);
@@ -33,6 +34,36 @@ test('jungle landmarks stay rare while parrots match Pacific flock spacing in bo
       assert.ok(site.nearU>riverCenter(site.s)+riverHalfWidth(site.s));
       assert.ok(site.nearU<-10,'footbridges remain separate from the driving road');
     }
+  }
+});
+
+test('temples occur on both roadsides with dry clearings and foundations grounded in the rendered terrain',()=>{
+  const sites=jungleDiscoveries(-200000,200000).filter(site=>site.kind==='temple');
+  assert.deepEqual([...new Set(sites.map(site=>site.side))].sort(),[-1,1]);
+  for(const site of sites) {
+    assert.ok(Math.abs(site.u)-9>9.6,'temple and steps stay off the road');
+    assert.equal(sideFalls(site.s-32,site.s+32).length,0);
+    for(const ds of [-9,0,9]) for(const du of [-9,0,9]) {
+      assert.equal(onRiver(site.s+ds,site.u+du,4),false);
+      assert.equal(jungleDiscoveryClears(site.s+ds,site.u+du,[site]),false);
+    }
+    assert.equal(jungleDiscoveryClears(site.s+30,site.u,[site],2),true);
+  }
+  for(const side of [-1,1]) {
+    const site=sites.find(site=>site.side===side),chunk=new JungleChunk(Math.floor(site.s/128));
+    try {
+      const temple=chunk.group.getObjectByName('jungle-temple');
+      const feature=chunk.features.discoveries.find(feature=>feature.kind==='temple');
+      assert.ok(temple && chunk.group.getObjectByName('jungle-temple-foundation'));
+      assert.ok(Number.isFinite(feature.base) && feature.base>feature.bottom);
+      const facing=new THREE.Vector3(0,0,1).applyQuaternion(temple.quaternion);
+      assert.ok(facing.x*side<0,'entrance faces back toward the road');
+      for(const x of [-6.5,0,6.5]) for(const z of [-5.5,0,5.5]) {
+        const p=new THREE.Vector3(x,0,z).applyQuaternion(temple.quaternion).add(temple.position);
+        const ground=chunk.sampleGround(p.x,p.z);
+        assert.ok(ground>feature.bottom && ground<feature.base,'foundation meets solid terrain without a floating corner');
+      }
+    } finally {chunk.dispose();}
   }
 });
 
@@ -66,7 +97,7 @@ test('rope bridges reach both rendered banks with grounded posts and a dry suspe
 
 test('jungle discovery geometry and simulation-clock animation survive worker transfer',()=>{
   const sites=jungleDiscoveries(-100000,100000);
-  for(const [kind,name] of [['rainbow','waterfall-rainbow'],['parrots','jungle-parrots'],['rope-bridge','jungle-rope-bridge']]) {
+  for(const [kind,name] of [['rainbow','waterfall-rainbow'],['parrots','jungle-parrots'],['rope-bridge','jungle-rope-bridge'],['temple','jungle-temple']]) {
     const site=sites.find(site=>site.kind===kind),original=new JungleChunk(Math.floor(site.s/128));
     const before=original.group.getObjectByName(name),positions=before.geometry.attributes.position.array.slice();
     const matrices=before.instanceMatrix?.array.slice();
@@ -76,7 +107,8 @@ test('jungle discovery geometry and simulation-clock animation survive worker tr
       assert.deepEqual(restored.features,original.features);assert.equal(after.material,before.material);
       assert.deepEqual(after.geometry.attributes.position.array,positions);
       assert.ok([...positions].every(Number.isFinite));
-      if(kind!=='rope-bridge') {
+      if(kind==='temple') assert.equal(after.geometry,before.geometry);
+      if(kind==='rainbow' || kind==='parrots') {
         assert.equal(after.geometry,before.geometry);
         const shader={uniforms:{},vertexShader:'#include <beginnormal_vertex>\n#include <begin_vertex>',fragmentShader:'#include <color_fragment>'};
         after.material.onBeforeCompile(shader);assert.equal(shader.uniforms.jungleTime,waterClock.time);

@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { CHUNK_LENGTH, positionAt, roadFrame, randomAt } from './route.js';
 import { jungleHeight, jungleRoadHeight, riverHalfWidth } from './jungle-route.js';
 import { JungleDiscoveryParts, ropeBridgeMaterial, parrotGeometry, parrotMaterial, rainbowGeometry, rainbowMaterial, landingPathMaterial } from './jungle-discovery-assets.js';
+import { buildJungleTemple } from './jungle-temple.js';
 
 const up=new THREE.Vector3(0,1,0),transform=new THREE.Object3D();
 
@@ -88,7 +89,8 @@ export function buildJungleDiscoveries(chunk,sites) {
   for(const site of sites) {
     if(site.s<chunk.start || site.s>=chunk.start+CHUNK_LENGTH) continue;
     let details={};
-    if(site.kind==='rope-bridge') details=buildBridge(chunk,site);
+    if(site.kind==='temple') details=buildJungleTemple(chunk,site);
+    else if(site.kind==='rope-bridge') details=buildBridge(chunk,site);
     else if(site.kind==='rainbow') {
       const radius=site.source==='side-fall'?Math.min(11,site.drop*.85):Math.min(13,riverHalfWidth(site.s)*1.1);
       const p=positionAt(site.s-(site.source==='cascade'?4:0),site.u,site.lower+.4);

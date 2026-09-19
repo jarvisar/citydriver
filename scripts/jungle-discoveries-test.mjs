@@ -21,7 +21,8 @@ try {
   const sites=await page.evaluate(async()=>{
     const {jungleDiscoveries}=await import('/src/world/jungle-discoveries.js');
     const all=jungleDiscoveries(-150000,150000);
-    return ['rainbow','parrots','rope-bridge'].map(kind=>all.filter(s=>s.kind===kind).sort((a,b)=>Math.abs(a.s)-Math.abs(b.s))[0]);
+    return [...['rainbow','parrots','rope-bridge'].map(kind=>all.filter(s=>s.kind===kind).sort((a,b)=>Math.abs(a.s)-Math.abs(b.s))[0]),
+      ...[-1,1].map(side=>all.filter(s=>s.kind==='temple'&&s.side===side).sort((a,b)=>Math.abs(a.s)-Math.abs(b.s))[0])];
   });
   assert.ok(sites.every(Boolean));
   for(const site of [...sites,sites[0]]) {
@@ -30,24 +31,29 @@ try {
       a.vehicle.s=site.s;a.vehicle.reset();a.world.update(site.s);a.vehicle.render(1,a.world.origin);
       while(a.rendering.viewLabel!=='Medium view')a.rendering.toggleView();
       a.rendering.snap();a.rendering.update(a.vehicle.car,10,a.world.origin);a.rendering.resize();a.world.animate(8.5);a.rendering.render();
-      return {...site,chunks:a.world.chunks.size,geometries:a.rendering.renderer.info.memory.geometries,
+      const {behind,ahead}=a.graphics.settings.chunks;
+      const indices=[...a.world.chunks.keys()];
+      const expectedFlocks=indices.filter(index=>((index%3)+3)%3===0).length;
+      return {...site,chunks:a.world.chunks.size,resident:behind+ahead+1,expectedFlocks,geometries:a.rendering.renderer.info.memory.geometries,
         features:[...a.world.chunks.values()].flatMap(c=>c.features?.discoveries||[])};
     },site);
-    assert.equal(record.chunks,9);
+    assert.equal(record.chunks,record.resident);
     if(!before) {
       assert.equal(record.features.filter(s=>s.kind===site.kind&&s.index===site.index).length,1);
-      assert.equal(record.features.filter(s=>s.kind==='parrots').length,3,'nine loaded chunks contain three flocks, like the Pacific');
+      assert.equal(record.features.filter(s=>s.kind==='parrots').length,record.expectedFlocks,'parrot flock frequency stays unchanged');
     }
-    await page.screenshot({path:`${directory}/${site.kind}-drive.png`});
+    const label=site.kind==='temple'?`temple-${site.side<0?'left':'right'}`:site.kind;
+    await page.screenshot({path:`${directory}/${label}-drive.png`});
     await page.evaluate(async site=>{
       const a=window.__coastline,{junglePosition,jungleRoadHeight,riverLevel}=await import('/src/world/jungle-route.js');
       const p=junglePosition(site.s,site.u),z=p.z+a.world.origin;
-      const y=site.kind==='parrots'?jungleRoadHeight(site.s)+10:(site.lower??site.level??riverLevel(site.s))+5;
+      const feature=[...a.world.chunks.values()].flatMap(c=>c.features?.discoveries||[]).find(s=>s.kind===site.kind&&s.index===site.index);
+      const y=site.kind==='temple'?feature.base+5:site.kind==='parrots'?jungleRoadHeight(site.s)+10:(site.lower??site.level??riverLevel(site.s))+5;
       const camera=a.rendering.camera,height=site.kind==='rope-bridge'?44:site.kind==='rainbow'?37:36,aspect=innerWidth/innerHeight;
       camera.left=-height*aspect/2;camera.right=height*aspect/2;camera.top=height/2;camera.bottom=-height/2;
-      camera.position.set(p.x-80,y+75,z+95);camera.lookAt(p.x,y,z);camera.updateProjectionMatrix();a.rendering.render();
+      camera.position.set(p.x-(site.side??1)*80,y+75,z+95);camera.lookAt(p.x,y,z);camera.updateProjectionMatrix();a.rendering.render();
     },site);
-    await page.screenshot({path:`${directory}/${site.kind}-detail.png`});
+    await page.screenshot({path:`${directory}/${label}-detail.png`});
     if(!before && site.kind==='parrots') {
       const timing=await page.evaluate(async()=>{
         const a=window.__coastline,mesh=a.rendering.scene.getObjectByName('jungle-parrots');
@@ -72,7 +78,7 @@ try {
   await page.screenshot({path:`${directory}/rainbow-mobile.png`});
   await page.evaluate(()=>window.__coastline.changeJourney('coast'));
   await page.waitForFunction(()=>window.__coastline.journey==='coast'&&!window.__coastline.changingJourney);
-  for(const name of ['jungle-parrots','jungle-rope-bridge','waterfall-rainbow']) {
+  for(const name of ['jungle-parrots','jungle-rope-bridge','waterfall-rainbow','jungle-temple','jungle-temple-foundation']) {
     assert.equal(await page.evaluate(name=>!!window.__coastline.rendering.scene.getObjectByName(name),name),false);
   }
   assert.deepEqual(errors,[]);
