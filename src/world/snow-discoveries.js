@@ -3,8 +3,9 @@ import { snowGroundHeight, snowRoadHeight, snowBridgeAt, ledgeEdge, lampAt, LAMP
 import { nearCabin } from './alpine-cabins.js';
 
 export const SNOW_DISCOVERY_SPACING = 6144;
-// Raise the chance by 25% while keeping existing sites and their spacing.
-const DISTRICT_CHANCE = .45 * 1.25;
+// Populate a third more districts; terrain checks still make these the rarest
+// encounters. Keep existing sites and the long gaps between districts.
+const DISTRICT_CHANCE = .75;
 // Track ropes run this far either side of the line; each carries one cabin.
 export const CABLE_ROPE_OFFSET = 3;
 // Cabin floor below the rope, and the clearance kept beneath it.

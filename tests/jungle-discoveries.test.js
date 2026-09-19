@@ -7,7 +7,7 @@ import { JungleChunk, JungleWorld } from '../src/world/jungle.js';
 import { packChunk, unpackChunk } from '../src/world/chunk-transfer.js';
 import { waterClock } from '../src/world/water.js';
 
-test('jungle landmarks are 25% more frequent while parrot flock spacing stays unchanged',()=>{
+test('jungle landmarks stay several kilometers apart while parrot flock spacing stays unchanged',()=>{
   const sites=jungleDiscoveries(-100000,100000);
   const landmarks=sites.filter(site=>site.kind!=='parrots'),flocks=sites.filter(site=>site.kind==='parrots');
   assert.ok(landmarks.length>5 && landmarks.length<42);

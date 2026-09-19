@@ -1,8 +1,8 @@
 import { randomAt, smoothstep } from './route.js';
 import { desertBridgeAt, desertCreek, desertCreekDistance, desertHeight, canyonProfile, insideMesa, dryWashCenter, dryWashWidth } from './desert-route.js';
 
-export const DESERT_DISCOVERY_SPACING = 6144;
-// Raise the chance by 25% while keeping existing sites and their spacing.
+// 25% more landmark districts, still roughly five kilometers apart.
+export const DESERT_DISCOVERY_SPACING = 6144 / 1.25;
 const DISTRICT_CHANCE = .78 * 1.25;
 const sites = new Map();
 
@@ -19,7 +19,7 @@ function districtSite(index) {
     const orders = [[0,1,2], [0,2,1], [1,0,2], [1,2,0], [2,0,1], [2,1,0]];
     const order = orders[Math.floor(randomAt(Math.floor(index / 3), 2302) * orders.length)];
     const kind = ['fuel-stop', 'windpump', 'cattle-skull'][order[((index % 3) + 3) % 3]];
-    const desired = index * DESERT_DISCOVERY_SPACING + 3072 + (randomAt(index, 2303) - .5) * 1536;
+    const desired = (index + .5) * DESERT_DISCOVERY_SPACING + (randomAt(index, 2303) - .5) * DESERT_DISCOVERY_SPACING / 4;
     const halfS = kind === 'fuel-stop' ? 9 : kind === 'cattle-skull' ? 3 : 7, halfU = kind === 'fuel-stop' ? 8 : kind === 'cattle-skull' ? 3 : 6;
     search: for (const offset of [0, 80, -80, 160, -160, 240, -240]) {
       const s = desired + offset;

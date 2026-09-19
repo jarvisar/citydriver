@@ -2,8 +2,9 @@ import { randomAt, headlandCenter, coastOffset, shorelineOffset, beachWidth, bri
 
 // Distances are world meters. Jittered districts give guaranteed breathing
 // room, independent of chunk load order, driving direction, and world origin.
-// 25% more discovery districts per kilometer; site suitability still applies.
-const FREQUENCY = 1.25;
+// A modest increase for the multi-kilometer landmarks; site suitability and
+// the quiet stretches around each encounter still apply.
+const FREQUENCY = 1.5625;
 export const DISCOVERY_SPACING = { lighthouse: 12288 / FREQUENCY, dock: 7168 / FREQUENCY, whale: 20480 / FREQUENCY };
 
 function clearHeadland(s) {

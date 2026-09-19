@@ -4,12 +4,14 @@ import { riverCenter, riverHalfWidth, riverLevel, riverLips, sideFalls, poolAt, 
 // 25% more encounters per kilometer means 80% of the original spacing.
 export const JUNGLE_DISCOVERY_SPACING = 6144 / 1.25;
 export const JUNGLE_PARROT_SPACING = CHUNK_LENGTH * 3;
+// Fill 25% more landmark districts without moving existing sites or flocks.
+const DISTRICT_CHANCE = .78 * 1.25;
 const cache = new Map();
 
 function districtSite(index) {
   if (cache.has(index)) return cache.get(index);
   let site = null;
-  if (randomAt(index, 2801) > .22) {
+  if (randomAt(index, 2801) > 1 - DISTRICT_CHANCE) {
     const orders = [[0,1,2], [0,2,1], [1,0,2], [1,2,0], [2,0,1], [2,1,0]];
     const order = orders[Math.floor(randomAt(Math.floor(index / 3), 2802) * orders.length)];
     const kind = ['rainbow', 'temple', 'rope-bridge'][order[((index % 3) + 3) % 3]];
