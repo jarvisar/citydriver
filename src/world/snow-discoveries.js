@@ -1,11 +1,18 @@
-import { CHUNK_LENGTH, randomAt, roadDerivative, lerp, clamp } from './route.js';
+import { CHUNK_LENGTH, roadDerivative, positionAt, lerp } from './route.js';
 import { snowGroundHeight, snowRoadHeight, snowBridgeAt, ledgeEdge, lampAt, LAMP_SPACING, summitForCell, alpineLake, LAKE_LEVEL } from './snow-route.js';
 import { nearCabin } from './alpine-cabins.js';
+import { createDiscoverySchedule } from './discovery-schedule.js';
 
-export const SNOW_DISCOVERY_SPACING = 6144;
-// Populate a third more districts; terrain checks still make these the rarest
-// encounters. Keep existing sites and the long gaps between districts.
-const DISTRICT_CHANCE = .75;
+// Approximate miles between sightings of EACH kind. Lower = more frequent.
+// Edit one number, then reload. Infinity disables a kind. Together: ~2.5 miles.
+export const SNOW_DISCOVERY_MILES = {
+  'cable-car': 5,
+  snowmen: 5, // One group of three figures.
+};
+// Lakeside cabins retain their original frequency in alpine-cabins.js.
+const schedule = createDiscoverySchedule(SNOW_DISCOVERY_MILES,
+  { 'cable-car': .60, snowmen: .99 }, 3101, districtSite);
+export const SNOW_DISCOVERY_SPACING = schedule.spacing;
 // Track ropes run this far either side of the line; each carries one cabin.
 export const CABLE_ROPE_OFFSET = 3;
 // Cabin floor below the rope, and the clearance kept beneath it.
@@ -13,7 +20,6 @@ export const CABIN_DROP = 5.2;
 const ROPE_CLEARANCE = 6.5;
 // The bench between the road's guardrail and the bluff rim carries the pylon.
 const LOWER_STATION_U = -15.5;
-const sites = new Map();
 
 // Rope height above the line at u, following each span's sag.
 function ropeHeight(points, u) {
@@ -133,6 +139,21 @@ function cableCarAt(s, index) {
     if (point.y - point.ground > 26) return null;
     i = 0;
   }
+  // A denser search reaches shelves the old survey missed. Reject a layout
+  // if bracing cannot keep its spans proportionate, then try the next shelf.
+  const spans = points.slice(1).map((point, i) => point.u - points[i].u);
+  if (Math.min(...spans) <= 20 || Math.max(...spans) >= Math.min(...spans) * 2.6) return null;
+  // Wide terrain offsets curve away from road normals. Check the rendered
+  // crossing too, so both cabins still meet the road at their scheduled time.
+  const from = positionAt(s, points[0].u), to = positionAt(s, points.at(-1).u);
+  const length = Math.hypot(to.x - from.x, to.z - from.z);
+  const across = { x: (to.z - from.z) / length, z: (from.x - to.x) / length };
+  const crossing = points.findIndex(point => point.u > 0);
+  const a = points[crossing - 1], b = points[crossing], t = -a.u / (b.u - a.u);
+  const start = positionAt(s, a.u), end = positionAt(s, b.u), roadPoint = positionAt(s, 0);
+  const x = lerp(start.x, end.x, t) - roadPoint.x, z = lerp(start.z, end.z, t) - roadPoint.z;
+  if ([-1, 1].some(side => Math.hypot(x + side * CABLE_ROPE_OFFSET * across.x,
+    z + side * CABLE_ROPE_OFFSET * across.z) >= 3.95)) return null;
   return worstClearance(s, points).clearance >= 0 ? site(points) : null;
 }
 
@@ -147,33 +168,20 @@ function snowmenAt(s, index) {
   return { kind: 'snowmen', index, s, u, figures };
 }
 
-function districtSite(index) {
-  if (sites.has(index)) return sites.get(index);
-  let site = null;
-  // Reuse the established terrain-checked discovery schedule, then give each
-  // kind an equal chance. Easier snowman placement must not make discoveries
-  // more common than the existing cable-car encounters.
-  if (randomAt(index, 3101) > 1 - DISTRICT_CHANCE) {
-    const desired = index * SNOW_DISCOVERY_SPACING + 3072 + (randomAt(index, 3103) - .5) * 1200;
-    for (let step = 0; step < 96 && !site; step++) {
-      const s = Math.round(desired / 2) * 2 + (step % 2 ? -1 : 1) * Math.ceil(step / 2) * 30;
-      site = cableCarAt(s, index);
-    }
-    if (site && randomAt(index, 3102) < .5) site = snowmenAt(site.s, index) ?? site;
+function districtSite(kind, index, desired) {
+  const create = kind === 'cable-car' ? cableCarAt : snowmenAt;
+  // A finer survey finds usable shelves that the old 30 m steps skipped.
+  // Snowmen need only their own footing checks, not a whole cable-car corridor.
+  const reach = Math.min(1200, SNOW_DISCOVERY_SPACING / 4);
+  for (let step = 0; step <= Math.floor(reach / 6) * 2; step++) {
+    const s = Math.round(desired / 2) * 2 + (step % 2 ? -1 : 1) * Math.ceil(step / 2) * 6;
+    const site = create(s, index);
+    if (site) return site;
   }
-  sites.set(index, site);
-  if (sites.size > 128) sites.delete(sites.keys().next().value);
-  return site;
+  return null;
 }
 
-export function snowDiscoveries(first, last) {
-  const result = [];
-  for (let index = Math.floor(first / SNOW_DISCOVERY_SPACING) - 1; index <= Math.floor(last / SNOW_DISCOVERY_SPACING) + 1; index++) {
-    const site = districtSite(index);
-    if (site && site.s >= first && site.s < last) result.push(site);
-  }
-  return result;
-}
+export const snowDiscoveries = schedule.discoveries;
 
 // Keep trees and boulders away from snowmen, footings and the ropes.
 export function snowDiscoveryClears(s, u, discoveries, radius = 0) {

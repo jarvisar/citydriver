@@ -9,11 +9,13 @@ test('Pacific discoveries stay sparse, separated, and independent of streaming o
   const sites = coastalDiscoveries(-100000, 100000);
   assert.deepEqual(coastalDiscoveries(-100000, 0).concat(coastalDiscoveries(0, 100000)), sites);
   assert.ok(sites.every(site => ['lighthouse', 'dock', 'whale'].includes(site.kind)));
-  for (const [kind, minimumGap, maximumCount] of [['lighthouse', 4800, 30], ['dock', 3000, 46], ['whale', 10000, 18]]) {
+  assert.ok(sites.length > 35 && sites.length < 65, 'roughly one special encounter per 2.5 miles');
+  for (const [kind, minimumGap, maximumCount] of [['lighthouse', 900, 35], ['dock', 900, 35], ['whale', 900, 20]]) {
     const group = sites.filter(site => site.kind === kind);
     assert.ok(group.length > 1 && group.length <= maximumCount, `${kind} must be an occasional discovery`);
     for (let i = 1; i < group.length; i++) assert.ok(group[i].s - group[i - 1].s > minimumGap);
   }
+  for (let i = 1; i < sites.length; i++) assert.ok(sites[i].s - sites[i - 1].s > 900, 'different kinds also need breathing room');
   for (const site of sites) {
     if (site.kind === 'lighthouse') {
       assert.ok(site.u < -27 && site.u > coastOffset(site.s));

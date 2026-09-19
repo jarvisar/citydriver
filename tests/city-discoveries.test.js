@@ -10,9 +10,9 @@ import { drapeCityLawn } from '../src/world/city-surfaces.js';
 test('city discoveries are sparse, varied, on the street grid, and stable across reversed chunk queries', () => {
   const sites = cityDiscoveries(-100000, 100000);
   assert.deepEqual(cityDiscoveries(-100000, 0).concat(cityDiscoveries(0, 100000)), sites);
-  assert.ok(sites.length > 8 && sites.length < 40);
+  assert.ok(sites.length > 35 && sites.length < 65, 'roughly one special encounter per 2.5 miles');
   assert.deepEqual([...new Set(sites.map(site => site.kind))].sort(), ['clock-tower', 'river-bridge', 'square']);
-  for (let i = 1; i < sites.length; i++) assert.ok(sites[i].s - sites[i - 1].s > 3000, 'leave kilometres between any two discoveries');
+  for (let i = 1; i < sites.length; i++) assert.ok(sites[i].s - sites[i - 1].s > 900, 'leave breathing room between discoveries');
   for (const site of [...sites].reverse()) {
     assert.ok(Math.abs(site.s - (site.index + .5) * CITY_DISCOVERY_SPACING) < 1400);
     const start = Math.floor(site.s / 128) * 128;
@@ -64,7 +64,7 @@ test('city discovery meshes survive worker transfer with their sites', () => {
 });
 
 test('park paths and lawn edges stay clean on both sides of terrain and chunk boundaries', () => {
-  const sites = cityDiscoveries(-30000, 30000).filter(site => site.kind === 'square');
+  const sites = cityDiscoveries(-150000, 150000).filter(site => site.kind === 'square');
   const selected = [sites.find(site => site.s < 0), sites.find(site => site.s > 0)];
   const ray = new THREE.Raycaster(), down = new THREE.Vector3(0, -1, 0);
   for (const site of selected) {

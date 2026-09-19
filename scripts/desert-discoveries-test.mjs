@@ -29,10 +29,10 @@ try {
       a.vehicle.s=site.s;a.vehicle.reset();a.world.update(site.s);a.vehicle.render(1,a.world.origin);
       while(a.rendering.viewLabel!=='Medium view')a.rendering.toggleView();
       a.rendering.snap();a.rendering.update(a.vehicle.car,10,a.world.origin);a.rendering.resize();a.world.animate(8.5);a.rendering.render();
-      return {...site,chunks:a.world.chunks.size,geometries:a.rendering.renderer.info.memory.geometries,
+      return {...site,chunks:a.world.chunks.size,resident:a.graphics.settings.chunks.behind+a.graphics.settings.chunks.ahead+1,geometries:a.rendering.renderer.info.memory.geometries,
         features:[...a.world.chunks.values()].flatMap(c=>c.features?.discoveries||[])};
     },site);
-    assert.equal(record.chunks,9);
+    assert.equal(record.chunks,record.resident);
     assert.equal(record.features.filter(s=>s.index===site.index).length,1);
     await page.screenshot({path:`${directory}/${site.kind}-drive.png`});
     await page.evaluate(async site=>{

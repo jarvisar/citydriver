@@ -11,9 +11,9 @@ import { desertPosition } from '../src/world/desert-route.js';
 test('desert discoveries are sparse, varied, and stable across reversed chunk queries', () => {
   const sites=desertDiscoveries(-100000,100000);
   assert.deepEqual(desertDiscoveries(-100000,0).concat(desertDiscoveries(0,100000)),sites);
-  assert.ok(sites.length>5 && sites.length<44);
+  assert.ok(sites.length>35 && sites.length<65, 'roughly one special encounter per 2.5 miles');
   assert.deepEqual([...new Set(sites.map(s=>s.kind))].sort(),['cattle-skull','fuel-stop','windpump']);
-  for(let i=1;i<sites.length;i++) assert.ok(sites[i].s-sites[i-1].s>3000,'leave several kilometers between any two discoveries');
+  for(let i=1;i<sites.length;i++) assert.ok(sites[i].s-sites[i-1].s>900,'leave breathing room between discoveries');
   for(const site of [...sites].reverse()) {
     assert.ok(Math.abs(site.s-(site.index+.5)*DESERT_DISCOVERY_SPACING)<1100);
     const start=Math.floor(site.s/128)*128;

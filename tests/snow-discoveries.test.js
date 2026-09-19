@@ -17,12 +17,11 @@ const groundUnder = (chunk, x, z) => {
 
 test('snow discovery sites stay rare and stable when streamed in either direction', () => {
   const sites = snowDiscoveries(-150000, 150000);
-  // The existing district chance and terrain requirements keep both types sparse.
-  assert.ok(sites.length > 4 && sites.length < 28, `unexpected discovery count ${sites.length}`);
+  // 300 km of route should offer roughly 75 discoveries, not the old 10–20.
+  assert.ok(sites.length > 55 && sites.length < 95, `unexpected discovery count ${sites.length}`);
   assert.deepEqual([...new Set(sites.map(site => site.kind))].sort(), ['cable-car', 'snowmen']);
   assert.deepEqual(snowDiscoveries(-150000, 0).concat(snowDiscoveries(0, 150000)), sites);
-  // Adjacent populated districts can search toward one another by up to 2 km each.
-  for (let i = 1; i < sites.length; i++) assert.ok(sites[i].s - sites[i - 1].s > 2000, 'leave kilometers between encounters');
+  for (let i = 1; i < sites.length; i++) assert.ok(sites[i].s - sites[i - 1].s > 900, 'leave breathing room between encounters');
   for (const site of [...sites].reverse()) {
     const start = Math.floor(site.s / CHUNK_LENGTH) * CHUNK_LENGTH;
     assert.deepEqual(snowDiscoveries(start, start + CHUNK_LENGTH), [site], 'exactly one chunk owns each site');

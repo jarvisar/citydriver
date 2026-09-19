@@ -1,23 +1,22 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import { jungleDiscoveries, jungleDiscoveryClears, JUNGLE_DISCOVERY_SPACING, JUNGLE_PARROT_SPACING } from '../src/world/jungle-discoveries.js';
+import { jungleDiscoveries, jungleDiscoveryClears, JUNGLE_PARROT_SPACING } from '../src/world/jungle-discoveries.js';
 import { riverLips, sideFalls, riverCenter, riverHalfWidth, onRiver, poolAt } from '../src/world/jungle-route.js';
 import { JungleChunk, JungleWorld } from '../src/world/jungle.js';
 import { packChunk, unpackChunk } from '../src/world/chunk-transfer.js';
 import { waterClock } from '../src/world/water.js';
 
-test('jungle landmarks stay several kilometers apart while parrot flock spacing stays unchanged',()=>{
+test('jungle landmarks stay separated while parrot flock spacing stays unchanged',()=>{
   const sites=jungleDiscoveries(-100000,100000);
   const landmarks=sites.filter(site=>site.kind!=='parrots'),flocks=sites.filter(site=>site.kind==='parrots');
-  assert.ok(landmarks.length>5 && landmarks.length<42);
-  assert.equal(6144/JUNGLE_DISCOVERY_SPACING,1.25);
+  assert.ok(landmarks.length>35 && landmarks.length<65, 'roughly one special encounter per 2.5 miles');
   assert.equal(JUNGLE_PARROT_SPACING,384);
   assert.ok(Math.abs(flocks.length-200000/JUNGLE_PARROT_SPACING)<1);
   for(let i=1;i<flocks.length;i++) assert.ok(Math.abs(flocks[i].s-flocks[i-1].s-JUNGLE_PARROT_SPACING)<1e-9);
   assert.deepEqual([...new Set(sites.map(site=>site.kind))].sort(),['parrots','rainbow','rope-bridge','temple']);
   assert.deepEqual(jungleDiscoveries(-100000,0).concat(jungleDiscoveries(0,100000)),sites);
-  for(let i=1;i<landmarks.length;i++) assert.ok(landmarks[i].s-landmarks[i-1].s>3000,'leave several kilometers between landmarks');
+  for(let i=1;i<landmarks.length;i++) assert.ok(landmarks[i].s-landmarks[i-1].s>900,'leave breathing room between landmarks');
   for(const site of [...sites].reverse()) {
     const start=Math.floor(site.s/128)*128;
     assert.deepEqual(jungleDiscoveries(start,start+128),sites.filter(candidate=>candidate.s>=start&&candidate.s<start+128));

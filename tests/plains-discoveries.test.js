@@ -47,7 +47,7 @@ test('plains discoveries are sparse, varied, level, and stable across reversed c
 });
 
 test("a farm's drive and its yard are one unbroken piece of bare earth", () => {
-  const sites = plainsDiscoveries(0, 200000);
+  const sites = plainsDiscoveries(0, 1000000);
   for (const kind of ['farmstead', 'farmhouse', 'barn-silo', 'grain-elevator']) {
     const site = sites.find(other => other.kind === kind);
     const chunk = new PlainsChunk(Math.floor(site.s / 128));

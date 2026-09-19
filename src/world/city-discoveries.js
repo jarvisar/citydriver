@@ -1,61 +1,48 @@
-import { randomAt } from './route.js';
 import { blockBoundary, blockAt, crossStreetAt, nearStreet, quayOffset, STREET_HALF_WIDTH, FAR_BANK_TOP, BANDS, BANK_BANDS } from './city-route.js';
+import { createDiscoverySchedule } from './discovery-schedule.js';
 
-// Three landmarks in shuffled districts, as on the plains: a road bridge
-// carrying a side street over the river to the far bank, a park square that
-// takes the place of two rows of buildings, and a clock tower church on the
-// building line. Each site is a rectangle in (s, u) that the ordinary blocks,
-// trees and furniture keep out of.
-export const CITY_DISCOVERY_SPACING = 5120;
-const sites = new Map();
+// Approximate miles between sightings of EACH kind. Lower = more frequent.
+// Edit one number, then reload. Infinity disables a kind. Together: ~2.5 miles.
+export const CITY_DISCOVERY_MILES = {
+  'river-bridge': 7.5, // Side street crossing the river.
+  square: 7.5, // Park and fountain.
+  'clock-tower': 7.5, // Church.
+};
+const schedule = createDiscoverySchedule(CITY_DISCOVERY_MILES,
+  { 'river-bridge': 1, square: 1, 'clock-tower': 1 }, 3101, districtSite);
+export const CITY_DISCOVERY_SPACING = schedule.spacing;
 
-function districtSite(index) {
-  if (sites.has(index)) return sites.get(index);
+function districtSite(kind, index, desired) {
   let site = null;
-  if (randomAt(index, 3101) > .18) {
-    const orders = [[0, 1, 2], [0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]];
-    const order = orders[Math.floor(randomAt(Math.floor(index / 3), 3102) * orders.length)];
-    const kind = ['river-bridge', 'square', 'clock-tower'][order[((index % 3) + 3) % 3]];
-    const desired = index * CITY_DISCOVERY_SPACING + 2560 + (randomAt(index, 3103) - .5) * 1536;
-    if (kind === 'river-bridge') {
-      // The bridge continues a side street that already runs down to the quay.
-      const nearest = crossStreetAt(desired).index;
-      for (const offset of [0, 1, -1, 2, -2, 3, -3]) {
-        const street = nearest + offset;
-        if (!nearStreet(street)) continue;
-        const s = blockBoundary(street);
-        site = { kind, index, street, s, u: (quayOffset(s) + FAR_BANK_TOP) / 2, side: -1, halfS: STREET_HALF_WIDTH, u0: BANK_BANDS[1].back - 4, u1: -6.6 };
-        break;
-      }
-    } else if (kind === 'square') {
-      // A square needs a long block: two rows of buildings give way to lawn.
-      for (const offset of [0, 1, -1, 2, -2]) {
-        const block = blockAt(desired) + offset, start = blockBoundary(block), end = blockBoundary(block + 1);
-        if (end - start < 96) continue;
-        const s = (start + end) / 2;
-        site = { kind, index, block, s, u: (BANDS[0].front + BANDS[1].back) / 2, side: 1, halfS: (end - start) / 2 - STREET_HALF_WIDTH - 2, u0: BANDS[0].front - 1, u1: BANDS[1].back + 2 };
-        break;
-      }
-    } else {
-      // The church takes the first lot of a block, on the corner by the side street.
-      const block = blockAt(desired), start = blockBoundary(block);
-      const s = start + STREET_HALF_WIDTH + 3 + 14;
-      site = { kind, index, block, s, u: BANDS[0].front + 13, side: 1, halfS: 10, u0: BANDS[0].front - 1, u1: BANDS[0].front + 27 };
+  if (kind === 'river-bridge') {
+    // The bridge continues a side street that already runs down to the quay.
+    const nearest = crossStreetAt(desired).index;
+    for (const offset of [0, 1, -1, 2, -2, 3, -3]) {
+      const street = nearest + offset;
+      if (!nearStreet(street)) continue;
+      const s = blockBoundary(street);
+      site = { kind, index, street, s, u: (quayOffset(s) + FAR_BANK_TOP) / 2, side: -1, halfS: STREET_HALF_WIDTH, u0: BANK_BANDS[1].back - 4, u1: -6.6 };
+      break;
     }
+  } else if (kind === 'square') {
+    // A square needs a long block: two rows of buildings give way to lawn.
+    for (const offset of [0, 1, -1, 2, -2]) {
+      const block = blockAt(desired) + offset, start = blockBoundary(block), end = blockBoundary(block + 1);
+      if (end - start < 96) continue;
+      const s = (start + end) / 2;
+      site = { kind, index, block, s, u: (BANDS[0].front + BANDS[1].back) / 2, side: 1, halfS: (end - start) / 2 - STREET_HALF_WIDTH - 2, u0: BANDS[0].front - 1, u1: BANDS[1].back + 2 };
+      break;
+    }
+  } else {
+    // The church takes the first lot of a block, on the corner by the side street.
+    const block = blockAt(desired), start = blockBoundary(block);
+    const s = start + STREET_HALF_WIDTH + 3 + 14;
+    site = { kind, index, block, s, u: BANDS[0].front + 13, side: 1, halfS: 10, u0: BANDS[0].front - 1, u1: BANDS[0].front + 27 };
   }
-  sites.set(index, site);
-  if (sites.size > 128) sites.delete(sites.keys().next().value);
   return site;
 }
 
-export function cityDiscoveries(first, last) {
-  const result = [];
-  for (let index = Math.floor(first / CITY_DISCOVERY_SPACING) - 1; index <= Math.floor(last / CITY_DISCOVERY_SPACING) + 1; index++) {
-    const site = districtSite(index);
-    if (site && site.s >= first && site.s < last) result.push(site);
-  }
-  return result;
-}
+export const cityDiscoveries = schedule.discoveries;
 
 // Whether a point, or a lot, stays out of every site's rectangle.
 export function cityDiscoveryClears(s, u, discoveries, radius = 0) {
