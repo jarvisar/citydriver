@@ -50,7 +50,7 @@ export class Input {
         if (e.code === 'KeyM') onAction('sound');
         if (e.code === 'KeyO' && !e.ctrlKey && !e.metaKey && !e.altKey) onAction('ambientOcclusion');
         if (e.code === 'KeyN' && !e.ctrlKey && !e.metaKey && !e.altKey) onAction('nextJourney');
-        if (e.code === 'KeyC' && !e.ctrlKey && !e.metaKey && !e.altKey) onAction('car');
+        if (['KeyC', 'KeyG'].includes(e.code) && !e.ctrlKey && !e.metaKey && !e.altKey) onAction('car');
       }
     });
     window.addEventListener('keyup', e => this.keys.delete(e.code));

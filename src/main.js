@@ -406,6 +406,13 @@ async function boot() {
       if (event.pointerType === 'touch') { event.preventDefault(); action(name); }
     });
     $('#start').addEventListener('click', () => { start(); if (!controlHelpDismissed()) toast(input.gamepad.connected ? 'Left stick to steer · RT / R2 gas · LT / L2 brake' : window.matchMedia('(any-pointer: coarse)').matches ? 'Drag the stick where you want to go · release to stop' : 'W / ↑ to accelerate · S / ↓ to brake'); });
+    window.addEventListener('keydown', event => {
+      if (event.key !== 'Enter' || event.ctrlKey || event.metaKey || event.altKey || event.defaultPrevented) return;
+      if (started || paused || changingJourney || document.querySelector('dialog[open]')) return;
+      if (event.target.closest?.('button, a, input, select, textarea, [contenteditable]') && event.target !== $('#start')) return;
+      event.preventDefault();
+      if (!event.repeat) $('#start').click();
+    });
     $('#resume').addEventListener('click', () => setPaused(false));
     document.addEventListener('visibilitychange', () => { audio.setHidden(document.hidden); if (document.hidden) { if (openChooser() || changingJourney) journeyWasPaused = true; if (started) setPaused(true); input.clear(); } frameClock.suspend(); });
     window.addEventListener('blur', () => { audio.setHidden(true); if (openChooser() || changingJourney) journeyWasPaused = true; if (started) setPaused(true); });
