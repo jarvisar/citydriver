@@ -37,6 +37,23 @@ test('city terrain stays ordered, continuous, level under the road, and lower to
   assert.deepEqual(cityDrivingRoute.bounds(0), [-5.9, 5.9]);
 });
 
+test('city bridge lanes and railings run straight between their existing bank connections', () => {
+  for (let index = -120; index < 120; index++) {
+    if (!nearStreet(index)) continue;
+    for (const ds of [-8, -7.7, -2.7, 0, 2.7, 7.7, 8]) {
+      const s = blockBoundary(index) + ds, near = quayOffset(s) + 1.5, far = FAR_BANK_TOP - 2;
+      const a = positionAt(s, near, 24), b = positionAt(s, far, 24);
+      assert.deepEqual(cityPosition(s, near, 24), a);
+      assert.deepEqual(cityPosition(s, far, 24), b);
+      for (let step = 1; step < 20; step++) {
+        const t = step / 20, p = cityPosition(s, near + (far - near) * t, 24);
+        assert.ok(Math.hypot(p.x - (a.x + (b.x - a.x) * t), p.z - (a.z + (b.z - a.z) * t)) < 1e-9,
+          `curved bridge at street ${index}, lane ${ds}`);
+      }
+    }
+  }
+});
+
 test('blocks tile the boulevard with cross streets on terrain rows', () => {
   for (let s = -6000; s < 6000; s += 5) {
     const block = blockAt(s);

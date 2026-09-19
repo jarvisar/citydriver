@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { Autodrive } from '../src/autodrive.js';
 import { DrivingController } from '../src/vehicle.js';
-import { Traffic } from '../src/traffic.js';
+import { Traffic, TRAFFIC_CRUISE_SPEED } from '../src/traffic.js';
 import { CAR_IDS } from '../src/cars.js';
 import { coastalDrivingRoute } from '../src/world/route.js';
 import { JOURNEYS } from '../src/journeys.js';
@@ -40,6 +40,22 @@ test('every car reaches its own top speed and follows a bending road without tra
     f.traffic.setEnabled(false, f.player);
     f.step(30, () => assert.ok(Math.abs(f.player.u - 2.4) < .01, id));
     assert.ok(Math.abs(f.player.speed - f.player.stats.topSpeed) < .01, id);
+    f.dispose();
+  }
+});
+
+test('traffic-speed cruising maintains pace and stays behind matching traffic', () => {
+  for (const id of ['auto', 'formula']) {
+    const f = setup(id); arrange(f, [40]);
+    f.player.speed = TRAFFIC_CRUISE_SPEED;
+    for (let i = 0; i < 30 * 60; i++) {
+      f.player.update(1 / 60, f.auto.update(f.player, f.traffic, TRAFFIC_CRUISE_SPEED));
+      f.traffic.update(1 / 60, f.player);
+      assert.ok(Math.abs(f.player.speed - TRAFFIC_CRUISE_SPEED) < .01, id);
+      assert.ok(Math.abs(f.player.u - 2.4) < .01, id);
+      assert.equal(f.auto.passing, null);
+    }
+    assert.equal(f.collisions(), 0);
     f.dispose();
   }
 });

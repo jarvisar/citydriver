@@ -159,6 +159,24 @@ function bankAxis(index) {
 }
 export function cityPosition(s, u, y = cityHeight(s, u)) {
   const p = positionAt(s, u, y);
+  const bridgeFar = FAR_BANK_TOP - 2;
+  if (u > bridgeFar && u < -QUAY_NEAR + 1.5) {
+    const street = crossStreetAt(s);
+    const weight = 1 - smoothstep(STREET_HALF_WIDTH, STREET_HALF_WIDTH + 12, Math.abs(s - street.center));
+    if (weight > 0 && nearStreet(street.index)) {
+      const near = quayOffset(s) + 1.5;
+      if (u < near) {
+        // The terrain's normal offset fades with distance from the boulevard,
+        // bending cross streets. Bridge spans instead join their bank endpoints
+        // with straight lines. Share the map with paving, rails and supports;
+        // ease the surrounding river bed back into the unmodified terrain.
+        const a = positionAt(s, near, y), b = positionAt(s, bridgeFar, y);
+        const t = (near - u) / (near - bridgeFar);
+        p.x = lerp(p.x, lerp(a.x, b.x, t), weight);
+        p.z = lerp(p.z, lerp(a.z, b.z, t), weight);
+      }
+    }
+  }
   if (u >= -138) return p;
   const index = Math.floor(blockAt(s) / 2), a = bankAxis(index), b = bankAxis(index + 1);
   const t = (s - a.s) / (b.s - a.s), weight = smoothstep(-138, -235, u);
