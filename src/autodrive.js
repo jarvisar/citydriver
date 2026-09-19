@@ -11,9 +11,10 @@ export class Autodrive {
   reset() { this.passing = null; }
   toggle() { this.enabled = !this.enabled; this.reset(); return this.enabled; }
 
-  update(player, traffic) {
+  update(player, traffic, speedLimit = player.stats.topSpeed) {
     const cars = traffic.enabled ? traffic.vehicles : [];
-    const { topSpeed, acceleration, touchBraking } = player.stats;
+    const { acceleration, touchBraking } = player.stats;
+    const topSpeed = Math.min(player.stats.topSpeed, speedLimit);
     const frame = player.route.frame(player.s);
     const ahead = car => (car.s - player.s) * frame.scale;
     const halfLength = car => (player.spec.length + car.spec.length) / 2;
@@ -68,7 +69,7 @@ export class Autodrive {
     // road-relative steering. Lateral speed is bounded for smooth lane changes.
     const across = clamp((lane - player.u) * 1.6, -LATERAL, LATERAL) / Math.max(4, player.speed);
     return { touchDrive: {
-      amount: speed / topSpeed,
+      amount: speed / player.stats.topSpeed,
       along: Math.sqrt(1 - across * across) / frame.scale,
       across,
       heading: frame.angle + Math.asin(across),

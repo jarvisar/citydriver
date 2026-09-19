@@ -15,7 +15,7 @@ import { freshSceneStart } from './world/generation.js';
 import { ChunkWorker } from './world/chunk-source.js';
 import { setResidentWindow } from './world/resident.js';
 import { DrivingController } from './vehicle.js';
-import { Traffic } from './traffic.js';
+import { Traffic, TRAFFIC_CRUISE_SPEED } from './traffic.js';
 import { Autodrive } from './autodrive.js';
 import { Input } from './input.js';
 import { touchDrivingInput, thirdPersonDrivingInput } from './touch-stick.js';
@@ -27,6 +27,7 @@ setupControlHelp();
 
 const $ = selector => document.querySelector(selector);
 const MENU_MOVES = ['menuNext', 'menuPrevious', 'menuUp', 'menuDown'];
+const MENU_CRUISE_SPEED = TRAFFIC_CRUISE_SPEED * 1.1;
 // A chooser's ring holds its cards and paint chips; the pause screen's holds
 // resume, the garage and every driving, sound and graphics setting.
 const MENU_CARDS = '[data-journey], [data-car], [data-paint]';
@@ -108,8 +109,8 @@ async function boot() {
     function primeMenuDrive() {
       if (started) return;
       // Reveal the menu already cruising, at a speed that respects traffic.
-      vehicle.speed = vehicle.stats.topSpeed;
-      const state = autodrive.update(vehicle, traffic);
+      vehicle.speed = MENU_CRUISE_SPEED;
+      const state = autodrive.update(vehicle, traffic, MENU_CRUISE_SPEED);
       vehicle.speed = state.touchDrive.amount * vehicle.stats.topSpeed;
       vehicle.update(0, state);
     }
@@ -325,7 +326,7 @@ async function boot() {
       }
       const chooser = openChooser();
       if (chooser) {
-        if (name === 'menuClose') chooser.close();
+        if (name === 'menuClose' || (name === 'car' && chooser === carDialog)) chooser.close();
         if (MENU_MOVES.includes(name)) moveMenuFocus(chooser, name);
         if (name === 'menuConfirm' && chooser.contains(document.activeElement)) document.activeElement.click();
         return;
@@ -501,7 +502,7 @@ async function boot() {
       if (autodrive.enabled && (state.forward || state.brake || state.left || state.right || state.handbrake || state.touchStick)) action('autodrive');
       // Cruise behind the welcome menu without toggling the player's setting
       // or showing a notification. Starting hands control straight to input.
-      if (!started || autodrive.enabled) state = autodrive.update(vehicle, traffic);
+      if (!started || autodrive.enabled) state = autodrive.update(vehicle, traffic, started ? vehicle.stats.topSpeed : MENU_CRUISE_SPEED);
       if (state.touchStick) {
         if (rendering.camera.isPerspectiveCamera) Object.assign(state, thirdPersonDrivingInput(state.touchStick));
         else state.touchDrive = touchDrivingInput(state.touchStick, rendering.camera, vehicle.route, vehicle.s, vehicle.u, world.origin);

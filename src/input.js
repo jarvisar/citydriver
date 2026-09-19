@@ -39,6 +39,11 @@ export class Input {
         if (!e.repeat) onAction('selectJourney', routeKey[1]);
         return;
       }
+      if (['KeyC', 'KeyG'].includes(e.code) && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        if (!e.repeat) onAction('car');
+        return;
+      }
       if (document.querySelector('dialog[open]')) return;
       if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) e.preventDefault();
       this.keys.add(e.code);
@@ -51,7 +56,6 @@ export class Input {
         if (e.code === 'KeyH' && !e.ctrlKey && !e.metaKey && !e.altKey) onAction('autodrive');
         if (e.code === 'KeyO' && !e.ctrlKey && !e.metaKey && !e.altKey) onAction('ambientOcclusion');
         if (e.code === 'KeyN' && !e.ctrlKey && !e.metaKey && !e.altKey) onAction('nextJourney');
-        if (['KeyC', 'KeyG'].includes(e.code) && !e.ctrlKey && !e.metaKey && !e.altKey) onAction('car');
       }
     });
     window.addEventListener('keyup', e => this.keys.delete(e.code));

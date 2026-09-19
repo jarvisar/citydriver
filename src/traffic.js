@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { clamp, randomAt } from './world/route.js';
 import { createTrafficModels, TRAFFIC_COLORS, TRAFFIC_MODELS } from './traffic-models.js';
 
+export const TRAFFIC_CRUISE_SPEED = 16;
 const LANE = 2.4;
 const BEHIND = 380, AHEAD = 620;
 const DENSITY = { coast: 1, snow: .75, desert: .5, jungle: .6, plains: .5, city: 1 };
@@ -84,7 +85,7 @@ export class Traffic {
   }
   respawn(car, s) {
     car.s = s; car.generation++;
-    car.cruiseSpeed = car.direction > 0 ? 16 : 20; car.speed = car.cruiseSpeed;
+    car.cruiseSpeed = car.direction > 0 ? TRAFFIC_CRUISE_SPEED : 20; car.speed = car.cruiseSpeed;
     car.paint.color.set(TRAFFIC_COLORS[Math.floor(this.random(car, 2) * TRAFFIC_COLORS.length)]);
     this.pose(car); car.previousPosition.copy(car.position); car.previousQuaternion.copy(car.quaternion);
   }
