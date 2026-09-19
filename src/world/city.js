@@ -6,8 +6,8 @@ import { updateResidentChunks } from './resident.js';
 import { CHUNK_LENGTH, randomAt, seededRandom, smoothstep, lerp, roadFrame } from './route.js';
 import { CITY_STEP, CITY_COLUMN_COUNT, KERB, PAVEMENT_LIFT, cityVertex, cityPosition, cityRoadHeight, cityGroundHeight, pavementHeight, quayOffset, RIVER_LEVEL,
   FAR_BANK, FAR_BANK_TOP, QUAY_WALL, blockBoundary, blockAt, crossStreetAt, nearStreet, onCrossStreet, STREET_HALF_WIDTH, BANDS, SKYLINE_FROM,
-  BANK_BANDS, BANK_ROADS, onRiverCrossing } from './city-route.js';
-import { createWaterMaterial, animateWater } from './water.js';
+  BANK_BANDS, BANK_ROADS, SIDE_ROAD_HALF_WIDTH, onRiverCrossing } from './city-route.js';
+import { createRiverMaterial, animateWater } from './water.js';
 import { terrainSampler } from './coastal-assets.js';
 import { cityAssets, cityTrees, parkedCars, PARKED_PAINTS } from './city-assets.js';
 import { dressBuilding, buildShopfront, rooftopTank } from './city-architecture.js';
@@ -26,7 +26,7 @@ const roadMaterial = material('#4d5155', { roughness: .5, flatShading: false });
 const kerbMaterial = material('#a4a7a9', { flatShading: false });
 const edgeMaterial = material('#c3c6c3', { flatShading: false });
 const centerMaterial = material('#bda041', { flatShading: false });
-const waterMaterial = createWaterMaterial(true);
+const waterMaterial = createRiverMaterial();
 const blocksMaterial = material('#ffffff', { vertexColors: true, roughness: .92 });
 const streetsMaterial = material('#ffffff', { vertexColors: true, roughness: .5, flatShading: false });
 const skylineMaterial = material('#ffffff', { vertexColors: true });
@@ -48,9 +48,13 @@ function geometry(vertices, colors) {
   if (colors) g.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
   g.computeVertexNormals(); g.computeBoundingSphere(); return g;
 }
-function triangle(vertices, colors, a, b, c, color, start) {
+function triangle(vertices, colors, a, b, c, color, start, coordinates) {
   if ((b.z - a.z) * (c.x - a.x) - (b.x - a.x) * (c.z - a.z) < 0) [b, c] = [c, b];
-  for (const p of [a, b, c]) { vertices.push(p.x, p.y, p.z + start); if (colors) colors.push(color.r, color.g, color.b); }
+  for (const p of [a, b, c]) {
+    vertices.push(p.x, p.y, p.z + start);
+    if (colors) colors.push(color.r, color.g, color.b);
+    if (coordinates) coordinates.push(p.u, p.s);
+  }
 }
 function instances(group, geo, mat, items, name, shadows = true, ambientOcclusion = true) {
   if (!items.length) return;
@@ -110,12 +114,34 @@ export class CityChunk {
     const vertices = [], colors = [], cache = new Map();
     const vertex = (row, col) => {
       const key = `${row},${col}`;
-      if (!cache.has(key)) cache.set(key, cityVertex(row, col));
+      if (!cache.has(key)) {
+        let p = cityVertex(row, col);
+        // Extra street rows split the distant terrain's existing edges;
+        // resampling its jitter here could fold the closely spaced rows.
+        if (!Number.isInteger(row) && (p.u < -260 || p.u > 170)) {
+          const a = vertex(Math.floor(row), col), b = vertex(Math.ceil(row), col), t = row - Math.floor(row);
+          p = { column: col };
+          for (const axis of ['x', 'y', 'z', 's', 'u']) p[axis] = lerp(a[axis], b[axis], t);
+        }
+        cache.set(key, p);
+      }
       return cache.get(key);
     };
-    for (let row = this.start / CITY_STEP; row < (this.start + CHUNK_LENGTH) / CITY_STEP; row++) {
+    // Put terrain edges at the asphalt edges as well as the outer pavements.
+    // Otherwise a lowered eight-metre row leaves a trough outside the kerb.
+    const end = this.start + CHUNK_LENGTH, rows = new Set();
+    for (let s = this.start; s <= end; s += CITY_STEP) rows.add(s / CITY_STEP);
+    for (let index = blockAt(this.start) - 1; index <= blockAt(end) + 1; index++) {
+      for (const side of [-1, 1]) {
+        const s = blockBoundary(index) + side * SIDE_ROAD_HALF_WIDTH;
+        if (s > this.start && s < end) rows.add(s / CITY_STEP);
+      }
+    }
+    const ordered = [...rows].sort((a, b) => a - b);
+    for (let k = 0; k < ordered.length - 1; k++) {
+      const row = ordered[k], next = ordered[k + 1];
       for (let col = 0; col < CITY_COLUMN_COUNT - 1; col++) {
-        const a = vertex(row, col), b = vertex(row + 1, col), c = vertex(row, col + 1), d = vertex(row + 1, col + 1);
+        const a = vertex(row, col), b = vertex(next, col), c = vertex(row, col + 1), d = vertex(next, col + 1);
         const tris = (row + col) % 2 ? [[a, b, c], [b, d, c]] : [[a, b, d], [a, d, c]];
         tris.forEach((tri, i) => triangle(vertices, colors, ...tri, this.facetColor(tri, row, col, i), this.start));
       }
@@ -127,28 +153,27 @@ export class CityChunk {
     const s = tri.reduce((sum, p) => sum + p.s, 0) / 3, u = tri.reduce((sum, p) => sum + p.u, 0) / 3, cross = Math.abs(u);
     const facet = randomAt(row * 2 + i, col + 3041);
     let color;
+    // Secondary asphalt has its own precisely clipped mesh. Its terrain
+    // backing stays paved so coarse facets cannot spill past the sidewalks.
     if (cross <= KERB + .3) color = asphalt.clone();
     else if (cross < 6.6) color = gutter.clone();
     else if (u > 0) {
       const square = this.discoveries.find(site => site.kind === 'square' && Math.abs(s - site.s) < site.halfS && u > site.u0 && u < site.u1);
-      if (onCrossStreet(s, u)) color = asphalt.clone();
-      else if ((u > BANDS[0].back && u < BANDS[1].front) || (u > BANDS[1].back && u < BANDS[2].front)) color = asphalt.clone().multiplyScalar(.94);
-      else if (square) {
+      if (square) {
         const paved = Math.hypot(s - square.s, u - square.u) < 11.5 || Math.abs(s - square.s) < 2.5 || Math.abs(u - square.u) < 2.5;
         color = paved ? paving.clone() : lawn.clone().lerp(lawnWet, .5 + .5 * Math.sin(s / 9 + u / 7));
-      } else if (u < 13) color = pavement.clone();
+      } else if (onCrossStreet(s, u) || (u > BANDS[0].back && u < BANDS[1].front) || (u > BANDS[1].back && u < BANDS[2].front) || u < 13) color = pavement.clone();
       else if (u < BANDS[2].back) color = lots.clone();
       else if (u < SKYLINE_FROM) color = vacant.clone();
       else color = far.clone().lerp(fog, smoothstep(180, 420, u) * .6);
     } else {
       const q = quayOffset(s);
       if (u >= q) {
-        if (onCrossStreet(s, u)) color = asphalt.clone();
-        else color = (Math.floor(row) % 2 ? paving : pavement).clone();
+        color = (Math.floor(row) % 2 ? paving : pavement).clone();
       } else if (u >= q - QUAY_WALL) color = wall.clone();
       else if (u > FAR_BANK) color = bed.clone();
       else if (u > FAR_BANK_TOP) color = bank.clone();
-      else if (onCrossStreet(s, u) || BANK_ROADS.some(center => Math.abs(u - center) < 5.5)) color = asphalt.clone();
+      else if (onCrossStreet(s, u) || BANK_ROADS.some(center => Math.abs(u - center) < 5.5)) color = pavement.clone();
       else color = bankTop.clone().lerp(fog, smoothstep(-260, -420, u) * .6);
     }
     return color.multiplyScalar(.975 + facet * .05);
@@ -172,19 +197,23 @@ export class CityChunk {
   // The river: one level plane from the far bank to just inside the quay
   // wall, so the wall's own facet meets the water without a seam.
   buildRiver() {
-    const vertices = [], colors = [];
+    const vertices = [], colors = [], coordinates = [];
+    // Keep coordinates small on long drives, with the same noise period at
+    // each chunk seam. Never wrap individual vertices across a triangle.
+    const flowStart = ((this.start % 4096) + 4096) % 4096;
     for (let s = this.start; s < this.start + CHUNK_LENGTH; s += CITY_STEP) {
       const t = s + CITY_STEP;
       const columns = q => [-128.3, -104, -82, -62, q - .9];
       const c0 = columns(quayOffset(s)), c1 = columns(quayOffset(t));
       for (let k = 0; k < c0.length - 1; k++) {
-        const at = (v, u) => cityPosition(v, u, RIVER_LEVEL);
+        const at = (v, u) => ({ ...cityPosition(v, u, RIVER_LEVEL), u, s: flowStart + v - this.start });
         const a = at(s, c0[k]), b = at(t, c1[k]), c = at(s, c0[k + 1]), d = at(t, c1[k + 1]);
         const color = waterDeep.clone().lerp(waterLight, .3 + .35 * Math.sin(s / 41 + k * 1.7)).multiplyScalar(.97 + randomAt(s, k + 3051) * .06);
-        triangle(vertices, colors, a, b, c, color, this.start); triangle(vertices, colors, b, d, c, color, this.start);
+        triangle(vertices, colors, a, b, c, color, this.start, coordinates); triangle(vertices, colors, b, d, c, color, this.start, coordinates);
       }
     }
     const water = this.addMesh(geometry(vertices, colors), waterMaterial, 'city-river');
+    water.geometry.setAttribute('riverCoord', new THREE.Float32BufferAttribute(coordinates, 2));
     water.geometry.boundingSphere.radius += .5;
   }
   // A face of a building, in local coordinates, wound to face outward.

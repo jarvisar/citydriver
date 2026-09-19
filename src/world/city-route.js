@@ -91,7 +91,8 @@ export function cityStreetHeight(s, u) {
 export function cityRoadbedHeight(s, u) {
   const street = crossStreetAt(s);
   const bankStreet = bankStreetRange(street.index);
-  const across = Math.abs(s - street.center) <= STREET_HALF_WIDTH &&
+  const halfWidth = Math.abs(u) <= 8 ? STREET_HALF_WIDTH : SIDE_ROAD_HALF_WIDTH;
+  const across = Math.abs(s - street.center) <= halfWidth &&
     ((u >= KERB && u <= 168) || (u <= bankStreet.to + SIDE_ROAD_HALF_WIDTH && u <= FAR_BANK_TOP && u >= bankStreet.from - SIDE_ROAD_HALF_WIDTH) ||
       (nearStreet(street.index) && u <= -KERB && u >= quayOffset(s)));
   const along = [...INLAND_ROADS, ...BANK_ROADS.map(u => ({ u, halfWidth: SIDE_ROAD_HALF_WIDTH }))]

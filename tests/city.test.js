@@ -280,3 +280,37 @@ test('far-bank T junctions close with a continuous sidewalk instead of opening i
     chunk.dispose();
   }
 });
+
+test('cross-street terrain meets the outside of the sidewalks without a sunken strip', () => {
+  for (const index of [-8, -1, 0, 1, 2, 8]) {
+    const center = blockBoundary(index), range = bankStreetRange(index);
+    const chunks = [-1, 0, 1].map(offset => new CityChunk(Math.floor(center / CHUNK_LENGTH) + offset));
+    try {
+      for (const side of [-1, 1]) for (const distance of [8.15, 9, 12]) for (const u of [24, 65, 110, -166, -215]) {
+        if (u < 0 && (u < range.from || u > range.to)) continue;
+        const s = center + side * distance, chunk = chunks.find(chunk => chunk.inChunk(s));
+        assert.ok(Math.abs(chunk.ground(s, u).y - cityGroundHeight(s, u)) < .025,
+          `terrain drops outside the sidewalk at ${s}, ${u}`);
+      }
+    } finally { chunks.forEach(chunk => chunk.dispose()); }
+  }
+});
+
+test('alley asphalt stays inside its curbs instead of bleeding through the surrounding terrain', () => {
+  const down = new THREE.Vector3(0, -1, 0);
+  for (const index of [0, 1, 2, 3]) {
+    const s = (blockBoundary(index) + blockBoundary(index + 1)) / 2;
+    const chunk = new CityChunk(Math.floor(s / CHUNK_LENGTH));
+    chunk.group.position.z = -chunk.start; chunk.group.updateMatrixWorld(true);
+    try {
+      for (const u of [36.1, 43.9, 84.04, 89.96]) {
+        const p = cityPosition(s, u, 150), ray = new THREE.Raycaster(new THREE.Vector3(p.x, p.y, p.z), down);
+        assert.equal(ray.intersectObject(chunk.group.getObjectByName('city-side-roads')).length, 0, 'asphalt stops at the kerb');
+        const hit = ray.intersectObject(chunk.terrain)[0];
+        assert.ok(hit, 'terrain continues behind the pavement');
+        const colors = chunk.terrain.geometry.attributes.color;
+        assert.ok(colors.getY(hit.face.a) > .2, `asphalt-colored terrain beyond the sidewalk at ${s}, ${u}`);
+      }
+    } finally { chunk.dispose(); }
+  }
+});
