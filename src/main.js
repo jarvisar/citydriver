@@ -27,9 +27,9 @@ setupControlHelp();
 const $ = selector => document.querySelector(selector);
 const MENU_MOVES = ['menuNext', 'menuPrevious', 'menuUp', 'menuDown'];
 // A chooser's ring holds its cards and paint chips; the pause screen's holds
-// resume, the garage and every graphics setting.
+// resume, the garage and every driving, sound and graphics setting.
 const MENU_CARDS = '[data-journey], [data-car], [data-paint]';
-const PAUSE_CONTROLS = '#resume, #change-car, #sound, #fullscreen, [data-quality], #soft-shading, .pwa-install-button';
+const PAUSE_CONTROLS = '#resume, #change-car, #traffic, #sound, #fullscreen, [data-quality], #soft-shading, .pwa-install-button';
 const mileageFormat = new Intl.NumberFormat('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 let paused = false, started = false, time = 0, hudTime = 0;
 const frameClock = new FrameClock();
@@ -86,6 +86,16 @@ async function boot() {
     const openPauseMenu = () => paused && !pauseOverlay.hidden ? pauseOverlay : null;
     scene.add(vehicle.car);
     const traffic = new Traffic(scene, vehicle.route, vehicle.s);
+    const trafficStorageKey = 'coastline-traffic';
+    try { traffic.setEnabled(localStorage.getItem(trafficStorageKey) !== 'false', vehicle); } catch { /* Storage is optional. */ }
+    $('#traffic').setAttribute('aria-pressed', String(traffic.enabled));
+    $('#traffic').addEventListener('click', () => {
+      traffic.setEnabled(!traffic.enabled, vehicle);
+      traffic.render(1, world.origin);
+      $('#traffic').setAttribute('aria-pressed', String(traffic.enabled));
+      try { localStorage.setItem(trafficStorageKey, String(traffic.enabled)); } catch { /* Keep the setting for this visit. */ }
+      needsRender = true;
+    });
     function start() { if (paused || changingJourney) return; if (!started) { started = true; $('#welcome').classList.add('hidden'); } }
     function setPaused(value) {
       paused = value; input.clear(); frameClock.suspend();

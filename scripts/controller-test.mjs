@@ -124,6 +124,13 @@ try {
   await press(13); await frames();
   assert.equal(await focus(), 'change-car', 'down reaches the garage button');
   await press(13); await frames();
+  assert.equal(await focus(), 'traffic', 'down reaches the traffic switch');
+  await press(0); await frames();
+  assert.equal(await page.locator('#traffic').getAttribute('aria-pressed'), 'false');
+  assert.equal(await page.evaluate(() => window.__coastline.traffic.group.visible), false);
+  await press(0); await frames();
+  assert.equal(await page.locator('#traffic').getAttribute('aria-pressed'), 'true');
+  await press(13); await frames();
   assert.equal(await focus(), 'sound', 'down reaches the sound switch');
   await press(13); await frames();
   assert.equal(await focus(), 'fullscreen', 'down reaches the fullscreen switch');

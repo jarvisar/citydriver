@@ -26,6 +26,34 @@ function playerFootprint(player) {
   return { x: player.groundedPosition.x, z: player.groundedPosition.z, heading: player.heading, halfWidth: 1, halfLength: 1.96 };
 }
 
+test('disabled traffic hides the fleet and prevents movement and collisions across route changes', () => {
+  const { player, traffic } = setup();
+  const car = traffic.vehicles[0];
+  traffic.respawn(car, player.s);
+  let collisions = 0;
+  player.resolveTrafficCollision = () => { collisions++; };
+  traffic.collide(player);
+  assert.ok(collisions > 0, 'the overlapping car collides when enabled');
+  collisions = 0;
+  traffic.setEnabled(false, player);
+  const positions = traffic.vehicles.map(car => car.s);
+  traffic.update(1, player); traffic.collide(player); traffic.render(1);
+  assert.equal(collisions, 0);
+  assert.equal(traffic.group.visible, false);
+  assert.deepEqual(traffic.vehicles.map(car => car.s), positions);
+  traffic.reset(snowDrivingRoute, 2000, 'snow');
+  traffic.render(1);
+  assert.equal(traffic.enabled, false);
+  assert.equal(traffic.group.visible, false);
+  player.s = 5000;
+  traffic.setEnabled(true, player); traffic.render(1, 4096);
+  assert.equal(traffic.group.visible, true);
+  assert.equal(traffic.journey, 'snow');
+  assert.ok(traffic.vehicles.every(car => Math.abs(car.s - player.s) >= 18 && Math.abs(car.s - player.s) < 625 * traffic.spacing));
+  assert.ok(traffic.vehicles.every(car => car.car.position.equals(car.position)));
+  traffic.dispose();
+});
+
 test('traffic has five distinct shapes, varied paint, and ample initial gaps', () => {
   const { traffic } = setup();
   assert.equal(traffic.vehicles.length, 6);

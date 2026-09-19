@@ -31,6 +31,7 @@ export function trafficContact(a, b) {
 
 export class Traffic {
   constructor(scene, route, s, journey = 'coast') {
+    this.enabled = true;
     this.group = new THREE.Group(); this.group.name = 'traffic'; scene.add(this.group);
     this.models = createTrafficModels();
     this.poseRotation = new THREE.Euler(0, 0, 0, 'YXZ');
@@ -54,6 +55,15 @@ export class Traffic {
     this.reset(route, s, journey);
   }
   random(car, salt) { return randomAt(car.index + car.generation * 31, salt + this.salt); }
+  setEnabled(enabled, player) {
+    if (this.enabled === enabled) return;
+    this.enabled = enabled;
+    this.group.visible = enabled;
+    if (enabled) {
+      this.reset(this.route, player.s);
+      this.clearNear(player);
+    }
+  }
   reset(route, s, journey = this.journey) {
     this.route = route; this.journey = journey; this.salt = { coast: 2100, desert: 2200, snow: 2300, jungle: 2400, plains: 2500, city: 2600 }[journey];
     this.spacing = 1 / (DENSITY[journey] ?? 1);
@@ -100,6 +110,7 @@ export class Traffic {
     car.quaternion.setFromEuler(this.poseRotation.set(Math.atan(slope * car.direction), -car.heading, Math.atan(crossSlope * car.direction)));
   }
   update(dt, player) {
+    if (!this.enabled) return;
     if (Math.abs(player.s - this.lastPlayerS) > 120) this.reset(this.route, player.s);
     this.lastPlayerS = player.s;
     for (const car of this.vehicles) {
@@ -128,6 +139,7 @@ export class Traffic {
     this.collide(player);
   }
   collide(player) {
+    if (!this.enabled) return;
     for (const car of this.vehicles) {
       if (Math.abs(car.s - player.s) > 9) continue;
       const p = player.groundedPosition;
@@ -143,6 +155,7 @@ export class Traffic {
     }
   }
   render(alpha, origin = 0) {
+    if (!this.enabled) return;
     this.group.position.z = origin;
     for (const car of this.vehicles) {
       car.car.position.lerpVectors(car.previousPosition, car.position, clamp(alpha, 0, 1));
