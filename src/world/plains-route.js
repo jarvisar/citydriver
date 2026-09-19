@@ -127,34 +127,60 @@ export function pondDistance(s, u) {
   return best;
 }
 
-// Long, low rises beyond the far fields. They only show in the third-person
-// view, where they close the horizon inside the fog instead of a flat edge.
+// Smooth, seeded variation in two dimensions. The second derivative also
+// meets at lattice boundaries, so grazing sunlight never reveals the grid.
+export function plainsNoise(s, u, span, salt) {
+  const x = s / span, z = u / span, i = Math.floor(x), j = Math.floor(z);
+  const ease = t => t * t * t * (t * (t * 6 - 15) + 10);
+  const a = ease(x - i), b = ease(z - j);
+  return lerp(lerp(randomAt(i, j + salt), randomAt(i + 1, j + salt), a),
+    lerp(randomAt(i, j + 1 + salt), randomAt(i + 1, j + 1 + salt), a), b) * 2 - 1;
+}
+
+// Overlapping rounded ridges, with different shoulders and saddles. Their
+// slopes run gently into the fields instead of ending at a pyramid's edge.
+const ridges = new Map();
+function plainsRidge(index, band) {
+  const key = `${index},${band}`;
+  if (ridges.has(key)) return ridges.get(key);
+  const seed = index * 5 + band * 733, spacing = 310 + band * 110;
+  const ridge = {
+    s: index * spacing + randomAt(seed, 2771) * spacing * .6,
+    u: 385 + band * 145 + (randomAt(seed, 2772) - .5) * 70,
+    along: 225 + band * 65 + randomAt(seed, 2773) * 75,
+    across: 110 + band * 30 + randomAt(seed, 2774) * 45,
+    lean: (randomAt(seed, 2775) - .5) * .65,
+    height: 22 + band * 7 + randomAt(seed, 2776) * 11,
+    shoulder: (randomAt(seed, 2777) - .5) * .35,
+  };
+  if (ridges.size >= 128) ridges.delete(ridges.keys().next().value);
+  ridges.set(key, ridge);
+  return ridge;
+}
 export function distantRise(s, u) {
-  if (u <= 280) return 0;
+  if (u <= 260) return 0;
   let hills = 0;
   for (let band = 0; band < 2; band++) {
-    const spacing = 300 + band * 110, cell = Math.floor(s / spacing);
+    const spacing = 310 + band * 110, cell = Math.floor(s / spacing);
     for (let i = cell - 2; i <= cell + 2; i++) {
-      const seed = i * 5 + band * 733;
-      const center = i * spacing + randomAt(seed, 2771) * spacing * .6;
-      const ridgeU = 390 + band * 140 + (randomAt(seed, 2772) - .5) * 60;
-      const ds = (s - center) / (150 + band * 70 + randomAt(seed, 2773) * 80);
-      const du = (u - ridgeU) / (70 + band * 40 + randomAt(seed, 2774) * 30);
-      const tilted = du + ds * (randomAt(seed, 2775) - .5) * .4;
-      const radius = Math.max(Math.abs(ds) * .8 + Math.abs(tilted) * .45, Math.abs(tilted) + Math.abs(ds) * .2);
-      hills = Math.max(hills, (16 + band * 12 + randomAt(seed, 2776) * 14) * Math.max(0, 1 - radius) ** .9);
+      const ridge = plainsRidge(i, band);
+      const ds = (s - ridge.s) / ridge.along;
+      const du = (u - ridge.u) / ridge.across + ds * ridge.lean;
+      const radius2 = (ds / (1 + ridge.shoulder * Math.tanh(ds * 2))) ** 2 + du * du;
+      hills += ridge.height * Math.max(0, 1 - radius2) ** 2;
     }
   }
-  const foothills = 5 + 5 * Math.sin(s / 131 + u / 97) ** 2;
-  return (hills + foothills) * smoothstep(280, 360, u);
+  const foothills = 7 + 3 * plainsNoise(s, u, 173, 2778);
+  return (hills + foothills) * smoothstep(260, 390, u);
 }
 
 function fieldSwell(s, u) {
-  // Long, broad waves carry the country; the short ones only break up their
-  // surface, so the fields roll without the road ever pitching. The shortest
-  // are kept faint: at the facet size they read as crumpled ground, not swell.
-  return 5.2 * Math.sin(s / 231 + u / 173 + swellPhase[1]) + 3.1 * Math.sin(s / 97 + u / 71 + swellPhase[0])
-    + 1.7 * Math.sin(s / 53 - u / 89) + .45 * Math.sin(s / 29 + u / 37) + .2 * Math.sin(s / 17 - u / 23);
+  // Bend the sampling coordinates before layering broad landforms. Crests
+  // wander and spread independently of the highway and the field boundaries.
+  const along = s + 48 * Math.sin(u / 157 + swellPhase[0]) + 22 * Math.sin(s / 253);
+  const across = u + 39 * Math.sin(s / 183 + swellPhase[1]);
+  return 9.5 * plainsNoise(along, across, 190, 2703) + 4.5 * plainsNoise(along + 143, across - 87, 93, 2704)
+    + .6 * plainsNoise(along, across, 42, 2705) + 2.5 * Math.sin(s / 347 - u / 263 + swellPhase[1]);
 }
 // The plain without its creek: a flat road reserve with a drainage ditch on
 // each side, then rolling fields that ease down toward the camera and up
@@ -163,7 +189,10 @@ export function plainsBaseHeight(s, u, beforePonds = false) {
   const h = plainsRoadHeight(s), cross = Math.abs(u);
   if (cross <= 7) return h;
   const ditch = .55 * Math.sin(Math.PI * clamp((cross - 8.2) / 5.2, 0, 1)) ** 2;
-  const swell = fieldSwell(s, u) * smoothstep(9, 42, cross);
+  // Let the road's elevation carry the adjacent pasture. Removing the local
+  // offset avoids a steep bank wherever an independent hill crosses the road;
+  // farther out, the land regains its full, independent relief.
+  const swell = (fieldSwell(s, u) - fieldSwell(s, 0) * (1 - smoothstep(65, 230, cross))) * smoothstep(9, 42, cross);
   const fall = u < 0 ? 9 * smoothstep(60, 420, cross) : 0;
   const rise = u > 0 ? 6 * smoothstep(60, 300, u) : 0;
   let height = h - ditch + swell - fall + rise + distantRise(s, u);
@@ -310,10 +339,10 @@ export function farmTrackClears(s, u, radius = 0) {
 }
 
 // Terrain columns are fixed offsets from the road. Fine rows and columns keep
-// the ditch crisp beside the road; the fields coarsen outward, and the far
-// rises, seen only in the third-person view, coarsest of all.
-const PLAINS_COLUMNS = [-400, -352, -308, -268, -232, -200, -172, -148, -127, -109, -93, -79, -67, -56, -46, -37, -29, -22, -16.5, -13, -10.8, -8.6, -7,
-  0, 7, 8.6, 10.8, 13, 16.5, 22, 29, 37, 46, 56, 67, 79, 93, 109, 127, 148, 172, 200, 232, 268, 308, 352, 400, 452, 508, 568];
+// the ditch crisp beside the road; the fields coarsen outward. Extra columns
+// on the distant hills keep facets broad rather than fifty-metre ribbons.
+const PLAINS_COLUMNS = [-400, -376, -352, -330, -308, -288, -268, -252, -232, -200, -172, -148, -127, -109, -93, -79, -67, -56, -46, -37, -29, -22, -16.5, -13, -10.8, -8.6, -7,
+  0, 7, 8.6, 10.8, 13, 16.5, 22, 29, 37, 46, 56, 67, 79, 93, 109, 127, 148, 172, 200, 232, 252, 268, 288, 308, 330, 352, 376, 400, 426, 452, 480, 508, 538, 568];
 export { PLAINS_COLUMNS };
 export const PLAINS_COLUMN_COUNT = PLAINS_COLUMNS.length;
 // The creek is only ten metres across, so the rows halve around each crossing.
@@ -329,9 +358,9 @@ export function plainsVertex(row, column) {
   const u = base + (fixed ? 0 : (randomAt(seedRow, column + 2762) - .5) * Math.min(4.5, gap * .32));
   const p = plainsPosition(s, u, plainsGroundHeight(s, u));
   // A trace of facet relief on the fields, so a worked field lies smooth
-  // enough to carry its furrows; more on the far rises, none at the water.
+  // enough to carry its furrows, without corrugating the hills; none at water.
   const dry = smoothstep(4, 9, creekDistance(s, u));
-  p.y += (randomAt(seedRow, column + 2763) - .5) * (.09 * smoothstep(13, 30, cross) + 2.2 * smoothstep(280, 360, cross)) * dry;
+  p.y += (randomAt(seedRow, column + 2763) - .5) * .09 * smoothstep(13, 30, cross) * dry;
   return { ...p, s, u, column };
 }
 

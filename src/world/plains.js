@@ -6,7 +6,7 @@ import { updateResidentChunks } from './resident.js';
 import { CHUNK_LENGTH, randomAt, seededRandom, smoothstep, lerp, positionAt, roadFrame } from './route.js';
 import { PLAINS_STEP, PLAINS_COLUMNS, PLAINS_COLUMN_COUNT, ROAD_RESERVE, plainsVertex, plainsRowStep, plainsPosition, plainsRoadHeight, plainsGroundHeight,
   plainsCreekAt, creekCenterS, creekDistance, CREEK_WATER_HALF_WIDTH, BRIDGE_HALF_LENGTH, fieldAt, fieldRowAt, fieldBoundary, fieldBands,
-  rowBoundaryKind, bandBoundaryKind, roadsideFence, farmGate, farmTrackClears, fieldCorner, pondsNear, pondDistance, pondEdge, headlandDistance } from './plains-route.js';
+  rowBoundaryKind, bandBoundaryKind, roadsideFence, farmGate, farmTrackClears, fieldCorner, pondsNear, pondDistance, pondEdge, headlandDistance, plainsNoise } from './plains-route.js';
 import { createWaterMaterial, createPondMaterial, animateWater } from './water.js';
 import { terrainSampler } from './coastal-assets.js';
 import { plainsTrees, baleGeometry, squareBaleGeometry, cowGeometry, rushGeometry, stalkGeometry, wheatGeometry, crowGeometry, crowMaterial } from './plains-assets.js';
@@ -116,7 +116,7 @@ const CROP_PALETTES = {
 };
 // How the rows are cut in each crop: metres between furrows, and how much
 // darker the trough is than the ridge. Pasture is not worked.
-const FURROWS = { wheat: [2.2, .08], stubble: [3, .09], ploughed: [1.7, .13], pasture: [4, 0], hay: [4.5, .07] };
+const FURROWS = { wheat: [2.2, .048], stubble: [3, .055], ploughed: [1.7, .11], pasture: [4, 0], hay: [4.5, .043] };
 const NO_FURROW = () => [0, 0, 99];
 const gravel = new THREE.Color('#c1b088'), verge = new THREE.Color('#9aad4f'), ditch = new THREE.Color('#7a9a43'), lush = new THREE.Color('#7aa34d'), mud = new THREE.Color('#8a7c58');
 // The far fields fade into the same gold the horizon haze carries.
@@ -142,7 +142,9 @@ const CONIFER_GREENS = ['#4c7c3e', '#427037', '#558544'], CYPRESS_GREENS = ['#45
 function cropColor(s, u) {
   const field = fieldAt(s, u) ?? fieldAt(s, Math.sign(u) * (ROAD_RESERVE + 1)), palette = CROP_PALETTES[field.kind];
   const color = new THREE.Color(palette[Math.floor(randomAt(field.seed, field.salt + 5) * palette.length)]);
-  if (field.kind === 'pasture') color.lerp(pastureLight, smoothstep(.3, .8, .5 + .3 * Math.sin(s / 37 + u / 29) + .2 * Math.sin(s / 13 - u / 17)) * .5);
+  const growth = plainsNoise(s + 23, u, 64, 2807);
+  if (field.kind === 'pasture') color.lerp(pastureLight, smoothstep(-.6, .7, growth) * .42);
+  else color.multiplyScalar(1 + growth * .045);
   return { field, color };
 }
 // Only two kinds of ground grow a fringe, and each grows its own: long
@@ -302,7 +304,13 @@ export class PlainsChunk {
       // a few metres wide, and a depth set per facet stepped down in a sawtooth.
       const damp = cross > 16 && cross < 180 ? p => smoothstep(1.25, 1.7, pondDistance(p.s, p.u).d) : () => 1;
       const along = field.rows !== 'across';
-      furrow = p => [(along ? Math.abs(p.u) - field.from : p.s - field.start) / period, depth * dry * damp(p), headlandDistance(p.s, p.u, field)];
+      const bow = (randomAt(field.seed, field.salt + 23) - .5) * 3.2;
+      const strength = .8 + randomAt(field.seed, field.salt + 24) * .3;
+      furrow = p => {
+        const run = along ? (p.s - field.start) / (field.end - field.start) : (Math.abs(p.u) - field.from) / (field.to - field.from);
+        const across = along ? Math.abs(p.u) - field.from : p.s - field.start;
+        return [(across + bow * Math.sin(run * Math.PI)) / period, depth * strength * dry * damp(p), headlandDistance(p.s, p.u, field)];
+      };
     }
     // Wet meadow along the creek and around the ponds, and bare mud under the water.
     if (d < 9.5) color.lerp(lush, (1 - smoothstep(6, 9.5, d)) * .85);
@@ -545,14 +553,15 @@ export class PlainsChunk {
       let sinceTree = 99;
       for (const point of points) {
         if (point.own === false || !clear(point.s, point.u, 1)) continue;
-        const jitter = (random() - .5) * 1.4;
-        const s = point.s + jitter, u = point.u + (random() - .5) * 1.8;
+        const jitter = (random() - .5) * 3.2;
+        const s = point.s + jitter, u = point.u + (random() - .5) * 3.6;
         sinceTree += 1;
         // Trees every few metres, with scrub filling the gaps between them.
-        if (sinceTree >= 2 && random() < .72 && inside(s) && clear(s, u, 2.5)) {
+        const opening = plainsNoise(s, u, 28, 2881) < -.38;
+        if (!opening && sinceTree >= 2 && random() < .78 && inside(s) && clear(s, u, 2.5)) {
           sinceTree = 0;
-          const tall = near ? 7 : 9;
-          const height = tall + random() * (near ? 2.5 : 4);
+          const tall = near ? 5.8 : 7;
+          const height = tall + random() * (near ? 4.5 : 6);
           this.mixedTree(s, u, height, random, { conifer: .14, cypress: .1, oak: .12 });
           continue;
         }
@@ -705,7 +714,7 @@ export class PlainsChunk {
           if ((field.kind === 'pasture' || field.kind === 'hay') && randomAt(field.seed, field.salt + 7) < .55) {
             const t = rowStart + 14 + randomAt(field.seed, field.salt + 8) * (rowEnd - rowStart - 28);
             const v = side * (from + 12 + randomAt(field.seed, field.salt + 9) * Math.max(4, to - from - 24));
-            if (inChunk(t) && clear(t, v, 4)) this.tree('oak', t, v, 9 + randomAt(field.seed, field.salt + 10) * 5, oakGreens[field.seed % oakGreens.length], random() * 6.28);
+            if (inChunk(t) && clear(t, v, 4)) this.tree('oak', t, v, 9 + randomAt(field.seed, field.salt + 10) * 5, oakGreens[((field.seed % oakGreens.length) + oakGreens.length) % oakGreens.length], random() * 6.28);
           }
           // A herd grazes some pastures, loosely together and facing the same way.
           if (field.kind === 'pasture' && randomAt(field.seed, field.salt + 17) < .7) {
@@ -765,7 +774,7 @@ export class PlainsChunk {
           const v = side * (bands[1] + 14 + randomAt(field.seed, field.salt + 16) * Math.max(4, bands[2] - bands[1] - 28));
           for (let i = 0; i < 3; i++) {
             const dt = t + (random() - .5) * 12, dv = v + (random() - .5) * 10;
-            if (inChunk(dt) && clear(dt, dv, 3.5)) this.tree('oak', dt, dv, 8 + random() * 5, oakGreens[(field.seed + i) % oakGreens.length], random() * 6.28);
+            if (inChunk(dt) && clear(dt, dv, 3.5)) this.tree('oak', dt, dv, 8 + random() * 5, oakGreens[(((field.seed + i) % oakGreens.length) + oakGreens.length) % oakGreens.length], random() * 6.28);
           }
         }
       }
@@ -784,9 +793,10 @@ export class PlainsChunk {
         } else if (kind === 'hedge') hedge(acrossPoints(line, side, ROAD_RESERVE, far, 1.7));
         else if (kind === 'treeline') treeLine(acrossPoints(line, side, 16, far, 4.5), side < 0);
         else if (kind === 'shelterbelt') for (let cross = 18; cross < Math.min(far, 260); cross += 6.5) {
-          const t = line + (random() - .5) * 1.6, v = side * (cross + (random() - .5) * 1.4);
+          if (random() < .1) continue;
+          const t = line + (random() - .5) * 2.2, v = side * (cross + (random() - .5) * 2.8);
           if (!clear(t, v, 2)) continue;
-          this.tree('poplar', t, v, 11 + random() * 5, poplarGreens[Math.floor(random() * poplarGreens.length)], random() * 6.28);
+          this.tree('poplar', t, v, 9 + random() * 7, poplarGreens[Math.floor(random() * poplarGreens.length)], random() * 6.28);
         }
       }
     }
@@ -865,13 +875,22 @@ export class PlainsChunk {
         this.scenery.rushes.push({ p: [p.x, p.y - .05, p.z], scale: [size, size, size], r: [0, yaw, 0], color: Math.floor(u) % 2 ? '#7f9a3c' : '#93a548' });
       }
     }
-    // Windbreaks on the far rises give the third-person horizon a treeline.
-    for (const [cross, span, salt] of [[318, 96, 2871], [372, 128, 2872], [436, 160, 2873]]) {
-      for (let s = Math.ceil(this.start / 8) * 8; s < this.start + CHUNK_LENGTH; s += 8) {
-        const cell = Math.floor(s / span);
-        if (randomAt(cell, salt) < .45 || randomAt(Math.round(s / 8), salt + 1) < .12) continue;
-        const p = this.ground(s + (randomAt(Math.round(s / 8), salt + 2) - .5) * 3, cross + (randomAt(cell, salt + 3) - .5) * 14), size = 4.5 + randomAt(Math.round(s / 8), salt + 4) * 3.5;
-        this.scenery.farLumps.push({ p: [p.x, p.y + size * .35, p.z], scale: [size, size * 1.15, size], r: [0, randomAt(Math.round(s / 8), salt + 5) * 6.28, 0], color: cell % 2 ? '#587a38' : '#4f7033' });
+    // Small woods spread across the shoulders of the hills, leaving open
+    // slopes between them. Each distant crown is still only twenty triangles.
+    for (const [cross, salt] of [[316, 2871], [391, 2881], [468, 2891]]) {
+      for (let cell = Math.floor(this.start / 104) - 1; cell * 104 < this.start + CHUNK_LENGTH + 60; cell++) {
+        if (randomAt(cell, salt) < .4) continue;
+        const centerS = cell * 104 + randomAt(cell, salt + 1) * 50;
+        const centerU = cross + (randomAt(cell, salt + 2) - .5) * 40;
+        const count = 10 + Math.floor(randomAt(cell, salt + 3) * 6);
+        for (let i = 0; i < count; i++) {
+          const id = cell * 16 + i, angle = randomAt(id, salt + 4) * Math.PI * 2;
+          const radius = Math.sqrt(randomAt(id, salt + 5));
+          const s = centerS + Math.cos(angle) * radius * 35, u = centerU + Math.sin(angle) * radius * 13;
+          if (!inside(s) || !clear(s, u, 2)) continue;
+          const p = this.ground(s, u), size = 4.5 + randomAt(id, salt + 6) * 3.8;
+          this.scenery.farLumps.push({ p: [p.x, p.y + size * .3, p.z], scale: [size, size * (.8 + randomAt(id, salt + 7) * .5), size * .85], r: [0, angle, 0], color: i % 3 ? '#587a38' : '#4f7033' });
+        }
       }
     }
     // A flock of crows wheels over a field in every third chunk.

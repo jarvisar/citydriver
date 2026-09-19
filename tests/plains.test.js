@@ -63,6 +63,23 @@ test('plains terrain stays ordered, continuous, flat under the road and below th
   }
 });
 
+test('distant rolling hills have rounded crests and continuous slopes across districts', () => {
+  let low = Infinity, high = -Infinity;
+  // A one-metre cross-section catches sharp pyramid crests and the creases
+  // caused by selecting the tallest of two overlapping hills.
+  for (let s = -5000; s <= 5000; s += 11) for (let u = 260; u <= 568; u += 13) {
+    const height = distantRise(s, u);
+    assert.ok(Number.isFinite(height) && height >= 0 && height < 90);
+    if (u > 380 && u < 470) { low = Math.min(low, height); high = Math.max(high, height); }
+    for (const [ds, du] of [[1, 0], [0, 1]]) {
+      const before = distantRise(s - ds, u - du), after = distantRise(s + ds, u + du);
+      assert.ok(Math.abs(after - 2 * height + before) < .08, `sharp crest at ${s}, ${u}`);
+      assert.ok(Math.abs(after - before) / 2 < 1.1, `cliff in a rolling hill at ${s}, ${u}`);
+    }
+  }
+  assert.ok(high - low > 20, 'the skyline includes both crests and lower saddles');
+});
+
 test('the creek crosses under a bridge with a level channel, banks that hold the water, and a road that keeps its deck', () => {
   for (let index = -12; index <= 12; index++) {
     const creek = plainsCreekAt(420 + index * CREEK_SPACING);
@@ -307,6 +324,26 @@ test('plains scenery stands on the rendered facets and the world streams and rel
   const chunk = new PlainsChunk(3);
   assert.ok(chunk.group.getObjectByName('plains-fields').geometry.attributes.position.count / 3 < 4000, 'terrain stays within the shared budget');
   chunk.dispose();
+});
+
+test('trees retain their green palette in fields before the world origin', () => {
+  let checked = 0;
+  for (const index of [-4, -3, -2, -1]) {
+    const chunk = new PlainsChunk(index);
+    try {
+      chunk.group.traverse(mesh => {
+        if (mesh.name !== 'plains-crowns') return;
+        assert.ok(mesh.instanceColor, 'every crown has a foliage tint');
+        const color = new THREE.Color();
+        for (let i = 0; i < mesh.count; i++) {
+          mesh.getColorAt(i, color);
+          assert.ok(color.g > color.r && color.g > color.b, `untinted tree in chunk ${index}`);
+          checked++;
+        }
+      });
+    } finally { chunk.dispose(); }
+  }
+  assert.ok(checked > 40);
 });
 
 test('the cow wears its patches proud of its hide, so no two faces flicker against each other', async () => {
