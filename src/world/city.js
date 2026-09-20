@@ -10,14 +10,15 @@ import { CITY_STEP, CITY_COLUMN_COUNT, KERB, PAVEMENT_LIFT, cityVertex, cityPosi
 import { createRiverMaterial, animateWater } from './water.js';
 import { terrainSampler } from './coastal-assets.js';
 import { cityAssets, cityTrees, parkedCars, PARKED_PAINTS } from './city-assets.js';
-import { dressBuilding, buildShopfront, rooftopTank } from './city-architecture.js';
+import { dressBuilding, buildShopfront, rooftopTank, dressSkyline } from './city-architecture.js';
 import { buildPromenade } from './city-promenade.js';
 import { buildCityParking, cityParkingAt } from './city-parking.js';
 import { cityParkLayout, paintCityPark } from './city-surfaces.js';
 import { buildCityRoads } from './city-roads.js';
 import { buildNeighborhoods } from './city-neighborhoods.js';
 import { cityDiscoveries, cityDiscoveryClears, cityLotClears, cityBuildingSpans } from './city-discoveries.js';
-import { buildCityDiscoveries } from './city-discovery-scenery.js';
+import { buildCityDiscoveries, reserveCityLandmarks } from './city-discovery-scenery.js';
+import { CityPlanting } from './city-planting.js';
 import { Rainfall } from './rainfall.js';
 
 const material = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: 1, flatShading: true, ...extra });
@@ -91,12 +92,15 @@ export class CityChunk {
   constructor(index) {
     this.index = index; this.start = index * CHUNK_LENGTH; this.group = new THREE.Group(); this.group.name = `city-chunk-${index}`; this.owned = [];
     this.features = { discoveries: [], bridges: [] };
+    this.planting = new CityPlanting();
     this.discoveries = cityDiscoveries(this.start - 160, this.start + CHUNK_LENGTH + 160);
     this.scenery = { blocks: { vertices: [], colors: [] }, details: { vertices: [], colors: [] }, streets: { vertices: [], colors: [] }, lit: { vertices: [], colors: [] }, skyline: { vertices: [], colors: [] },
       boxes: [], furniture: new Map(), parked: new Map(), bark: new Map(), leaves: new Map() };
-    this.buildTerrain(); this.buildRoad(); this.buildRiver(); this.buildBlocks(); this.buildStreets(); buildPromenade(this); buildCityParking(this); buildCityRoads(this); buildNeighborhoods(this);
+    this.buildTerrain(); this.buildRoad(); this.buildRiver(); reserveCityLandmarks(this, this.discoveries);
+    this.buildBlocks(); this.buildStreets(); buildPromenade(this); buildCityParking(this); buildCityRoads(this); buildNeighborhoods(this);
     buildCityDiscoveries(this, this.discoveries);
     this.finishScenery();
+    this.planting = null;
     finalizeChunkTransforms(this.group);
   }
   addMesh(g, mat, name, shadows = false) {
@@ -260,12 +264,15 @@ export class CityChunk {
       }
     }
   }
-  // Windows on the front and the near end of a building: punched holes in
-  // rows, or ribbon strips on the towers. Some are lit from inside.
+  // Face the boulevard on either bank, with end windows for both driving
+  // directions. All panes are baked into the existing opaque/lit batches.
   windows(b, y0, seed, kind) {
     const { s0, s1, u0, u1 } = b, { blocks, lit } = this.scenery;
     const storeys = Math.floor((b.height - 1.2) / 3.2), first = b.shop ? 1 : 0;
     const detailed = u0 > 0 && u0 < 40, distant = u0 >= 90 || u0 < -190, surround = new THREE.Color(b.wall).lerp(new THREE.Color('#c8c1b3'), .48);
+    const facing = u1 < 0 ? 1 : -1, front = facing > 0 ? u1 : u0;
+    const frontPoint = (s, depth, y) => this.at(s, front + facing * depth, y);
+    const frontNormal = [facing, 0, 0];
     let n = 0;
     const pane = (points, outward, salt) => {
       const on = randomAt(seed, 3061 + salt) < b.lit;
@@ -277,11 +284,12 @@ export class CityChunk {
         // Ribbon strips in bays, so a lit office is one bay, not a whole floor.
         for (let s = s0 + .5; s < s1 - .5; s += 6) {
           const e = Math.min(s + 5.7, s1 - .5);
-          pane([this.at(s, u0 - .05, yLow), this.at(e, u0 - .05, yLow), this.at(e, u0 - .05, yHigh), this.at(s, u0 - .05, yHigh)], [-1, 0, 0], ++n);
+          pane([frontPoint(s, .05, yLow), frontPoint(e, .05, yLow), frontPoint(e, .05, yHigh), frontPoint(s, .05, yHigh)], frontNormal, ++n);
         }
-        for (let u = u0 + .5; u < u1 - .5; u += 6) {
+        for (const [end, direction] of [[s0, -1], [s1, 1]]) for (let u = u0 + .5; u < u1 - .5; u += 6) {
           const e = Math.min(u + 5.7, u1 - .5);
-          pane([this.at(s0 - .05, u, yLow), this.at(s0 - .05, e, yLow), this.at(s0 - .05, e, yHigh), this.at(s0 - .05, u, yHigh)], [0, 0, 1], ++n);
+          const s = end + direction * .05;
+          pane([this.at(s, u, yLow), this.at(s, e, yLow), this.at(s, e, yHigh), this.at(s, u, yHigh)], [0, 0, -direction], ++n);
         }
         continue;
       }
@@ -290,18 +298,21 @@ export class CityChunk {
           this.quad(blocks, [this.at(s - .14, u0 - .035, yLow - .13), this.at(s + 1.44, u0 - .035, yLow - .13), this.at(s + 1.44, u0 - .035, yHigh + .14), this.at(s - .14, u0 - .035, yHigh + .14)], surround, [-1, 0, 0]);
           this.prism(blocks, s - .2, s + 1.5, u0 - .22, u0, yLow - .16, yLow - .04, surround);
         }
-        pane([this.at(s, u0 - .05, yLow), this.at(s + 1.3, u0 - .05, yLow), this.at(s + 1.3, u0 - .05, yHigh), this.at(s, u0 - .05, yHigh)], [-1, 0, 0], ++n);
+        pane([frontPoint(s, .05, yLow), frontPoint(s + 1.3, .05, yLow), frontPoint(s + 1.3, .05, yHigh), frontPoint(s, .05, yHigh)], frontNormal, ++n);
         if (detailed) this.quad(blocks, [this.at(s, u0 - .07, yLow + .92), this.at(s + 1.3, u0 - .07, yLow + .92), this.at(s + 1.3, u0 - .07, yLow + 1), this.at(s, u0 - .07, yLow + 1)], surround.clone().multiplyScalar(.8), [-1, 0, 0]);
       }
-      for (let u = u0 + 1.4; u + 1.3 <= u1 - 1; u += detailed ? 3.2 : distant ? 3.8 : 2.9) {
-        if (detailed) this.quad(blocks, [this.at(s0 - .035, u - .14, yLow - .13), this.at(s0 - .035, u + 1.44, yLow - .13), this.at(s0 - .035, u + 1.44, yHigh + .14), this.at(s0 - .035, u - .14, yHigh + .14)], surround, [0, 0, 1]);
-        pane([this.at(s0 - .05, u, yLow), this.at(s0 - .05, u + 1.3, yLow), this.at(s0 - .05, u + 1.3, yHigh), this.at(s0 - .05, u, yHigh)], [0, 0, 1], ++n);
+      for (const [end, direction] of [[s0, -1], [s1, 1]]) for (let u = u0 + 1.4; u + 1.3 <= u1 - 1; u += detailed ? 3.2 : distant ? 3.8 : 2.9) {
+        const outward = [0, 0, -direction], s = end + direction * .05, frameS = end + direction * .035;
+        if (detailed) this.quad(blocks, [this.at(frameS, u - .14, yLow - .13), this.at(frameS, u + 1.44, yLow - .13), this.at(frameS, u + 1.44, yHigh + .14), this.at(frameS, u - .14, yHigh + .14)], surround, outward);
+        pane([this.at(s, u, yLow), this.at(s, u + 1.3, yLow), this.at(s, u + 1.3, yHigh), this.at(s, u, yHigh)], outward, ++n);
       }
     }
   }
   // One building: walls, roof, parapet or gable, roof furniture and windows.
   building(b, seed) {
     const { blocks } = this.scenery, { s0, s1, u0, u1 } = b;
+    this.reserveBuilding(s0, s1, u0, u1);
+    if (!this.inChunk((s0 + s1) / 2)) return;
     const heights = [[s0, u0], [s1, u0], [s1, u1], [s0, u1], [(s0 + s1) / 2, (u0 + u1) / 2]].map(([s, u]) => this.ground(s, u).y);
     const y0 = Math.min(...heights) - .25, y1 = Math.max(...heights) + b.height;
     const color = new THREE.Color(b.wall);
@@ -340,8 +351,8 @@ export class CityChunk {
       // Wharf workshops read as occupied buildings even at a distance:
       // loading doors and a short clerestory use only a few flat panels.
       for (let s = s0 + 2; s < s1 - 3; s += 6.5) {
-        this.quad(blocks, [this.at(s, u0 - .055, y0 + .3), this.at(s + 2.6, u0 - .055, y0 + .3), this.at(s + 2.6, u0 - .055, y0 + 3.3), this.at(s, u0 - .055, y0 + 3.3)], new THREE.Color('#4a595d'), [-1, 0, 0]);
-        this.quad(blocks, [this.at(s, u0 - .06, y1 - 1.5), this.at(s + 2.6, u0 - .06, y1 - 1.5), this.at(s + 2.6, u0 - .06, y1 - .65), this.at(s, u0 - .06, y1 - .65)], GLASS, [-1, 0, 0]);
+        this.quad(blocks, [this.at(s, u1 + .055, y0 + .3), this.at(s + 2.6, u1 + .055, y0 + .3), this.at(s + 2.6, u1 + .055, y0 + 3.3), this.at(s, u1 + .055, y0 + 3.3)], new THREE.Color('#4a595d'), [1, 0, 0]);
+        this.quad(blocks, [this.at(s, u1 + .06, y1 - 1.5), this.at(s + 2.6, u1 + .06, y1 - 1.5), this.at(s + 2.6, u1 + .06, y1 - .65), this.at(s, u1 + .06, y1 - .65)], GLASS, [1, 0, 0]);
       }
     }
     if (b.shop) buildShopfront(this, b, y0, seed);
@@ -367,8 +378,6 @@ export class CityChunk {
       for (const [band, range] of BANDS.entries()) {
         const spans = cityBuildingSpans(start, end, range.front, range.back, this.discoveries);
         for (const span of spans) for (const lot of this.lotsFor(block, band, span.s0, span.s1)) {
-          const center = (lot.s0 + lot.s1) / 2;
-          if (!this.inChunk(center)) continue;
           const seed = (block * 16 + band * 5) * 41 + lot.i, r = k => randomAt(seed, 3121 + k);
           if (r(0) > [.98, .95, .94][band]) continue;
           const simple = r(0) > [.94, .88, .74][band];
@@ -387,14 +396,14 @@ export class CityChunk {
     for (const [k, range] of BANK_BANDS.entries()) {
       for (let block = first; block <= last; block++) for (const lot of this.lotsFor(block, k ? 2 : 3, blockBoundary(block) + STREET_HALF_WIDTH + 1.5, blockBoundary(block + 1) - STREET_HALF_WIDTH - 1.5)) {
         const { s0, s1 } = lot, seed = block * 97 + k * 31 + lot.i, r = j => randomAt(seed, 3141 + j);
-        if (!this.inChunk((s0 + s1) / 2) || r(2) < .16 || !cityLotClears(s0, s1, range.back, range.front, this.discoveries)) continue;
+        if (r(2) < .16 || !cityLotClears(s0, s1, range.back, range.front, this.discoveries)) continue;
         const u1 = range.front - r(3) * 3, u0 = Math.max(range.back, u1 - (k ? 16 + r(4) * 20 : 9 + r(4) * 8));
         const height = k ? 14 + r(5) * 26 : 6 + r(5) * 5;
         this.building({ s0, s1, u0, u1, height, wall: WALLS[Math.floor(r(6) * WALLS.length)], roofColor: ROOFS[Math.floor(r(7) * ROOFS.length)],
           roof: !k && r(8) < .55 ? 'gable' : 'flat', windows: k ? 'punched' : 'none', shop: false, lit: k ? .05 : 0, shade: .94 + r(9) * .08 }, seed);
       }
     }
-    // The skyline: plain towers beyond the far blocks, fading into the fog,
+    // The skyline: lightly banded towers beyond the far blocks, fading into the fog,
     // without shadows or soft shading, like the far windbreaks on the plains.
     // The near side has none: nothing on the camera's side of the road is
     // ever far enough away for the fog to soften it.
@@ -406,10 +415,21 @@ export class CityChunk {
         const height = 30 + r(4) * 95 + lane * 6;
         const base = cityGroundHeight(s, u) - 1, color = new THREE.Color(lane % 2 ? '#78828d' : '#808a95').lerp(fog, .15 + .06 * (lane % 5));
         this.prism(skyline, s, s + w, u, u + d, base, base + height, color, { back: false, sides: true });
+        dressSkyline(this, { s0: s, s1: s + w, u0: u, u1: u + d }, base, base + height, color, lane);
       }
     }
   }
   clearAt(s, u, r = 1) { return !onRiverCrossing(s, u, r) && cityDiscoveryClears(s, u, this.discoveries, r); }
+  reserveBuilding(s0, s1, u0, u1) {
+    if (s1 < this.start - 24 || s0 > this.start + CHUNK_LENGTH + 24) return;
+    const points = [], corners = [[s0, u0], [s1, u0], [s1, u1], [s0, u1]];
+    for (let i = 0; i < 4; i++) {
+      const a = corners[i], b = corners[(i + 1) % 4], steps = Math.ceil(Math.max(Math.abs(b[0] - a[0]), Math.abs(b[1] - a[1])) / 2);
+      for (let j = 0; j < steps; j++) points.push(this.at(lerp(a[0], b[0], j / steps), lerp(a[1], b[1], j / steps), 0));
+    }
+    // Include projecting sills and roof edges, as well as the wall itself.
+    this.planting.reserve(points, .65);
+  }
   furniture(name, s, u, yaw, extra = {}) {
     const p = this.ground(s, u), { furniture } = this.scenery;
     if (!furniture.has(name)) furniture.set(name, []);
@@ -418,10 +438,12 @@ export class CityChunk {
   tree(s, u, height, color, yaw, plantingHeight = null) {
     const variant = cityTrees[Math.abs(Math.round(s * 7 + u)) % cityTrees.length];
     const p = this.ground(s, u), { bark, leaves } = this.scenery;
+    if (!this.planting.clears(p, variant.radius * height)) return false;
     if (plantingHeight !== null) p.y = plantingHeight;
     if (!bark.has(variant)) { bark.set(variant, []); leaves.set(variant, []); }
     bark.get(variant).push({ p: [p.x, p.y - .12, p.z], scale: [height, height, height], r: [0, yaw, 0], pit: plantingHeight === null });
     leaves.get(variant).push({ p: [p.x, p.y - .12, p.z], scale: [height, height, height], r: [0, yaw, 0], color });
+    return true;
   }
   parkedCar(s, u, yaw, seed, lift = 0) {
     // Two body shapes per chunk: variety along the route, few draw calls in it.

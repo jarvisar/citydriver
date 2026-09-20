@@ -6,6 +6,7 @@ import { blockBoundary, nearStreet, quayOffset, BANDS, cityPosition } from '../s
 import { CityChunk } from '../src/world/city.js';
 import { packChunk, unpackChunk } from '../src/world/chunk-transfer.js';
 import { drapeCityLawn } from '../src/world/city-surfaces.js';
+import { CityPlanting } from '../src/world/city-planting.js';
 
 test('city discoveries are sparse, varied, on the street grid, and stable across reversed chunk queries', () => {
   const sites = cityDiscoveries(-100000, 100000);
@@ -61,6 +62,64 @@ test('city discovery meshes survive worker transfer with their sites', () => {
       }
     } finally { original.dispose(); restored.dispose(); }
   }
+});
+
+test('city planting rejects trunks inside buildings and crowns clipping walls or corners', () => {
+  for (const angle of [0, .37, -1.2]) {
+    const point = (x, z) => ({ x: 15 + x * Math.cos(angle) + z * Math.sin(angle), z: -30 + z * Math.cos(angle) - x * Math.sin(angle) });
+    const planting = new CityPlanting();
+    planting.reserve([point(-4, -8), point(4, -8), point(4, 8), point(-4, 8)]);
+    assert.equal(planting.clears(point(0, 0), .1), false, 'trunk inside');
+    assert.equal(planting.clears(point(5, 0), 2), false, 'crown through wall');
+    assert.equal(planting.clears(point(5, 9), 2), false, 'crown through corner');
+    assert.equal(planting.clears(point(7, 0), 2), true, 'clear side yard');
+    assert.equal(planting.clears(point(6, 10), 2), true, 'clear diagonal corner');
+  }
+});
+
+test('clocktower gardens stay outside the scaled building across bends and chunk seams', () => {
+  const sites = cityDiscoveries(-100000, 100000).filter(site => site.kind === 'clock-tower');
+  for (const site of sites) {
+    const owner = Math.floor(site.s / 128), chunks = [-1, 0, 1].map(offset => new CityChunk(owner + offset));
+    try {
+      for (const chunk of chunks) { chunk.group.position.z = -chunk.start; chunk.group.updateMatrixWorld(true); }
+      const tower = chunks[1].group.getObjectByName('city-clock-towers'), clockMatrix = new THREE.Matrix4();
+      tower.getMatrixAt(0, clockMatrix); clockMatrix.premultiply(tower.matrixWorld);
+      const inverse = clockMatrix.clone().invert();
+      tower.geometry.computeBoundingBox();
+      const bounds = tower.geometry.boundingBox, center = new THREE.Vector3(), matrix = new THREE.Matrix4();
+      let gardenTrees = 0;
+      for (const chunk of chunks) chunk.group.traverse(mesh => {
+        if (mesh.name !== 'city-crowns') return;
+        const positions = mesh.geometry.attributes.position;
+        let radius = 0;
+        for (let i = 0; i < positions.count; i++) radius = Math.max(radius, Math.hypot(positions.getX(i), positions.getZ(i)));
+        for (let i = 0; i < mesh.count; i++) {
+          mesh.getMatrixAt(i, matrix); matrix.premultiply(mesh.matrixWorld);
+          center.setFromMatrixPosition(matrix);
+          for (const du of [6.5, 19]) {
+            const p = cityPosition(site.s - 10.7, BANDS[0].front + .2 + du);
+            if (Math.hypot(center.x - p.x, center.z - p.z) < .01) gardenTrees++;
+          }
+          matrix.premultiply(inverse); center.setFromMatrixPosition(matrix);
+          const dx = Math.max(bounds.min.x - center.x, 0, center.x - bounds.max.x);
+          const dz = Math.max(bounds.min.z - center.z, 0, center.z - bounds.max.z);
+          assert.ok(Math.hypot(dx, dz) > radius * matrix.getMaxScaleOnAxis(), `tree intersects church at ${site.s}`);
+        }
+      });
+      assert.equal(gardenTrees, 2, `both garden trees survive at ${site.s}`);
+      assert.equal(chunks[1].planting, null, 'generation checks retain no runtime footprint data');
+    } finally { chunks.forEach(chunk => chunk.dispose()); }
+  }
+});
+
+test('city planting reserves nearby lots even when their buildings belong to another chunk', () => {
+  const chunk = Object.create(CityChunk.prototype);
+  chunk.start = 0; chunk.planting = new CityPlanting(); chunk.scenery = {};
+  // The lot crosses the chunk boundary, but its center belongs to chunk 1.
+  chunk.building({ s0: 122, s1: 146, u0: 14, u1: 34 }, 0);
+  assert.equal(chunk.planting.clears(chunk.at(126, 20, 0), 2), false);
+  assert.equal(chunk.planting.clears(chunk.at(110, 20, 0), 2), true);
 });
 
 test('park paths and lawn edges stay clean on both sides of terrain and chunk boundaries', () => {

@@ -31,12 +31,10 @@ export const QUALITY_LEVELS = [
 const WORST = QUALITY_LEVELS.length - 1;
 export const levelIndex = id => QUALITY_LEVELS.findIndex(level => level.id === id);
 
-// Nothing in this scene resolves past two device pixels per CSS pixel, and a 3x
-// phone panel was paying for a third of every frame in pixels no one could see.
-// Cap first and scale second, so each level still steps on a dense screen.
-const MAX_PIXEL_RATIO = 2, MIN_PIXEL_RATIO = .5;
+// Density is a fraction of native resolution, including on high-density screens.
+const MIN_DENSITY = .5;
 export function renderScale(density, devicePixelRatio = globalThis.devicePixelRatio || 1) {
-  return Math.max(MIN_PIXEL_RATIO, Math.min(devicePixelRatio, MAX_PIXEL_RATIO) * density);
+  return devicePixelRatio * Math.max(MIN_DENSITY, Math.min(1, density));
 }
 
 // Measure over windows long enough to average a stutter, and ignore the first
@@ -101,7 +99,7 @@ export function probeRenderer(createCanvas = () => globalThis.document?.createEl
 function displayPixels() {
   const screen = globalThis.screen;
   if (!screen?.width) return 0;
-  const ratio = Math.min(globalThis.devicePixelRatio || 1, MAX_PIXEL_RATIO);
+  const ratio = globalThis.devicePixelRatio || 1;
   return screen.width * screen.height * ratio * ratio;
 }
 
@@ -155,6 +153,7 @@ export class Graphics {
     // `?ao=0` sets soft shading for this visit, ahead of the level's own answer
     // and of a remembered choice. It can still be switched back on.
     this.ambientOcclusionOverride = ambientOcclusion ?? (typeof stored.ambientOcclusion === 'boolean' ? stored.ambientOcclusion : null);
+    this.densityOverride = Number.isFinite(stored.density) && stored.density >= MIN_DENSITY && stored.density <= 1 ? stored.density : null;
     // Soft shading is the controller's own axis, separate from the level, so
     // that giving up a level can never hand it back. `shadingChosen` records
     // that the player has had their say and the controller should keep out.
@@ -177,7 +176,7 @@ export class Graphics {
     return this.shading && QUALITY_LEVELS[this.level].ambientOcclusion;
   }
   get settings() {
-    return { ...QUALITY_LEVELS[this.level], ambientOcclusion: this.ambientOcclusion };
+    return { ...QUALITY_LEVELS[this.level], density: this.densityOverride ?? QUALITY_LEVELS[this.level].density, ambientOcclusion: this.ambientOcclusion };
   }
   // Antialiasing belongs to the WebGL context, which cannot be reconfigured
   // without rebuilding it, so it follows the level this page started on.
@@ -189,22 +188,33 @@ export class Graphics {
   announce(reason) { for (const listener of this.listeners) listener(this.settings, reason, this); }
 
   save() {
-    writeStored(this.storage, { mode: this.mode, level: this.levelId, ambientOcclusion: this.ambientOcclusionOverride, softShading: this.shading });
+    writeStored(this.storage, { mode: this.mode, level: this.levelId, density: this.densityOverride, ambientOcclusion: this.ambientOcclusionOverride, softShading: this.shading });
   }
 
   setMode(mode) {
     const index = levelIndex(mode);
     if (mode !== 'auto' && index === -1) return false;
     this.mode = mode === 'auto' ? 'auto' : mode;
-    // A fresh choice clears an adaptive history and any soft-shading override,
+    // A fresh choice clears adaptive history and the player's overrides,
     // so the level the player picked is the level they get.
     this.ceiling = 0; this.cascade = null; this.target = 60;
     this.ambientOcclusionOverride = null;
+    this.densityOverride = null;
     this.shading = true; this.shadingChosen = false; this.shadingDrops = 0;
     if (index !== -1) this.level = index;
     this.suspend();
     this.save();
     this.announce('mode');
+    return true;
+  }
+
+  setDensity(density) {
+    if (!Number.isFinite(density)) return false;
+    // Keep an explicit choice even if Auto later changes the underlying level.
+    this.densityOverride = Math.max(MIN_DENSITY, Math.min(1, density));
+    this.suspend();
+    this.save();
+    this.announce('density');
     return true;
   }
 

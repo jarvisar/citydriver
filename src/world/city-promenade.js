@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { CHUNK_LENGTH, randomAt, roadFrame } from './route.js';
 import { blockAt, blockBoundary, crossStreetAt, nearStreet, onCrossStreet, STREET_HALF_WIDTH, pavementHeight, quayOffset, QUAY_WALL, RIVER_LEVEL, RIVER_BED } from './city-route.js';
 import { cityParkingForBlock, cityParkingAt, cityParkingWidth } from './city-parking.js';
+import { buildWaterfrontGarden } from './city-gardens.js';
 
 const STONE = new THREE.Color('#aaa99e'), JOINT = new THREE.Color('#80888b');
 const GRASS = ['#6b8058', '#71865e', '#627951'];
@@ -70,12 +71,7 @@ export function buildPromenade(chunk) {
       const parking = cityParkingForBlock(block), shift = parking ? 6 : 0;
       const u0 = Math.max(q + (parking || q < -35 ? 12 : 4.5), -28) - shift, u1 = -14.5 - shift, half = Math.min(11, ((to - from) / count - 8) / 2);
       if (!chunk.inChunk(s) || u1 - u0 < 2.2 || !chunk.clearAt(s, (u0 + u1) / 2, half + 2)) continue;
-      const y = bed(s - half, s + half, u0, u1, n), u = (u0 + u1) / 2;
-      for (const ds of [-half * .56, half * .56]) chunk.tree(s + ds, u, 5.8 + randomAt(n, ds + 3610) * 1.4, GRASS[Math.abs(n) % 3], randomAt(n, ds + 3611) * 6.28, y);
-      // A low hedge at one end, with clear walking space around the stone rim.
-      chunk.prism(details, s - half + 1.4, s - half + 2.7, u0 + .65, u1 - .65, y, y + .68, new THREE.Color('#566f4b'));
-      for (const ds of [-3.8, 3.8]) chunk.furniture('bench', s + ds, u0 - 1.25, -roadFrame(s).angle);
-      chunk.furniture('bin', s + half - 2, u0 - 1.25, 0);
+      buildWaterfrontGarden(chunk, s, u0, u1, half, n);
     }
   }
 

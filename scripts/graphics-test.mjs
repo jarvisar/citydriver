@@ -107,6 +107,30 @@ try {
     assert.equal(await page.evaluate(() => window.__coastline.graphics.mode), 'smooth', 'the choice is remembered');
     assert.equal(await page.locator('[data-quality="smooth"]').getAttribute('aria-checked'), 'true');
 
+    // The slider changes the real drawing buffer, including above the old 2x cap.
+    await page.evaluate(() => window.__coastline.action('pause'));
+    const slider = page.locator('#pixel-density');
+    assert.equal(await slider.inputValue(), '70');
+    await slider.fill('83');
+    assert.equal(await page.evaluate(() => window.__coastline.rendering.renderer.getPixelRatio()), deviceScaleFactor * .83);
+    await slider.press('ArrowRight');
+    assert.equal(await slider.inputValue(), '84', 'keyboard arrows adjust density without driving');
+    assert.equal(await page.evaluate(() => window.__coastline.paused), true);
+    await page.evaluate(() => window.__coastline.action('menuNext'));
+    assert.equal(await slider.inputValue(), '85', 'controller right adjusts density');
+    await slider.press('End');
+    assert.equal(await slider.inputValue(), '100');
+    assert.equal(await page.locator('#pixel-density-value').textContent(), '100% · Native');
+    assert.equal(await page.evaluate(() => window.__coastline.rendering.renderer.getPixelRatio()), deviceScaleFactor);
+    await slider.fill('83');
+    await page.reload();
+    await page.waitForFunction(() => window.__coastline && document.querySelector('#loading.loaded'));
+    assert.equal(await slider.inputValue(), '83', 'custom density survives reload');
+    await page.evaluate(() => window.__coastline.action('pause'));
+    await page.locator('[data-quality="balanced"]').click();
+    assert.equal(await slider.inputValue(), '85', 'a preset restores its density');
+    await page.evaluate(() => window.__coastline.action('pause'));
+
     // The main loop must keep supplying active and inactive samples.
     await page.evaluate(() => {
       const rendering = window.__coastline.rendering, original = rendering.recordFrame;

@@ -4,6 +4,7 @@ import './ui.css';
 import './layout.css';
 import './car.css';
 import './menu.css';
+import './audio/mixer.css';
 import { createRendering } from './rendering.js';
 import { Graphics } from './graphics.js';
 import { JOURNEYS } from './journeys.js';
@@ -20,12 +21,15 @@ import { Autodrive } from './autodrive.js';
 import { Input } from './input.js';
 import { touchDrivingInput, thirdPersonDrivingInput } from './touch-stick.js';
 import { DriveAudio } from './audio.js';
+import { setupAudioMixer } from './audio/mixer.js';
 import { FrameClock } from './timing.js';
 import { setupControlHelp, controlHelpDismissed } from './control-help.js';
 import { BrowserVR } from './vr.js';
 import { VRStatus } from './vr-status.js';
+import { setupPwaFullscreen } from './pwa-fullscreen.js';
 
 setupControlHelp();
+setupPwaFullscreen();
 
 const $ = selector => document.querySelector(selector);
 const MENU_MOVES = ['menuNext', 'menuPrevious', 'menuUp', 'menuDown'];
@@ -33,7 +37,7 @@ const MENU_CRUISE_SPEED = TRAFFIC_CRUISE_SPEED * 1.1;
 // A chooser's ring holds its cards and paint chips; the pause screen's holds
 // resume, the garage and every driving, sound and graphics setting.
 const MENU_CARDS = '[data-journey], [data-car], [data-paint]';
-const PAUSE_CONTROLS = '#resume, #change-car, #autodrive, #traffic, #sound, #fullscreen, [data-quality], #soft-shading, #enter-vr-pause, .pwa-install-button';
+const PAUSE_CONTROLS = '#resume, #change-car, #autodrive, #traffic, #sound, #audio-mixer-toggle, #audio-mixer button, #audio-mixer input, #fullscreen, [data-quality], #pixel-density, #soft-shading, #enter-vr-pause, .pwa-install-button';
 const mileageFormat = new Intl.NumberFormat('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 let paused = false, started = false, time = 0, hudTime = 0;
 const frameClock = new FrameClock();
@@ -88,6 +92,7 @@ async function boot() {
     let changingJourney = true, journeyWasPaused = false;
     const savedJourneys = Object.fromEntries(Object.entries(JOURNEYS).map(([id, data]) => [id, journeyStart(Number(data.routeNumber))]));
     const vehicle = new DrivingController(JOURNEYS[journey].route, savedJourneys[journey], DEFAULT_CAR); const audio = new DriveAudio();
+    const refreshAudioMixer = setupAudioMixer(audio);
     vehicle.setAppearance(journey);
     vehicle.setLights(journey === 'snow' ? 1 : journey === 'city' ? .35 : 0);
     rendering.setJourney(journey); audio.setJourney(journey);
@@ -98,6 +103,7 @@ async function boot() {
     const openPauseMenu = () => paused && !pauseOverlay.hidden ? pauseOverlay : null;
     scene.add(vehicle.car);
     const traffic = new Traffic(scene, vehicle.route, vehicle.s, journey);
+    const soundScene = { player: vehicle, traffic, interior: false, heading: 0 };
     const autodrive = new Autodrive();
     const touchControls = $('.touch-controls');
     let touchControlsTimer;
@@ -316,6 +322,16 @@ async function boot() {
       if (index < 0) { cards[0].focus(); return; }
       const current = cards[index];
       const step = name === 'menuNext' || name === 'menuDown' ? 1 : -1;
+      if (current.matches('[data-audio-channel]') && (name === 'menuNext' || name === 'menuPrevious')) {
+        current.value = Math.max(0, Math.min(100, Number(current.value) + step * 5));
+        current.dispatchEvent(new Event('input', { bubbles: true }));
+        return;
+      }
+      if (current.matches('input[type="range"]') && ['menuNext', 'menuPrevious'].includes(name)) {
+        if (step > 0) current.stepUp(); else current.stepDown();
+        current.dispatchEvent(new Event('input', { bubbles: true }));
+        return;
+      }
       if (name === 'menuUp' || name === 'menuDown') {
         const box = current.getBoundingClientRect();
         const x = box.left + box.width / 2, y = box.top + box.height / 2;
@@ -463,8 +479,11 @@ async function boot() {
       if (event.pointerType !== 'touch') action('nextJourney');
     });
     let fullscreenPending = false;
+    const desktop = window.coastlineDesktop;
+    let desktopFullscreen = false;
+    const fullscreenDisplay = window.matchMedia('(display-mode: fullscreen)');
     function updateFullscreenUi() {
-      const active = Boolean(document.fullscreenElement || document.webkitFullscreenElement);
+      const active = desktop ? desktopFullscreen : Boolean(document.fullscreenElement || document.webkitFullscreenElement || fullscreenDisplay.matches);
       $('#fullscreen').setAttribute('aria-pressed', String(active));
       $('#fullscreen').setAttribute('aria-label', active ? 'Exit fullscreen' : 'Enter fullscreen');
       $('#fullscreen').title = `${active ? 'Exit' : 'Enter'} fullscreen (F / LB / L1)`;
@@ -473,7 +492,9 @@ async function boot() {
       if (fullscreenPending) return;
       fullscreenPending = true;
       try {
-        if (document.fullscreenElement || document.webkitFullscreenElement) {
+        if (desktop) {
+          desktopFullscreen = await desktop.toggleFullscreen();
+        } else if (document.fullscreenElement || document.webkitFullscreenElement) {
           await (document.exitFullscreen ?? document.webkitExitFullscreen).call(document);
         } else {
           const request = document.documentElement.requestFullscreen ?? document.documentElement.webkitRequestFullscreen;
@@ -486,6 +507,16 @@ async function boot() {
     }
     document.addEventListener('fullscreenchange', updateFullscreenUi);
     document.addEventListener('webkitfullscreenchange', updateFullscreenUi);
+    fullscreenDisplay.addEventListener('change', updateFullscreenUi);
+    if (desktop) {
+      desktop.onFullscreenChange(active => { desktopFullscreen = active; updateFullscreenUi(); });
+      desktop.getFullscreen().then(active => { desktopFullscreen = active; updateFullscreenUi(); });
+      desktop.onEscape(() => {
+        const chooser = openChooser();
+        if (chooser) chooser.close(); else action('pause');
+      });
+    }
+    updateFullscreenUi();
     $('#fullscreen').addEventListener('click', event => {
       if (event.pointerType !== 'touch') action('fullscreen');
     });
@@ -533,9 +564,14 @@ async function boot() {
     $('#scene').addEventListener('webglcontextrestored', () => { needsRender = true; });
     const qualityButtons = [...document.querySelectorAll('[data-quality]')];
     const softShading = $('#soft-shading'), graphicsStatus = $('#graphics-status');
+    const pixelDensity = $('#pixel-density'), pixelDensityValue = $('#pixel-density-value');
     function updateGraphicsUi(settings = graphics.settings) {
       for (const button of qualityButtons) button.setAttribute('aria-checked', String(button.dataset.quality === graphics.mode));
       softShading.setAttribute('aria-pressed', String(settings.ambientOcclusion));
+      const densityPercent = Math.round(settings.density * 100);
+      pixelDensity.value = String(densityPercent);
+      pixelDensityValue.textContent = `${densityPercent}%${densityPercent === 100 ? ' · Native' : ''}`;
+      pixelDensity.setAttribute('aria-valuetext', `${densityPercent}% of native resolution`);
       // The drawing buffer is the thing the quality level actually changes, so
       // show it: it explains a softer picture without any further digging.
       graphicsStatus.textContent = `${graphics.auto ? 'Auto · ' : ''}${settings.label} · ${renderer.domElement.width} × ${renderer.domElement.height} · soft shading ${settings.ambientOcclusion ? 'on' : 'off'}`;
@@ -548,6 +584,7 @@ async function boot() {
     });
     for (const button of qualityButtons) button.addEventListener('click', () => graphics.setMode(button.dataset.quality));
     softShading.addEventListener('click', () => action('ambientOcclusion'));
+    pixelDensity.addEventListener('input', () => graphics.setDensity(Number(pixelDensity.value) / 100));
     const hud = { distance: $('#distance') };
     function updateHud() {
       // Physics uses meters; convert only the displayed measurement. The drive
@@ -588,6 +625,7 @@ async function boot() {
         item(`Autodrive: ${autodrive.enabled ? 'on' : 'off'}`, 'autodrive'),
         { label: `Traffic: ${traffic.enabled ? 'on' : 'off'}`, activate: () => $('#traffic').click() },
         item(`Sound: ${$('#sound').getAttribute('aria-pressed') === 'true' ? 'on' : 'off'}`, 'sound'),
+        { label: `Sound mix: ${audio.preset}`, activate: () => { const presets = ['balanced', 'scenic', 'night']; audio.setPreset(presets[(presets.indexOf(audio.preset) + 1) % presets.length]); refreshAudioMixer(); } },
         { label: `Graphics: ${graphics.mode}`, activate: () => graphics.setMode(modes[(modes.indexOf(graphics.mode) + 1) % modes.length]) },
         item('Reset road', 'reset'), item('Recenter view', 'recenterVR'), item('Exit VR', 'exitVR'),
       ] };
@@ -618,7 +656,11 @@ async function boot() {
         traffic.render(frameClock.alpha, world.origin);
         rendering.update(vehicle.car, dt, world.origin); world.animate(time, vehicle);
       }
-      audio.update(vehicle.audioTelemetry, dt);
+      soundScene.interior = rendering.viewLabel === 'First-person view';
+      soundScene.lightning = world.flash?.intensity ?? 0;
+      const cameraMatrix = (vr.active ? rendering.vrCamera.camera : rendering.camera).matrixWorld.elements;
+      soundScene.heading = Math.atan2(cameraMatrix[2], cameraMatrix[0]);
+      audio.update(vehicle.audioTelemetry, dt, false, soundScene);
       hudTime += dt; if (hudTime > .1) { updateHud(); hudTime = 0; }
       // The desktop quality sampler targets 60 Hz and resizes a canvas, whereas
       // the headset owns its framebuffer and refresh rate.

@@ -146,7 +146,7 @@ export class DrivingController {
     this.s = state.s ?? 24; this.u = 2.4; this.speed = 0; this.steer = 0; this.heading = route.frame(this.s).angle;
     this.distance = state.distance ?? 0; this.pitch = 0; this.roll = 0; this.previousSpeed = 0; this.groundedPosition = new THREE.Vector3();
     this.bodyPitch = 0; this.bodyRoll = 0; this.wheelSpin = 0;
-    this.audioTelemetry = { speed: 0, throttle: 0, brake: 0, offRoad: 0 };
+    this.audioTelemetry = { speed: 0, throttle: 0, brake: 0, offRoad: 0, steer: 0, handbrake: 0, impact: 0, impactSerial: 0 };
     const pose = () => ({ position: new THREE.Vector3(), quaternion: new THREE.Quaternion(), bodyPitch: 0, bodyRoll: 0, wheelSpin: 0, steer: 0 });
     this.previousPose = pose(); this.currentPose = pose();
     this.update(0, {});
@@ -198,6 +198,8 @@ export class DrivingController {
     for (const key of ['bodyPitch', 'bodyRoll', 'wheelSpin', 'steer']) target[key] = source[key];
   }
   resolveTrafficCollision(dx, dz, speed) {
+    const impact = Math.abs(this.speed - speed);
+    if (impact > .4) { this.audioTelemetry.impact = impact; this.audioTelemetry.impactSerial++; }
     const frame = this.route.frame(this.s);
     this.s += (dx * Math.sin(frame.angle) - dz * Math.cos(frame.angle)) / frame.scale;
     this.u += dx * Math.cos(frame.angle) + dz * Math.sin(frame.angle);
@@ -301,6 +303,9 @@ export class DrivingController {
     this.audioTelemetry.throttle = input.handbrake ? 0 : touch ? clamp((acceleration + (this.speed > .015 ? drag : 0)) / stats.acceleration, 0, 1) : this.speed < -.3 ? brake : forward;
     this.audioTelemetry.brake = input.handbrake ? 1 : touch ? clamp(-acceleration / stats.touchBraking, 0, 1) : this.speed < -.3 ? forward : brake;
     this.audioTelemetry.offRoad = looseness;
+    this.audioTelemetry.steer = this.steer;
+    this.audioTelemetry.handbrake = input.handbrake ? 1 : 0;
+    if (dt === 0) this.audioTelemetry.impact = 0;
     this.currentPose.position.copy(this.groundedPosition); this.currentPose.quaternion.copy(this.car.quaternion);
     for (const key of ['bodyPitch', 'bodyRoll', 'wheelSpin', 'steer']) this.currentPose[key] = this[key];
     // Resets and journey changes are teleports, so never blend from the old location.

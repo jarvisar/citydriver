@@ -3,6 +3,29 @@ import { randomAt, roadFrame } from './route.js';
 
 const ACCENTS = ['#486f69', '#955e4f', '#aa894f', '#52687c', '#687451'];
 
+// Broad glazing bands survive the fog without hundreds of individual panes.
+// Interpolate the actual flat tower faces, so details cannot sink into their
+// chords on bends. Reuse the skyline batch: no new draws, shadows or updates.
+export function dressSkyline(chunk, b, base, roof, color, lane) {
+  const { s0, s1, u0, u1 } = b, target = chunk.scenery.skyline;
+  const corners = [[s0, u0], [s1, u0], [s1, u1], [s0, u1]].map(([s, u]) => chunk.at(s, u, 0));
+  const glass = color.clone().multiplyScalar(lane < 2 ? .72 : .84), cap = color.clone().multiplyScalar(1.12);
+  // Group more floors at the back; at most sixteen bands per face.
+  const rows = Math.min(16, Math.max(3, Math.floor((roof - base) / (lane < 2 ? 6.4 : 9.6))));
+  const pitch = (roof - base - 3) / rows;
+  for (const [i, j, outward] of [[0, 1, [-1, 0, 0]], [1, 2, [0, 0, -1]], [3, 0, [0, 0, 1]]]) {
+    const a = corners[i], b = corners[j], length = Math.hypot(b.x - a.x, b.z - a.z);
+    const point = (t, y) => ({ x: a.x + (b.x - a.x) * t + outward[0] * .06, y, z: a.z + (b.z - a.z) * t + outward[2] * .06 });
+    const band = (low, high, inset, tint) => chunk.quad(target,
+      [point(inset, low), point(1 - inset, low), point(1 - inset, high), point(inset, high)], tint, outward);
+    for (let row = 0; row < rows; row++) {
+      const low = base + 2 + row * pitch;
+      band(low, low + pitch * .55, 1 / length, glass);
+    }
+    band(roof - .65, roof - .15, 0, cap);
+  }
+}
+
 export function rooftopTank(b, seed) {
   if (b.u0 < 0 || b.u0 > 85 || b.roof === 'gable' || randomAt(seed, 3521) >= (b.u0 < 40 ? .28 : .12)) return null;
   return { s: b.s0 + (b.s1 - b.s0) * .65, u: b.u0 + (b.u1 - b.u0) * .66 };

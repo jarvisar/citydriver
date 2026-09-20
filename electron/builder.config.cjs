@@ -63,6 +63,7 @@ module.exports = {
   // The renderer is fully bundled by Vite: no runtime node_modules are shipped.
   files: [
     'electron/main.js',
+    'electron/preload.cjs',
     'electron/window-state.js',
     'electron/build/icon.png',
     'dist-electron/**/*',

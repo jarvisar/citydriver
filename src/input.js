@@ -9,7 +9,7 @@ export class Input {
     this.xr = new XRInput(onAction); this.xrActive = false;
     this.konami = new KonamiCode();
     this.touchStick = new TouchStick(document.querySelector('#touch-stick'), () => onAction('drive'));
-    this.codes = { forward: ['KeyW', 'ArrowUp'], brake: ['KeyS', 'ArrowDown'], left: ['KeyA', 'ArrowLeft'], right: ['KeyD', 'ArrowRight'], handbrake: ['Space'] };
+    this.codes = { forward: ['KeyW', 'ArrowUp', 'Numpad8'], brake: ['KeyS', 'ArrowDown', 'Numpad2'], left: ['KeyA', 'ArrowLeft', 'Numpad4'], right: ['KeyD', 'ArrowRight', 'Numpad6'], handbrake: ['Space'] };
     // The driving simulation reads this up to six times per displayed frame, so
     // it fills one reused record rather than building a fresh object each step.
     this.actions = Object.keys(this.codes);
@@ -20,6 +20,9 @@ export class Input {
       onControllerConnection(connected);
     });
     window.addEventListener('keydown', e => {
+      // Native mixer sliders own their arrow, Home and End keys. Editing a
+      // volume must not also accelerate the car or swallow keyboard access.
+      if (e.target.matches?.('input[type="range"]') && !['Escape', 'KeyP', 'KeyM'].includes(e.code)) return;
       // This hidden toggle is reachable only through the keyboard sequence.
       if (this.konami.keydown(e)) {
         e.preventDefault(); this.clear(); onFreeDriving();
@@ -35,10 +38,10 @@ export class Input {
         if (!e.repeat) onAction('fullscreen');
         return;
       }
-      const routeKey = /^(?:Digit|Numpad)([1-6])$/.exec(e.code);
+      const routeKey = /^(?:Digit([1-6])|Numpad([135]))$/.exec(e.code);
       if (routeKey && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
         e.preventDefault();
-        if (!e.repeat) onAction('selectJourney', routeKey[1]);
+        if (!e.repeat) onAction('selectJourney', routeKey[1] || routeKey[2]);
         return;
       }
       if (['KeyC', 'KeyG'].includes(e.code) && !e.ctrlKey && !e.metaKey && !e.altKey) {
@@ -47,10 +50,11 @@ export class Input {
         return;
       }
       if (document.querySelector('dialog[open]')) return;
-      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) e.preventDefault();
+      if (e.target.matches?.('input[type="range"]') && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.code)) return;
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Numpad8', 'Numpad2', 'Numpad4', 'Numpad6', 'Space'].includes(e.code)) e.preventDefault();
       this.keys.add(e.code);
       if (!e.repeat) {
-        if (['KeyW', 'ArrowUp', 'KeyS', 'ArrowDown'].includes(e.code)) onAction('drive');
+        if ([...this.codes.forward, ...this.codes.brake].includes(e.code)) onAction('drive');
         if (['KeyP', 'Escape'].includes(e.code)) onAction('pause');
         if (e.code === 'KeyR') onAction('reset');
         if (e.code === 'KeyV') onAction('view');

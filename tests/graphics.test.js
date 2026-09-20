@@ -54,11 +54,12 @@ test('every level removes pixels, on a 1x panel as much as on a dense one', () =
     for (let i = 1; i < scales.length; i++) {
       assert.ok(scales[i] < scales[i - 1], `${devicePixelRatio}x: ${QUALITY_LEVELS[i].id} must draw fewer pixels than ${QUALITY_LEVELS[i - 1].id}`);
     }
-    // Nothing in this scene resolves past two device pixels per CSS pixel.
-    assert.ok(scales[0] <= 2, `${devicePixelRatio}x: full quality is capped`);
+    assert.equal(scales[0], devicePixelRatio, `${devicePixelRatio}x: full quality reaches native resolution`);
   }
   assert.equal(renderScale(1, 1), 1, 'full quality on a 1x panel is still 1x');
-  assert.equal(renderScale(1, 3), 2, 'a 3x phone panel is capped rather than obeyed');
+  assert.equal(renderScale(1, 3), 3, 'a 3x phone panel can render at native resolution');
+  assert.equal(renderScale(2, 3), 3, 'density never exceeds native resolution');
+  assert.equal(renderScale(.1, 2), 1, 'the minimum density is 50%');
 });
 
 test('detection tiers pointer devices on what they are, and touch devices cautiously', () => {
@@ -196,7 +197,7 @@ test('a chosen level is pinned, adapts to nothing, and is remembered', () => {
   assert.equal(graphics.levelId, 'high');
   new Device(graphics, 8).run(120);
   assert.equal(graphics.levelId, 'high', 'a pinned level stays pinned');
-  assert.deepEqual(stored(storage), { mode: 'high', level: 'high', ambientOcclusion: null, softShading: true });
+  assert.deepEqual(stored(storage), { mode: 'high', level: 'high', density: null, ambientOcclusion: null, softShading: true });
 
   const next = new Graphics({ storage, detect: () => levelIndex('basic') });
   assert.equal(next.mode, 'high');
@@ -213,7 +214,7 @@ test('auto remembers the level it settled on so the next visit starts there', ()
   assert.equal(graphics.levelId, 'basic');
   // The player never touched soft shading, so their override stays empty; what
   // is remembered is the controller's own decision to stop drawing it.
-  assert.deepEqual(stored(storage), { mode: 'auto', level: 'basic', ambientOcclusion: null, softShading: false });
+  assert.deepEqual(stored(storage), { mode: 'auto', level: 'basic', density: null, ambientOcclusion: null, softShading: false });
   const next = new Graphics({ storage, detect: () => levelIndex('high') });
   assert.equal(next.auto, true);
   assert.equal(next.levelId, 'basic');
@@ -237,6 +238,45 @@ test('soft shading can be turned on or off against the level, and is remembered'
   assert.equal(next.settings.ambientOcclusion, false);
   assert.equal(next.toggleAmbientOcclusion(), true);
   assert.equal(next.settings.ambientOcclusion, true);
+});
+
+test('custom density is remembered, survives Auto adjustments, and resets with presets', () => {
+  const storage = memoryStorage();
+  const graphics = graphicsAt(0, { storage });
+  graphics.setDensity(.83);
+  assert.equal(graphics.settings.density, .83);
+  assert.equal(graphics.mode, 'auto');
+  new Device(graphics, [22, 31, 43, 61]).run(60);
+  assert.equal(graphics.levelId, 'basic');
+  assert.equal(graphics.settings.density, .83);
+  const next = graphicsAt(0, { storage });
+  assert.equal(next.settings.density, .83);
+  next.toggleAmbientOcclusion();
+  assert.equal(next.settings.density, .83, 'AO does not reset density');
+  for (const level of QUALITY_LEVELS) {
+    next.setDensity(.83);
+    next.setMode(level.id);
+    assert.equal(next.settings.density, level.density);
+    assert.equal(stored(storage).density, null);
+  }
+  next.setDensity(1);
+  next.setMode('auto');
+  assert.equal(next.settings.density, .55, 'Auto restores the current level default');
+});
+
+test('density validates saved values and clamps user choices to the slider limits', () => {
+  for (const density of [null, '0.8', -1, .49, 1.01]) {
+    const storage = memoryStorage({ 'coastline.graphics': JSON.stringify({ density }) });
+    assert.equal(graphicsAt(1, { storage }).settings.density, .85);
+  }
+  const graphics = graphicsAt(0);
+  graphics.setDensity(5);
+  assert.equal(graphics.settings.density, 1);
+  graphics.setDensity(0);
+  assert.equal(graphics.settings.density, .5);
+  assert.equal(graphics.setDensity(NaN), false);
+  assert.equal(graphics.setDensity(Infinity), false);
+  assert.equal(graphics.settings.density, .5);
 });
 
 test('?ao=0 starts every level without soft shading, and can still be switched back', () => {

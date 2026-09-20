@@ -29,22 +29,16 @@ try {
         points.push(new THREE.Vector3(x - 1.2 + i * .12, .01, z + side * .95));
       }
     }
-    const measure = baseline => {
+    const measure = quality => {
+      renderer.render(scene, camera);
+      const memoryBefore = { ...renderer.info.memory };
       const ao = new AmbientOcclusion(renderer, scene, camera);
-      if (baseline) {
-        ao.normalResolutionScale = 1;
-        for (const material of [ao.pass.gtaoMaterial, ao.pass.pdMaterial]) {
-          material.fragmentShader = material.fragmentShader.replace(
-            'textureLod(tNoise, vec2(0.5), 0.0)', 'textureLod(tNoise, noiseUv, 0.0)');
-        }
-        ao.pass.updateGtaoMaterial({ samples: 6 });
-        ao.pass.updatePdMaterial({ samples: 8, radius: 3 });
-      }
+      ao.pass.setQualityMode(quality);
       const frames = [];
       for (let frame = 0; frame < 28; frame++) {
         camera.position.copy(origin).addScaledVector(right, frame * .025); camera.updateMatrixWorld();
         ao.render(camera);
-        const target = ao.pass.pdRenderTarget, { width, height } = target;
+        const target = ao.aoTarget, { width, height } = target;
         const pixels = new Uint8Array(width * height * 4);
         renderer.readRenderTargetPixels(target, 0, 0, width, height, pixels);
         frames.push(points.map(point => {
@@ -59,15 +53,18 @@ try {
         change += Math.abs(frames[f][p] - frames[f - 1][p]); darkness += 1 - frames[f][p];
       }
       ao.dispose();
+      if (renderer.info.memory.textures !== memoryBefore.textures || renderer.info.memory.geometries !== memoryBefore.geometries) {
+        throw new Error('Disposing N8AO must release its textures and geometry');
+      }
       return { shimmer: change / ((frames.length - 1) * points.length), darkness: darkness / ((frames.length - 1) * points.length) };
     };
-    const baseline = measure(true), revised = measure(false);
+    const performance = measure('Performance'), medium = measure('Medium');
     scene.traverse(object => object.geometry?.dispose()); material.dispose(); renderer.dispose();
-    return { baseline, revised, reduction: 1 - revised.shimmer / baseline.shimmer };
+    return { performance, medium };
   });
   console.log(JSON.stringify(result, null, 2));
   await mkdir('.artifacts/ambient-occlusion', { recursive: true });
   await writeFile('.artifacts/ambient-occlusion/motion.json', JSON.stringify(result, null, 2));
-  assert.ok(result.reduction > .15, 'camera motion should produce at least 15% less AO fluctuation at fixed world points');
-  assert.ok(result.revised.darkness > result.baseline.darkness * .7, 'smoothing must retain contact shading');
+  assert.ok(result.medium.shimmer < .03, 'camera motion keeps AO changes below 3% at fixed world points');
+  assert.ok(result.medium.darkness > .01, 'N8AO retains contact shading');
 } finally { await browser.close(); }

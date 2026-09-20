@@ -69,6 +69,8 @@
         <section class="pause-panel" aria-labelledby="sound-heading">
           <h3 id="sound-heading">Sound &amp; display</h3>
           <button type="button" id="sound" class="panel-button panel-toggle" title="Sound (M)" aria-label="Turn sound on" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M11 5L6 9H3v6h3l5 4V5Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path class="sound-off" d="m16 9 6 6m0-6-6 6" stroke="currentColor" stroke-width="1.5"/><path class="sound-on" d="M15 8a6 6 0 0 1 0 8m3-11a10 10 0 0 1 0 14" stroke="currentColor" stroke-width="1.5"/></svg><span class="panel-button-label">Sound</span><span class="panel-switch" aria-hidden="true"></span></button>
+          <button type="button" id="audio-mixer-toggle" class="panel-button audio-mixer-toggle" aria-expanded="false" aria-controls="audio-mixer"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 3v7m0 4v7M12 3v11m0 4v3M19 3v3m0 4v11M2 10h6m1 4h6m1-8h6" stroke="currentColor" stroke-width="1.5"/></svg><span class="panel-button-label">Audio settings<small id="audio-mix-label">Balanced · Music off</small></span><svg class="audio-chevron" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m7 10 5 5 5-5" stroke="currentColor" stroke-width="1.8"/></svg></button>
+          <div id="audio-mixer" class="audio-mixer" hidden></div>
           <button type="button" id="fullscreen" class="panel-button panel-toggle" title="Fullscreen (F / LB / L1)" aria-label="Enter fullscreen" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 4H4v5m11-5h5v5M4 15v5h5m11-5v5h-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="panel-button-label">Fullscreen</span><span class="panel-switch" aria-hidden="true"></span></button>
         </section>
         <section class="graphics-panel" aria-labelledby="graphics-heading">
@@ -79,6 +81,10 @@
             <button type="button" role="radio" aria-checked="false" data-quality="balanced">Balanced</button>
             <button type="button" role="radio" aria-checked="false" data-quality="smooth">Smooth</button>
             <button type="button" role="radio" aria-checked="false" data-quality="basic">Basic</button>
+          </div>
+          <div class="pixel-density-control">
+            <label for="pixel-density">Pixel density <output id="pixel-density-value" for="pixel-density">100% · Native</output></label>
+            <input type="range" id="pixel-density" min="50" max="100" step="1" value="100">
           </div>
           <button type="button" id="soft-shading" class="panel-toggle" aria-pressed="true">Soft shading<span class="panel-switch" aria-hidden="true"></span></button>
           <p id="graphics-status" class="graphics-status" role="status"></p>

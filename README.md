@@ -81,7 +81,7 @@ Windows, Linux (including the Steam Deck), and macOS builds wrap this same web b
 
 ## Experimental shading
 
-Experimental ambient occlusion is enabled by default on the High and Balanced graphics levels, and off on Smooth and Basic. AO sampling and edge-aware denoising run at half resolution, capped at 640 pixels on the longest edge. Fixed sampling directions and finer depth/normal coverage (up to 1280 pixels) reduce shimmer during camera motion. Upscaling uses surface depth and normals to keep background shading off foreground edges. **Soft shading** in the pause screen, or `O`, switches it for the current level; `?ao=0` starts a visit with it off. The jungle's background forest layers do not take part in the prepass; see [Scenery drawing cost](#scenery-drawing-cost).
+Ambient occlusion uses [N8AO](https://github.com/N8python/n8ao), enabled by default on the High and Balanced graphics levels, and off on Smooth and Basic. Its Medium quality sampling and edge-aware denoising run at half resolution, capped at 640 pixels on the longest edge, with finer depth/normal coverage up to 1280 pixels. N8AO generates a fog-aware shading mask that is multiplied over the original scene, preserving its antialiasing and tone mapping. Temporal accumulation stays off so moving cars and scenery refresh even when the camera is still. Upscaling uses surface depth and normals to keep background shading off foreground edges. **Soft shading** in the pause screen, or `O`, switches it for the current level; `?ao=0` starts a visit with it off. The jungle's background forest layers do not take part in the prepass; see [Scenery drawing cost](#scenery-drawing-cost).
 
 Sunlight shadows use a fixed soft filter and a world-aligned texel grid, including after floating-origin shifts. The chase camera uses constant shadow coverage while turning, so shadow pixels do not stretch with the camera angle.
 
@@ -126,14 +126,14 @@ Free driving is a hidden keyboard toggle, off by default. Enter **↑ ↑ ↓ �
 
 The interface uses US English, miles per hour (mph) where speeds are quoted, miles, and Fahrenheit (°F). Driving physics and world geometry use meters internally; displayed measurements are converted to US units.
 
-- **W / ↑:** accelerate
-- **S / ↓:** brake, then reverse
-- **A D / ← →:** steer
+- **W / ↑ / Numpad 8:** accelerate
+- **S / ↓ / Numpad 2:** brake, then reverse
+- **A D / ← → / Numpad 4 6:** steer (numpad driving works with Num Lock on or off)
 - **Space:** strong brake
 - **V / View button:** cycle through medium (default), close, extra close, third-person, first-person, and scenic views. Third-person follows from a low chase angle aimed toward the horizon. First-person looks forward from the center of the selected car's windshield, with the vehicle hidden, softened terrain pitch, and a level horizon. The Formula car uses a centered viewpoint just ahead of the cockpit halo.
 - **R:** reset the scene in a fresh area with zero mileage
 - **N:** switch to the next scene, cycling through all routes while preserving each route’s progress
-- **1–6:** jump straight to a route by its number
+- **Top-row 1–6:** jump straight to a route by its number
 - **C:** open the garage
 - **P / Escape:** pause / resume
 - **O:** toggle soft ambient shading.
@@ -220,7 +220,7 @@ The touch joystick and the whole row of driving actions — View, Change Route, 
 - `src/timing.js`: 60 Hz physics with display-rate rendering via `requestAnimationFrame`, including high-refresh and variable-refresh displays. Actual frame delivery depends on the browser, system settings, and available GPU/CPU performance. Pausing preserves interpolation progress; resets and journey changes discard old poses.
 - `src/rendering.js`, `src/third-person-camera.js`, `src/first-person-camera.js`: four isometric zoom levels (165-unit medium default, 115-unit close, 75-unit extra close, 235-unit scenic), perspective chase and driver cameras, lighting, fog, and shadows. The overhead views close on the car across the ground about eight times per second and climb to its height about three, so steering moves the world promptly while terrain does not make the view bob. Zoom changes the projection without reallocating the canvas buffers.
 - `src/input.js`, `src/gamepad.js`, `src/main.js`: keyboard/touch/controller input and scene lifecycle.
-- `src/audio.js`, `src/audio/`: optional procedural audio with a rounded engine tone, throttle/coasting response, gentle automatic gear changes, speed-dependent tire and wind noise, and softer snow or grittier off-road texture. Stereo surf, canyon wind, and alpine gusts use different profiles and slow overlapping swells. One reusable Web Audio graph fades on mute, pause, and focus loss, then suspends to save processing; sound stays off until enabled with the speaker button or M. No audio downloads or new dependencies.
+- `src/audio.js`, `src/audio/`: combustion-based engine textures blended across RPM and load, per-car voices, textured tires and wind, six environment profiles, stereo passing traffic, cabin filtering, and optional instrumental music. Pause → Audio settings provides saved channel volumes, three presets, and compression for loud sounds. Sound starts off; press M or use the sound button to enable it. Muting, pausing, and focus loss fade and suspend the context. No audio downloads or new dependencies. See [audio design](docs/audio.md).
 
 Geometry, colors, and lighting provide the environment without external texture or model assets. System fonts keep the app self-contained with no runtime network dependencies. Instanced scenery follows [Three.js instancing guidance](https://threejs.org/docs/pages/InstancedMesh.html).
 
@@ -273,7 +273,7 @@ With the development server running, `npm run test:graphics` checks each level's
 
 With the development server running, `npm run test:generation` checks fresh worlds on reload, repeatable URL seeds across all six journeys, grounded spawns, regenerated chunk consistency, and saved progress. Reports and screenshots go to `.artifacts/generation/`. Set `TEST_URL` to override the development URL. The Node suite uses a repeatable seed by default; set `TEST_WORLD_SEED` to run it against another world.
 
-With the development server running, `npm run test:audio` checks sound activation, throttle response, pause/resume, rapid toggles, focus loss, route changes, and cleanup in Chrome. It also renders the actual audio graph offline to check headroom and fades, saving a report and three short WAV previews to `.artifacts/audio/`. Set `TEST_URL` to override the development URL. Browser emulation does not replace listening on physical phone speakers or headphones.
+With the development server running, `npm run test:audio` checks activation, driving response, pause/resume, rapid toggles, focus loss, all six routes, mixer persistence, keyboard and mobile controls, and cleanup in Chrome. Offline renders check individual channels, full-volume headroom, compression, and fades, saving a report and six WAV previews to `.artifacts/audio/`. `npm run review:audio` creates volume-matched comparisons with the committed audio implementation at `.artifacts/audio/review/index.html`; set `AUDIO_BASE_REF` to compare a different Git revision. Set `TEST_URL` to override the development URL. Browser emulation does not replace listening on physical phone speakers or headphones.
 
 With the development server running, `npm run test:responsive` audits menu, driving, pause, route-chooser and garage layouts across 23 phone/tablet/desktop viewport sizes, plus notched screens, controller mode, dismissed help and expanded install instructions. It checks panel overlaps, reachable primary actions, target sizes, overflow, the pause screen's readout (and its absence during a drive) and the right-side joystick. Reports and screenshots are saved in `.artifacts/responsive/`. These checks use Chrome emulation, not physical devices. Set `TEST_URL` to override the default development URL.
 

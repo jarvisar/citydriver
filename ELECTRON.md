@@ -1,14 +1,14 @@
 # Coastline on the desktop
 
-Windows, Linux (including the Steam Deck), and macOS builds wrap the web app in [Electron](https://www.electronjs.org/). The desktop app ships the same `vite build` output as the website; nothing in `src/` or `index.html` knows it is running on the desktop. This document covers running it, building it, putting it on a Steam Deck, and keeping it in step with the web app as the game changes. The web install flow is described separately in [PWA.md](PWA.md).
+Windows, Linux (including the Steam Deck), and macOS builds wrap the web app in [Electron](https://www.electronjs.org/). The desktop app ships the same `vite build` output as the website, with a small optional bridge for native fullscreen and Escape handling. This document covers running it, building it, putting it on a Steam Deck, and keeping it in step with the web app as the game changes. The web install flow is described separately in [PWA.md](PWA.md).
 
 ## How the wrapper works
 
 - `electron/main.js` (the only process with Node access) registers a privileged `app://` scheme and serves `dist-electron/` from it at `app://coastline/`. Absolute `/assets/...` URLs, the module Web Worker, `localStorage`, and secure-context APIs therefore behave exactly as on the HTTPS deployment. `file://` is never used.
-- The renderer runs with `contextIsolation`, `sandbox`, and no preload script, so the game has no extra privileges and no Electron-specific code paths.
+- The renderer runs with `contextIsolation` and `sandbox`. `electron/preload.cjs` exposes only fullscreen state/toggling and Escape notifications; it does not expose Node or general IPC access.
 - The two web-only scripts injected by the PWA plugin, `pwa-register.js` (offline service worker) and `pwa-install.js` (install banners), are served as empty scripts. The build itself is untouched.
 - Product name, description, window title, and background color come from `public/manifest.webmanifest`; the icon is rendered from `public/favicon.svg`; the version is `package.json`'s `version`.
-- The game's own fullscreen (F, LB / L1, the toolbar button) drives the native window. The shell adds F11 and Alt+Enter to toggle the window, F12 for DevTools, and remembers the window's size and position between launches.
+- The app starts fullscreen. F, LB / L1, the menu button, F11, and Alt+Enter all toggle the same native window state. Escape opens/closes the pause menu (or dismisses an open chooser) without leaving fullscreen. On Windows this is borderless window fullscreen, not an exclusive display mode. The shell adds F12 for DevTools and remembers the window's size and position between launches.
 - Links that leave the app open in the system browser; the window never navigates away from the game.
 
 ## Run from source
@@ -29,7 +29,7 @@ Flags work with `electron .`, the packaged executables, and Steam launch options
 
 | Flag | Environment variable | Effect |
 | --- | --- | --- |
-| `--fullscreen` / `--windowed` | `COASTLINE_FULLSCREEN=1` / `0` | Start fullscreen or windowed. Default: windowed, except on a Steam Deck (`SteamDeck=1` is set by Steam), where it starts fullscreen. |
+| `--fullscreen` / `--windowed` | `COASTLINE_FULLSCREEN=1` / `0` | Start fullscreen or windowed. Default: fullscreen on every platform. |
 | `--seed=<n>` | | Open a specific world, like `?seed=` on the web. |
 | `--software-gl` | `COASTLINE_SOFTWARE_GL=1` | Render with SwiftShader instead of the GPU. Slow; for headless tests and diagnosing a black window. |
 | `--devtools` | `COASTLINE_DEVTOOLS=1` | Open DevTools at startup. F12 or Ctrl+Shift+I toggles them at any time. |
@@ -100,7 +100,7 @@ The Linux AppImage is the Steam Deck build. The game already supports controller
 
 1. **Desktop Mode:** download the `.AppImage` from the GitHub release, right-click it in Dolphin → *Properties* → *Permissions* → *Is executable* (or `chmod +x` in Konsole), then double-click to check it runs.
 2. **Add to Steam:** in Steam (Desktop Mode) choose *Games* → *Add a Non-Steam Game to My Library…* → *Browse*, set the file type to *All Files*, pick the AppImage, and add it. Rename it and add artwork in its *Properties* if you like.
-3. **Game Mode:** launch it from the *Non-Steam* tab. Steam sets `SteamDeck=1`, so the app starts fullscreen, and gamescope keeps it there.
+3. **Game Mode:** launch it from the *Non-Steam* tab. The app starts fullscreen by default, and gamescope keeps it there.
 4. **Controls:** open the controller settings for the game and pick a *Gamepad* layout (for example *Gamepad with Joystick Trackpad*). The Deck's controls then arrive as a standard gamepad: left stick or D-pad steers, RT accelerates, LT brakes, Start pauses, LB toggles fullscreen, RB switches routes, and the View button opens the route chooser. A *Keyboard (WASD)* layout also works because the game supports keyboard driving, but without analog triggers.
 5. **Launch options:** *Properties* → *Launch Options* accepts the flags above, for example `--windowed` or `--seed=4817`.
 6. **Quit:** the Steam button → *Exit Game*, or close the window in Desktop Mode.
@@ -128,7 +128,7 @@ Checklist after web changes that touch the table:
 2. Before a release, `npm run electron:pack && npm run test:electron -- --packaged`.
 3. Update this document if flags or behaviour changed.
 
-The smoke test verifies: the page is served over `app://` as a secure context, WebGL 2 is available, the chunk worker runs, no install UI or service worker exists, storage works, the window title and default windowed start, keyboard driving and pausing, F fullscreen on the page and the native window, F11 window fullscreen, cycling through every route, and the absence of console errors. Reports and screenshots are written to `.artifacts/electron/`. It uses Playwright's Electron support and the installed `electron` package; no browser download is required.
+The smoke test verifies: the page is served over `app://` as a secure context, WebGL 2 is available, the chunk worker runs, no install UI or service worker exists, storage works, the window title and default fullscreen start, keyboard driving and pausing, Escape preserving fullscreen, F and the menu button toggling native fullscreen, F11 synchronizing the menu setting, cycling through every route, and the absence of console errors. Pass `--windowed` to check the startup override. Reports and screenshots are written to `.artifacts/electron/`. It uses Playwright's Electron support and the installed `electron` package; no browser download is required.
 
 Claude Code users have matching project skills: `/electron-run`, `/electron-sync`, and `/electron-build` under `.claude/skills/`.
 

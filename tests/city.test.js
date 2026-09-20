@@ -8,6 +8,7 @@ import { CITY_STEP, CITY_COLUMN_COUNT, KERB, cityColumns, cityVertex, cityHeight
 import { crossRoadHeight } from '../src/world/city-roads.js';
 import { cityParkingForBlock, cityParkingWidth, cityParkingHeight } from '../src/world/city-parking.js';
 import { CityWorld, CityChunk, lightning } from '../src/world/city.js';
+import { dressSkyline } from '../src/world/city-architecture.js';
 import { Rainfall } from '../src/world/rainfall.js';
 import { DrivingController } from '../src/vehicle.js';
 
@@ -202,6 +203,52 @@ test('building walls face outward and follow facade details through road bends',
     geometry.dispose();
   }
   material.dispose();
+});
+
+test('window facades face the road on both banks and remain visible from either end', () => {
+  const material = new THREE.MeshBasicMaterial();
+  for (const s0 of [-320, 180, 1025]) for (const u0 of [-222, 44]) for (const kind of ['punched', 'ribbon']) {
+    const chunk = Object.create(CityChunk.prototype); chunk.start = 0;
+    chunk.scenery = { blocks: { vertices: [], colors: [] }, lit: { vertices: [], colors: [] } };
+    const b = { s0, s1: s0 + 23, u0, u1: u0 + 22, height: 30, wall: '#888888', lit: .05 };
+    const walls = { vertices: [], colors: [] };
+    chunk.prism(walls, b.s0, b.s1, b.u0, b.u1, 20, 50, new THREE.Color('#888888'));
+    const wallGeometry = new THREE.BufferGeometry();
+    wallGeometry.setAttribute('position', new THREE.Float32BufferAttribute(walls.vertices, 3));
+    const wallMesh = new THREE.Mesh(wallGeometry, material), faces = new Map();
+    chunk.quad = (target, points, color, outward) => {
+      faces.set(outward.join(','), { points, outward });
+      CityChunk.prototype.quad.call(chunk, target, points, color, outward);
+    };
+    chunk.windows(b, 20, 123, kind);
+    const roadNormal = u0 < 0 ? '1,0,0' : '-1,0,0';
+    assert.deepEqual([...faces.keys()].sort(), [roadNormal, '0,0,1', '0,0,-1'].sort());
+    for (const { points, outward } of faces.values()) {
+      const center = points.reduce((sum, p) => sum.add(new THREE.Vector3(p.x, p.y, p.z)), new THREE.Vector3()).multiplyScalar(.25);
+      const normal = new THREE.Vector3(...outward), ray = new THREE.Raycaster(center.clone().addScaledVector(normal, 2), normal.clone().negate());
+      const vertices = { vertices: [], colors: [] };
+      CityChunk.prototype.quad.call(chunk, vertices, points, new THREE.Color('#ffffff'), outward);
+      const paneGeometry = new THREE.BufferGeometry();
+      paneGeometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices.vertices, 3));
+      const paneHit = ray.intersectObject(new THREE.Mesh(paneGeometry, material))[0], wallHit = ray.intersectObject(wallMesh)[0];
+      assert.ok(paneHit && wallHit && paneHit.distance < wallHit.distance, `${kind} facade ${outward} buried or facing away at ${s0}, ${u0}`);
+      paneGeometry.dispose();
+    }
+    wallGeometry.dispose();
+  }
+  material.dispose();
+});
+
+test('skyline bands have a fixed geometry budget and use the existing unshadowed batch', () => {
+  const chunk = Object.create(CityChunk.prototype); chunk.start = 0;
+  for (const lane of [0, 1, 2, 3]) {
+    const skyline = { vertices: [], colors: [] }; chunk.scenery = { skyline };
+    dressSkyline(chunk, { s0: 498, s1: 524, u0: 260 + lane * 70, u1: 285 + lane * 70 }, 20, 155, new THREE.Color('#808a95'), lane);
+    assert.ok(skyline.vertices.length > 0 && skyline.vertices.length / 9 <= 102, 'at most 16 bands and a cap on three faces');
+    assert.ok(skyline.vertices.every(Number.isFinite));
+    assert.equal(skyline.colors.length, skyline.vertices.length);
+    assert.deepEqual(Object.keys(chunk.scenery), ['skyline']);
+  }
 });
 
 test('river-bound streets connect across both banks, including bridges split by a chunk seam', () => {

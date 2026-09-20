@@ -110,7 +110,7 @@ try {
         return {
           perspective, darkened, brightened, averageDarkening: difference / (off.length / 4), offError, neutralError,
           transformUpdates, transformError, autoUpdateRestored: r.scene.matrixWorldAutoUpdate,
-          textures, texturesAfter: r.renderer.info.memory.textures, aoSize: [ao.pass.width, ao.pass.height],
+          textures, texturesAfter: r.renderer.info.memory.textures, aoSize: [ao.pass.writeTargetInternal.width, ao.pass.writeTargetInternal.height],
           gpu: extension ? gl.getParameter(extension.UNMASKED_RENDERER_WEBGL) : 'unknown',
           offImage, onImage,
         };
@@ -163,7 +163,8 @@ try {
     await mobile.evaluate(() => window.__coastline.rendering.render());
     const size = await mobile.evaluate(() => {
       const r = window.__coastline.rendering;
-      return { ao: [r.ambientOcclusion.pass.width, r.ambientOcclusion.pass.height], overflow: document.documentElement.scrollWidth > innerWidth };
+      const target = r.ambientOcclusion.pass.writeTargetInternal;
+      return { ao: [target.width, target.height], overflow: document.documentElement.scrollWidth > innerWidth };
     });
     assert.ok(Math.max(...size.ao) <= 640, 'AO stays capped at high display density');
     assert.equal(size.overflow, false);

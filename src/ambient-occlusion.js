@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
+import { N8AOPass } from 'n8ao';
 import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 
 // A small, independent AO buffer keeps the normal scene's antialiasing,
@@ -11,40 +11,36 @@ export class AmbientOcclusion {
     this.enabled = true;
     this.size = new THREE.Vector2();
     this.hidden = [];
-    this.normalResolutionScale = 2;
-    this.pass = new GTAOPass(scene, camera, 1, 1, undefined,
-      { samples: 12, radius: 2.4, thickness: 2, distanceFallOff: 1, scale: 1 },
-      { samples: 16, radius: 5, rings: 2, depthPhi: 1, normalPhi: 4, lumaPhi: 1 });
-    this.pass.output = GTAOPass.OUTPUT.Off;
-    // A fixed sampling orientation avoids crawling screen-space grain. These
-    // passes have no temporal accumulation to average randomized pixels away.
-    for (const material of [this.pass.gtaoMaterial, this.pass.pdMaterial]) {
-      material.fragmentShader = material.fragmentShader.replace(
-        'textureLod(tNoise, noiseUv, 0.0)', 'textureLod(tNoise, vec2(0.5), 0.0)');
+    this.pass = new N8AOPass(scene, camera, 2, 2);
+    this.pass.setQualityMode('Medium');
+    Object.assign(this.pass.configuration, {
+      aoRadius: 2.4, distanceFalloff: 1, intensity: 2,
+      halfRes: true, gammaCorrection: false, autoRenderBeauty: false,
+      transparencyAware: false, accumulate: false, depthAwareUpsampling: false,
+    });
+    this.pass.setDisplayMode('AO');
+    // Depth is sampled with nearest filtering. Keep the denoiser's AO samples
+    // on that same surface instead of blending across silhouettes first.
+    for (const target of [this.pass.writeTargetInternal, this.pass.readTargetInternal, this.pass.accumulationRenderTarget]) {
+      target.texture.minFilter = target.texture.magFilter = THREE.NearestFilter;
     }
-    // Orthographic rays are parallel; the stock shader assumes perspective.
-    this.pass.gtaoMaterial.fragmentShader = this.pass.gtaoMaterial.fragmentShader.replace(
-      'vec3 viewDir = normalize(-viewPos.xyz);',
-      'vec3 viewDir = PERSPECTIVE_CAMERA == 1 ? normalize(-viewPos.xyz) : vec3(0.0, 0.0, 1.0);');
-    // AO and packed normals only need eight bits per channel.
-    for (const target of [this.pass.normalRenderTarget, this.pass.gtaoRenderTarget, this.pass.pdRenderTarget]) {
-      target.texture.type = THREE.UnsignedByteType;
-    }
+    // Supply depth and normals without rendering lighting a second time. N8AO
+    // reconstructs its own normals; ours guide the final surface-aware upscale.
+    this.normalMaterial = new THREE.MeshNormalMaterial();
+    this.pass.beautyRenderTarget.texture.type = THREE.UnsignedByteType;
+    this.aoTarget = new THREE.WebGLRenderTarget(2, 2, { depthBuffer: false });
     this.material = new THREE.ShaderMaterial({
       name: 'Soft ambient occlusion',
       uniforms: {
-        tAO: { value: this.pass.gtaoMap },
-        tDepth: { value: this.pass.depthTexture },
-        tNormal: { value: this.pass.normalTexture },
+        tAO: { value: this.aoTarget.texture },
+        tDepth: { value: this.pass.beautyRenderTarget.depthTexture },
+        tNormal: { value: this.pass.beautyRenderTarget.texture },
+        tSampleDepth: { value: this.pass.depthDownsampleTarget.textures[0] },
+        tSampleNormal: { value: this.pass.depthDownsampleTarget.textures[1] },
         aoSize: { value: new THREE.Vector2(1, 1) },
         inverseProjection: { value: new THREE.Matrix4() },
         intensity: { value: .48 },
-        cameraNear: { value: camera.near },
-        cameraFar: { value: camera.far },
-        fogNear: { value: scene.fog.near },
-        fogFar: { value: scene.fog.far },
       },
-      defines: { PERSPECTIVE_CAMERA: 0 },
       vertexShader: /* glsl */`
         varying vec2 vUv;
         void main() {
@@ -57,13 +53,11 @@ export class AmbientOcclusion {
         uniform sampler2D tAO;
         uniform sampler2D tDepth;
         uniform sampler2D tNormal;
+        uniform sampler2D tSampleDepth;
+        uniform sampler2D tSampleNormal;
         uniform vec2 aoSize;
         uniform mat4 inverseProjection;
         uniform float intensity;
-        uniform float cameraNear;
-        uniform float cameraFar;
-        uniform float fogNear;
-        uniform float fogFar;
         varying vec2 vUv;
         vec3 viewPosition(vec2 uv, float depth) {
           vec4 position = inverseProjection * vec4(vec3(uv, depth) * 2.0 - 1.0, 1.0);
@@ -80,8 +74,8 @@ export class AmbientOcclusion {
           for (int y = 0; y < 2; y++) for (int x = 0; x < 2; x++) {
             vec2 offset = vec2(float(x), float(y));
             vec2 uv = (clamp(base + offset, vec2(0.0), aoSize - 1.0) + 0.5) / aoSize;
-            float sampleDepth = texture2D(tDepth, uv).r;
-            vec3 sampleNormal = unpackRGBToNormal(texture2D(tNormal, uv).rgb);
+            float sampleDepth = texture2D(tSampleDepth, uv).r;
+            vec3 sampleNormal = texture2D(tSampleNormal, uv).rgb;
             float planeDistance = abs(dot(viewPosition(uv, sampleDepth) - center, normal));
             float sameSurface = (1.0 - smoothstep(0.05, 0.3, planeDistance))
               * smoothstep(0.8, 0.98, dot(normal, sampleNormal)) * (1.0 - step(1.0, sampleDepth));
@@ -96,15 +90,9 @@ export class AmbientOcclusion {
         }
         void main() {
           float depth = texture2D(tDepth, vUv).r;
-          #if PERSPECTIVE_CAMERA == 1
-            float distance = -perspectiveDepthToViewZ(depth, cameraNear, cameraFar);
-          #else
-            float distance = -orthographicDepthToViewZ(depth, cameraNear, cameraFar);
-          #endif
-          float visibility = 1.0 - smoothstep(fogNear, fogFar, distance);
           float ao = depth >= 1.0 ? 1.0 : surfaceAO(depth);
-          // Preserve the sky and fade shading with the scene's existing fog.
-          float shade = depth >= 1.0 ? 1.0 : mix(1.0, ao, intensity * visibility);
+          // N8AO already fades its mask with fog; preserve the original color.
+          float shade = depth >= 1.0 ? 1.0 : mix(1.0, ao, intensity);
           gl_FragColor = vec4(vec3(shade), 1.0);
         }
       `,
@@ -139,6 +127,9 @@ export class AmbientOcclusion {
     const autoClear = renderer.autoClear;
     const shadowAutoUpdate = renderer.shadowMap.autoUpdate;
     const matrixWorldAutoUpdate = scene.matrixWorldAutoUpdate;
+    const overrideMaterial = scene.overrideMaterial;
+    const background = scene.background;
+    const xrEnabled = renderer.xr.enabled;
     const target = renderer.getRenderTarget();
     try {
       renderer.render(scene, camera);
@@ -146,35 +137,31 @@ export class AmbientOcclusion {
 
       renderer.getDrawingBufferSize(this.size);
       const scale = Math.min(.5, 640 / Math.max(this.size.x, this.size.y));
-      const width = Math.max(1, Math.round(this.size.x * scale));
-      const height = Math.max(1, Math.round(this.size.y * scale));
+      const width = Math.max(1, Math.round(this.size.x * scale)) * 2;
+      const height = Math.max(1, Math.round(this.size.y * scale)) * 2;
+      const cameraChanged = Boolean(pass.camera.isOrthographicCamera) !== Boolean(camera.isOrthographicCamera);
       pass.camera = camera;
       if (pass.width !== width || pass.height !== height) pass.setSize(width, height);
-      // Finer depth/normal coverage reduces contact-edge popping as the camera
-      // moves. The costly AO sampling and denoising stay at the smaller size.
-      const normalWidth = width * this.normalResolutionScale, normalHeight = height * this.normalResolutionScale;
-      if (pass.normalRenderTarget.width !== normalWidth || pass.normalRenderTarget.height !== normalHeight) {
-        pass.normalRenderTarget.setSize(normalWidth, normalHeight);
+      if (this.aoTarget.width !== width / 2 || this.aoTarget.height !== height / 2) this.aoTarget.setSize(width / 2, height / 2);
+      // N8AO specializes its shaders for the camera projection at creation.
+      if (cameraChanged) {
+        pass.configureSampleDependentPasses();
+        pass.configureEffectCompositer(pass.configuration.depthBufferType, camera.isOrthographicCamera);
       }
-      const perspective = camera.isPerspectiveCamera ? 1 : 0;
-      for (const material of [pass.gtaoMaterial, this.material]) {
-        if (material.defines.PERSPECTIVE_CAMERA !== perspective) {
-          material.defines.PERSPECTIVE_CAMERA = perspective;
-          material.needsUpdate = true;
-        }
-      }
-      this.material.uniforms.cameraNear.value = camera.near;
-      this.material.uniforms.aoSize.value.set(width, height);
+      this.material.uniforms.aoSize.value.set(width / 2, height / 2);
       this.material.uniforms.inverseProjection.value.copy(camera.projectionMatrixInverse);
-      this.material.uniforms.cameraFar.value = camera.far;
-      this.material.uniforms.fogNear.value = scene.fog.near;
-      this.material.uniforms.fogFar.value = scene.fog.far;
       // Foam, mist, flakes and other overlays must not become opaque AO casters.
       scene.traverseVisible(this.hideOverlay);
       renderer.shadowMap.autoUpdate = false;
       // The color pass already updated every transform. AO uses the same pose.
       scene.matrixWorldAutoUpdate = false;
-      pass.render(renderer, null, null);
+      scene.overrideMaterial = this.normalMaterial;
+      scene.background = null;
+      renderer.setRenderTarget(pass.beautyRenderTarget);
+      renderer.render(scene, camera);
+      scene.overrideMaterial = overrideMaterial;
+      scene.background = background;
+      pass.render(renderer, this.aoTarget);
       renderer.setRenderTarget(target);
       renderer.autoClear = false;
       this.quad.render(renderer);
@@ -184,16 +171,25 @@ export class AmbientOcclusion {
       renderer.setRenderTarget(target);
       renderer.shadowMap.autoUpdate = shadowAutoUpdate;
       scene.matrixWorldAutoUpdate = matrixWorldAutoUpdate;
+      scene.overrideMaterial = overrideMaterial;
+      scene.background = background;
+      renderer.xr.enabled = xrEnabled;
       renderer.autoClear = autoClear;
       renderer.info.autoReset = autoReset;
     }
   }
 
   dispose() {
-    this.pass.dispose();
-    // These two materials are not disposed by GTAOPass in the current release.
-    this.pass.gtaoMaterial.dispose();
-    this.pass.blendMaterial.dispose();
+    // N8AO 2.0.1 inherits Pass's empty dispose(), so release its owned resources.
+    const resources = new Set();
+    for (const value of Object.values(this.pass)) {
+      if (value?.isWebGLRenderTarget || value?.isTexture || value?.isMaterial) resources.add(value);
+      if (value?.material?.isMaterial) resources.add(value.material);
+      if (value?._mesh?.geometry) resources.add(value._mesh.geometry);
+    }
+    for (const resource of resources) resource.dispose();
+    this.aoTarget.dispose();
+    this.normalMaterial.dispose();
     this.material.dispose();
     this.quad.dispose();
   }

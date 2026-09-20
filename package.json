@@ -13,6 +13,7 @@
     "test:ao": "node scripts/ambient-occlusion-test.mjs",
     "test:traffic": "node scripts/traffic-test.mjs",
     "test:audio": "node scripts/audio-test.mjs",
+    "review:audio": "node scripts/audio-review.mjs",
     "test:mobile": "node scripts/mobile-test.mjs",
     "test:graphics": "node scripts/graphics-test.mjs",
     "test:responsive": "node scripts/responsive-test.mjs",
@@ -37,6 +38,8 @@
     "test:electron": "node scripts/electron-test.mjs"
   },
   "dependencies": {
+    "n8ao": "2.0.1",
+    "postprocessing": "^6.39.5",
     "three": "^0.186.0"
   },
   "devDependencies": {

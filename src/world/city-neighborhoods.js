@@ -10,17 +10,22 @@ const canopy = new THREE.IcosahedronGeometry(1, 0);
 const canopyPositions = Array.from(canopy.attributes.position.array);
 canopy.dispose();
 
-// Background density comes from compact silhouettes and two simple facades.
+// Background density comes from compact silhouettes and simple facades.
 // Everything is baked into existing chunk batches; there are no additional
 // objects, materials, shadow lights or per-frame updates.
 export function buildNeighborhoods(chunk) {
   const { blocks, skyline, details, boxes } = chunk.scenery;
+  const plantings = [];
   const first = blockAt(chunk.start - 160), last = blockAt(chunk.start + CHUNK_LENGTH + 160);
   const ground = (s, u, lift = 0) => {
     const p = chunk.ground(s, u); p.y += lift; return p;
   };
   function tree(target, s, u, h, seed) {
+    plantings.push({ target, s, u, h, seed });
+  }
+  function plantTree({ target, s, u, h, seed }) {
     const p = ground(s, u), color = new THREE.Color(GREENS[Math.abs(seed) % GREENS.length]);
+    if (!chunk.planting.clears(p, h * .35)) return;
     chunk.prism(target, s - .14, s + .14, u - .14, u + .14, p.y, p.y + h * .64, new THREE.Color('#655a48'));
     for (let i = 0; i < canopyPositions.length; i += 9) {
       const tint = color.clone().multiplyScalar(.87 + randomAt(seed, i + 3681) * .25);
@@ -38,6 +43,8 @@ export function buildNeighborhoods(chunk) {
     for (const ds of [-width * .27, width * .22]) tree(target, s + ds, u + (randomAt(seed, Math.round(ds) + 3682) - .5) * depth * .35, 4.2 + randomAt(seed, Math.round(ds) + 3683) * 1.8, seed + Math.round(ds));
   }
   function building(target, s0, s1, u0, u1, height, seed) {
+    chunk.reserveBuilding(s0, s1, u0, u1);
+    if (!chunk.inChunk((s0 + s1) / 2)) return;
     const corners = [[s0, u0], [s1, u0], [s1, u1], [s0, u1]].map(([s, u]) => ground(s, u));
     const base = Math.min(...corners.map(p => p.y)) - .2, top = Math.max(...corners.map(p => p.y)) + height;
     const color = new THREE.Color(WALLS[Math.floor(randomAt(seed, 3691) * WALLS.length)]);
@@ -46,7 +53,8 @@ export function buildNeighborhoods(chunk) {
     for (let i = 0; i < 4; i++) {
       const j = (i + 1) % 4, outward = [[-1, 0, 0], [0, 0, -1], [1, 0, 0], [0, 0, 1]][i];
       chunk.quad(target, [at(i, base), at(j, base), at(j, top), at(i, top)], color.clone().multiplyScalar([1, .9, .82, .94][i]), outward);
-      if (i !== 0 && i !== 3) continue;
+      // The opposite bank faces +u; both ends can be seen while driving.
+      if (i === (u1 < 0 ? 0 : 2)) continue;
       const a = corners[i], b = corners[j], length = Math.hypot(b.x - a.x, b.z - a.z);
       const point = (distance, y) => ({ x: lerp(a.x, b.x, distance / length) + outward[0] * .04, y, z: lerp(a.z, b.z, distance / length) + outward[2] * .04 });
       for (let y = base + 1.3; y < top - 1.8; y += 3.4) for (let d = 1.5; d < length - 2.2; d += 4.2) {
@@ -78,13 +86,12 @@ export function buildNeighborhoods(chunk) {
           green(target, center, (front + back) / 2, width - 5, back - front - 4, seed);
           continue;
         }
-        if (!chunk.inChunk(center)) continue;
         const s0 = center - width / 2 + 1.5 + r(3) * 2.5, s1 = center + width / 2 - 2;
         const height = (lane === 1 ? 6 : 8) + Math.floor(r(4) * (lane > 1 ? 5 : 3)) * 3.4;
         building(target, s0, s1, u0, u1, height, seed);
         // Small, irregular yards soften the building row without filling
         // every lot with another costly foreground tree or parked vehicle.
-        if (r(5) < .55) tree(target, s1 + .8, back - 2, 4.5 + r(6) * 2, seed);
+        if (chunk.inChunk(center) && r(5) < .55) tree(target, s1 + .8, back - 2, 4.5 + r(6) * 2, seed);
       }
     }
     // The waterfront gets a few planted setbacks between bridge approaches.
@@ -98,6 +105,10 @@ export function buildNeighborhoods(chunk) {
     // a little green court rather than another repeated cross intersection.
     if (bankStreetRange(block).from > -245) green(blocks, blockBoundary(block), -217, 12, 29, block);
   }
+
+  // Check after every lot is reserved, including buildings owned by the next
+  // chunk. Planting must not depend on which side of a seam was built first.
+  plantings.forEach(plantTree);
 
   // Continuous riverfront edge. The rail opens only at a real bridge, so
   // T junctions retain a walking route instead of ending abruptly at water.

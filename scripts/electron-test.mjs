@@ -48,12 +48,12 @@ function packagedExecutable() {
   return found;
 }
 
-const appArgs = ['--seed=4817', '--windowed', ...(softwareGl ? ['--software-gl'] : [])];
+const appArgs = ['--seed=4817', ...(flags.has('--windowed') ? ['--windowed'] : []), ...(softwareGl ? ['--software-gl'] : [])];
 // Editor terminals often export ELECTRON_RUN_AS_NODE, which would start Electron as plain Node.
 const { ELECTRON_RUN_AS_NODE: _ignored, ...env } = process.env;
 const launchOptions = {
   cwd: root,
-  env: { ...env, COASTLINE_USER_DATA: userData },
+  env: { ...env, COASTLINE_FULLSCREEN: '', COASTLINE_USER_DATA: userData },
   args: packaged ? appArgs : ['.', ...appArgs],
   ...(packaged ? { executablePath: packagedExecutable() } : {}),
   timeout: 60_000,
@@ -105,9 +105,11 @@ try {
   check('localStorage works on app://', environment.storage);
   check('chunk worker running', page.workers().some(worker => /chunk-worker/.test(worker.url())), page.workers().map(worker => worker.url()));
   const initial = await windowState();
+  const strictFullscreen = process.platform !== 'linux';
+  const fullscreenCheck = (name, condition, detail) => strictFullscreen ? check(name, condition, detail) : condition ? check(name, true) : warn(`${name} (not enforced on Linux CI without a window manager)`, detail);
   check('window visible', initial.visible);
   check('window title', initial.title.includes(productName), initial.title);
-  check('starts windowed', !initial.fullscreen);
+  fullscreenCheck('startup fullscreen matches launch option', initial.fullscreen === !flags.has('--windowed'));
   report.environment = { ...environment, bounds: initial.bounds };
   await page.screenshot({ path: path.join(out, 'welcome.png') });
 
@@ -122,20 +124,7 @@ try {
   await page.keyboard.press('KeyP');
   await page.waitForFunction(() => document.querySelector('#pause-overlay').hidden);
 
-  // The game's own fullscreen (F) must drive the native window, and F11 must toggle the window.
-  const strictFullscreen = process.platform !== 'linux';
-  const fullscreenCheck = (name, condition, detail) => strictFullscreen ? check(name, condition, detail) : condition ? check(name, true) : warn(`${name} (not enforced on Linux CI without a window manager)`, detail);
-  await page.keyboard.press('KeyF');
-  await page.waitForFunction(() => document.fullscreenElement !== null, null, { timeout: 10_000 }).catch(() => {});
-  await page.waitForTimeout(600);
-  let state = await windowState();
-  fullscreenCheck('F enters fullscreen (page)', await page.evaluate(() => document.fullscreenElement !== null));
-  fullscreenCheck('F enters fullscreen (window)', state.fullscreen, state.bounds);
-  await page.keyboard.press('KeyF');
-  await page.waitForFunction(() => document.fullscreenElement === null, null, { timeout: 10_000 }).catch(() => {});
-  await page.waitForTimeout(600);
-  state = await windowState();
-  fullscreenCheck('F exits fullscreen', !state.fullscreen && await page.evaluate(() => document.fullscreenElement === null), state.bounds);
+  // All fullscreen controls share native state, without HTML fullscreen swallowing Escape.
   // Playwright's synthetic keys bypass Electron's before-input-event, so the shell's
   // own shortcuts are sent through Chromium's input pipeline with sendInputEvent.
   const sendKey = keyCode => electronApp.evaluate(({ BrowserWindow }, keyCode) => {
@@ -144,10 +133,39 @@ try {
     webContents.sendInputEvent({ type: 'keyDown', keyCode });
     webContents.sendInputEvent({ type: 'keyUp', keyCode });
   }, keyCode);
+  if (!(await windowState()).fullscreen) {
+    await page.keyboard.press('KeyF');
+    await page.waitForTimeout(800);
+  }
+  let state = await windowState();
+  fullscreenCheck('native fullscreen active', state.fullscreen, state.bounds);
+  check('no HTML fullscreen session', await page.evaluate(() => document.fullscreenElement === null));
+  check('fullscreen setting reflects native state', await page.locator('#fullscreen').getAttribute('aria-pressed') === String(state.fullscreen));
+  await sendKey('Escape');
+  await page.waitForFunction(() => !document.querySelector('#pause-overlay').hidden);
+  fullscreenCheck('Escape opens pause without leaving fullscreen', (await windowState()).fullscreen);
+  await sendKey('Escape');
+  await page.waitForFunction(() => document.querySelector('#pause-overlay').hidden);
+  fullscreenCheck('Escape resumes without leaving fullscreen', (await windowState()).fullscreen);
+  await page.keyboard.press('KeyF');
+  await page.waitForTimeout(800);
+  fullscreenCheck('F exits native fullscreen', !(await windowState()).fullscreen);
+  await page.keyboard.press('KeyF');
+  await page.waitForTimeout(800);
+  fullscreenCheck('F enters native fullscreen', (await windowState()).fullscreen);
+  await sendKey('Escape');
+  await page.waitForFunction(() => !document.querySelector('#pause-overlay').hidden);
+  fullscreenCheck('Escape after F still preserves fullscreen', (await windowState()).fullscreen);
+  await page.locator('#fullscreen').click();
+  await page.waitForTimeout(800);
+  fullscreenCheck('menu button exits native fullscreen', !(await windowState()).fullscreen);
+  await sendKey('Escape');
+  await page.waitForFunction(() => document.querySelector('#pause-overlay').hidden);
   await sendKey('F11');
   await page.waitForTimeout(800);
   state = await windowState();
   fullscreenCheck('F11 toggles the window fullscreen', state.fullscreen, state.bounds);
+  check('F11 updates the menu setting', await page.locator('#fullscreen').getAttribute('aria-pressed') === String(state.fullscreen));
   await sendKey('F11');
   await page.waitForTimeout(800);
   state = await windowState();

@@ -51,8 +51,10 @@ export class BrowserVR {
       session.addEventListener('visibilitychange', this.visibilityChanged);
       this.renderer.xr.enabled = true;
       this.renderer.xr.setReferenceSpaceType('local');
-      this.renderer.xr.setFramebufferScaleFactor(.85);
-      this.renderer.xr.setFoveation(1);
+      // Supersample both eyes and preserve peripheral detail. The framebuffer
+      // scale must be set before the session allocates its render targets.
+      this.renderer.xr.setFramebufferScaleFactor(1.5);
+      this.renderer.xr.setFoveation(0);
       await this.renderer.xr.setSession(session);
       if (this.session === session) this.onStart();
     } catch (error) {

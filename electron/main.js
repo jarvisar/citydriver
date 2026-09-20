@@ -3,8 +3,8 @@
 // The renderer is the unmodified Vite build (dist-electron/), served through a
 // privileged app:// scheme so absolute asset URLs, the module Web Worker,
 // storage, and secure-context APIs behave exactly as on the HTTPS deployment.
-// The web app has no knowledge of Electron: nothing here is exposed to the page.
-import { app, BrowserWindow, Menu, dialog, net, protocol, shell } from 'electron';
+// A sandboxed preload exposes only native fullscreen controls and Escape input.
+import { app, BrowserWindow, Menu, dialog, ipcMain, net, protocol, shell } from 'electron';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -34,19 +34,18 @@ const MIME = {
 const argv = process.argv.slice(1);
 const has = flag => argv.includes(flag);
 const value = flag => argv.find(arg => arg.startsWith(`${flag}=`))?.slice(flag.length + 1);
-const steamDeck = process.env.SteamDeck === '1' || process.env.SteamOS === '1' || Boolean(process.env.GAMESCOPE_WAYLAND_DISPLAY);
 const options = {
   devUrl: value('--dev-url') ?? process.env.COASTLINE_DEV_URL,
   seed: value('--seed'),
   devtools: has('--devtools') || process.env.COASTLINE_DEVTOOLS === '1',
   softwareGl: has('--software-gl') || process.env.COASTLINE_SOFTWARE_GL === '1',
   fullscreen: has('--fullscreen') ? true : has('--windowed') ? false
-    : process.env.COASTLINE_FULLSCREEN ? process.env.COASTLINE_FULLSCREEN === '1' : steamDeck,
+    : process.env.COASTLINE_FULLSCREEN ? process.env.COASTLINE_FULLSCREEN === '1' : true,
 };
 if (has('--help') || has('-h')) {
   process.stdout.write([
     'Coastline desktop options:',
-    '  --fullscreen | --windowed   Start fullscreen or windowed (default: windowed; fullscreen on Steam Deck)',
+    '  --fullscreen | --windowed   Start fullscreen or windowed (default: fullscreen)',
     '  --seed=<number>             Open a specific world, like ?seed= on the web',
     '  --software-gl               Render with SwiftShader instead of the GPU (slow; for testing)',
     '  --devtools                  Open DevTools at startup (F12 toggles them any time)',
@@ -140,9 +139,11 @@ function createWindow() {
     title: productName, backgroundColor, show: false, autoHideMenuBar: true,
     fullscreen: options.fullscreen,
     ...(process.platform === 'linux' ? { icon: path.join(here, 'build', 'icon.png') } : {}),
-    webPreferences: { contextIsolation: true, sandbox: true, nodeIntegration: false, spellcheck: false },
+    webPreferences: { contextIsolation: true, sandbox: true, nodeIntegration: false, spellcheck: false, preload: path.join(here, 'preload.cjs') },
   });
   mainWindow = window;
+  window.on('enter-full-screen', () => window.webContents.send('coastline:fullscreen-changed', true));
+  window.on('leave-full-screen', () => window.webContents.send('coastline:fullscreen-changed', false));
   if (state.maximized && !options.fullscreen) window.maximize();
   state.track(window);
   window.once('ready-to-show', () => {
@@ -163,7 +164,10 @@ function createWindow() {
   window.webContents.on('before-input-event', (event, input) => {
     if (input.type !== 'keyDown') return;
     const modifier = input.control || input.meta;
-    if (input.key === 'F11' || (input.alt && input.key === 'Enter')) {
+    if (input.key === 'Escape') {
+      event.preventDefault();
+      if (!input.isAutoRepeat) window.webContents.send('coastline:escape');
+    } else if (input.key === 'F11' || (input.alt && input.key === 'Enter')) {
       event.preventDefault(); window.setFullScreen(!window.isFullScreen());
     } else if (input.key === 'F12' || (modifier && input.shift && input.key.toUpperCase() === 'I')) {
       event.preventDefault(); window.webContents.toggleDevTools();
@@ -205,6 +209,13 @@ app.whenReady().then(() => {
   }
   installProtocols();
   installMenu();
+  for (const [channel, toggle] of [['coastline:fullscreen-get', false], ['coastline:fullscreen-toggle', true]]) {
+    ipcMain.handle(channel, event => {
+      if (!mainWindow || event.sender !== mainWindow.webContents || event.senderFrame !== mainWindow.webContents.mainFrame) return false;
+      if (toggle) mainWindow.setFullScreen(!mainWindow.isFullScreen());
+      return mainWindow.isFullScreen();
+    });
+  }
   createWindow();
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 });

@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { DriveSoundModel } from '../src/audio/model.js';
+import { DriveSoundModel, trafficSound } from '../src/audio/model.js';
+import { ENGINES, engineFor, sanitizeMix, MIX_PRESETS } from '../src/audio/profiles.js';
+import { createEngineBuffer, engineBandWeights } from '../src/audio/engine.js';
+import { createTextureBuffer } from '../src/audio/textures.js';
+import { SoundDirector } from '../src/audio/director.js';
 import { createNoiseBuffer } from '../src/audio/synthesis.js';
 import { DriveAudio } from '../src/audio.js';
 import { DrivingController } from '../src/vehicle.js';
@@ -103,4 +107,104 @@ test('unsupported audio fails cleanly and leaves sound disabled', async () => {
     assert.equal(audio.enabled, false); assert.equal(audio.context, null);
     await audio.dispose(); await audio.dispose();
   } finally { if (original === undefined) delete globalThis.window; else globalThis.window = original; }
+});
+
+test('engine personalities cover the garage and Formula retains its full rev range', () => {
+  assert.equal(engineFor('auto', 'snow'), ENGINES.snow);
+  assert.equal(engineFor('pickup', 'snow'), ENGINES.pickup);
+  assert.equal(engineFor('unknown'), ENGINES.coast);
+  const model = new DriveSoundModel(); model.setProfile(ENGINES.formula);
+  const fast = settle(model, { speed: 50, throttle: 1 }, 5);
+  assert.equal(fast.gear, 6); assert.ok(fast.rpm > 10000 && fast.rpm <= 12500);
+  assert.ok(settle(model, { speed: 0 }).rpm < 1810);
+});
+
+test('tire scrub and reverse whine follow motion and road contact', () => {
+  const model = new DriveSoundModel();
+  assert.equal(model.update({ speed: 0, steer: 1, brake: 1, handbrake: 1 }).skidLevel, 0);
+  assert.equal(model.update({ speed: 20 }).skidLevel, 0);
+  const tarmac = model.update({ speed: 20, steer: 1, handbrake: 1 });
+  const gravel = model.update({ speed: 20, steer: 1, handbrake: 1, offRoad: 1 });
+  assert.ok(tarmac.skidLevel > gravel.skidLevel * 4);
+  assert.ok(model.update({ speed: -5 }).reverseLevel > 0);
+  assert.equal(model.update({ speed: 5 }).reverseLevel, 0);
+});
+
+test('passing traffic pans with the listener, fades with distance, and changes pitch at the pass', () => {
+  const player = { groundedPosition: { x: 0, z: 0 }, heading: 0, speed: 15 };
+  const car = { position: { x: -5, z: -20 }, heading: Math.PI, speed: 20 };
+  const approaching = trafficSound(player, car);
+  assert.ok(approaching.pan < 0 && approaching.doppler > 1 && approaching.level > 0);
+  assert.ok(trafficSound(player, car, Math.PI).pan > 0);
+  car.position.z = 20;
+  assert.ok(trafficSound(player, car).doppler < 1);
+  car.position.z = 100;
+  assert.equal(trafficSound(player, car).level, 0);
+});
+
+test('mix storage rejects invalid values and clamps valid numeric volumes', () => {
+  assert.deepEqual(sanitizeMix(null), MIX_PRESETS.balanced);
+  const mix = sanitizeMix({ master: Infinity, engine: -4, road: 8, music: '1', night: 'false' });
+  assert.equal(mix.master, MIX_PRESETS.balanced.master);
+  assert.equal(mix.engine, 0); assert.equal(mix.road, 1); assert.equal(mix.music, 0); assert.equal(mix.night, false);
+});
+
+const bufferContext = { sampleRate: 12000, createBuffer(channels, length) {
+  const data = Array.from({ length: channels }, () => new Float32Array(length));
+  return { getChannelData: i => data[i] };
+} };
+function signalStats(data) {
+  let energy = 0, steps = 0, peak = 0, mean = 0;
+  for (let i = 1; i < data.length; i++) { energy += data[i] ** 2; steps += (data[i] - data[i - 1]) ** 2; peak = Math.max(peak, Math.abs(data[i])); mean += data[i]; }
+  return { rms: Math.sqrt(energy / data.length), step: Math.sqrt(steps / data.length), peak, mean: mean / data.length };
+}
+test('combustion takes are deterministic, centered, matched in level, and distinct under load', () => {
+  for (const profile of [ENGINES.coast, ENGINES.pickup, ENGINES.formula]) {
+    const coast = createEngineBuffer(bufferContext, profile, profile.idle, false).getChannelData(0);
+    const load = createEngineBuffer(bufferContext, profile, profile.idle, true).getChannelData(0);
+    assert.deepEqual(coast, createEngineBuffer(bufferContext, profile, profile.idle, false).getChannelData(0));
+    assert.notDeepEqual(coast, load);
+    for (const data of [coast, load]) {
+      const stats = signalStats(data);
+      assert.ok(stats.rms > .19 && stats.rms < .21);
+      assert.ok(Math.abs(stats.mean) < .01);
+      assert.ok(stats.peak < 1);
+      assert.ok(Math.abs(data[0] - data.at(-1)) < stats.step * 5, 'no seam impulse');
+    }
+  }
+});
+
+test('RPM band crossfades preserve energy and stay continuous across band boundaries', () => {
+  const refs = [820, 2200, 3800];
+  let previous = engineBandWeights(400, refs);
+  for (let rpm = 401; rpm < 7000; rpm++) {
+    const weights = engineBandWeights(rpm, refs);
+    assert.ok(Math.abs(weights.reduce((sum, value) => sum + value * value, 0) - 1) < 1e-10);
+    assert.ok(weights.every((value, i) => Math.abs(value - previous[i]) < .004));
+    previous = weights;
+  }
+});
+
+test('contact, wind and rain textures have different spectra and smooth stereo loops', () => {
+  const brightness = [];
+  for (const kind of ['road', 'wind', 'rain']) {
+    const buffer = createTextureBuffer(bufferContext, kind);
+    const left = buffer.getChannelData(0), right = buffer.getChannelData(1), stats = signalStats(left);
+    assert.notDeepEqual(left, right);
+    assert.ok(stats.peak < 1 && stats.rms > .01);
+    assert.ok(Math.abs(left[0] - left.at(-1)) < stats.step * 5);
+    brightness.push(stats.step / stats.rms);
+  }
+  assert.ok(brightness[1] < brightness[0] && brightness[0] < brightness[2]);
+});
+
+test('director skips silent layers and avoids a note backlog after interruption', () => {
+  const director = new SoundDirector(), events = [];
+  const audio = { journey: 'coast', mix: { ambience: 0, music: 0 }, graph: { pads: [], event: (...args) => events.push(args) } };
+  director.update(audio, { motion: 1 }, 100);
+  assert.deepEqual(events, []);
+  audio.mix.music = .5; director.update(audio, { motion: 1 }, 200);
+  assert.equal(events.length, 1); assert.equal(events[0][1].time, 200);
+  director.update(audio, { motion: 1 }, 10000);
+  assert.ok(events.length <= 2, 'never catches up missed beats');
 });

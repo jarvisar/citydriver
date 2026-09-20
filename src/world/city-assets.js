@@ -161,7 +161,10 @@ function streetTree(variant) {
     g.scale(1, stretch + variant * .12, .88); g.rotateY(variant * .8 + y);
     crown.add(g, [x, y, z], x === 0 ? '#ffffff' : '#e2e8da');
   }
-  return { bark: trunk.finish(), leaves: crown.finish() };
+  const bark = trunk.finish(), leaves = crown.finish(), positions = leaves.attributes.position;
+  let radius = 0;
+  for (let i = 0; i < positions.count; i++) radius = Math.max(radius, Math.hypot(positions.getX(i), positions.getZ(i)));
+  return { bark, leaves, radius };
 }
 
 export const cityTrees = [streetTree(0), streetTree(1)];
