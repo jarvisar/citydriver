@@ -114,16 +114,16 @@ rainbowMaterial.customProgramCacheKey=()=> 'waterfall-rainbow-v1';
 export const ropeBridgeMaterial=new THREE.MeshStandardMaterial({vertexColors:true,roughness:1,flatShading:true});
 export const landingPathMaterial=new THREE.MeshStandardMaterial({color:'#998e69',roughness:1,flatShading:true,transparent:true,depthWrite:false});
 landingPathMaterial.onBeforeCompile=shader=>{
-  shader.vertexShader='attribute vec2 landingCoord; varying vec2 vLanding;\n'+shader.vertexShader;
+  shader.vertexShader='attribute vec3 landingCoord; varying vec3 vLanding;\n'+shader.vertexShader;
   shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\nvLanding = landingCoord;');
-  shader.fragmentShader='varying vec2 vLanding;\n'+shader.fragmentShader;
+  shader.fragmentShader='varying vec3 vLanding;\n'+shader.fragmentShader;
   shader.fragmentShader=shader.fragmentShader.replace('#include <color_fragment>',`#include <color_fragment>
     float along = vLanding.x;
     float edge = abs(vLanding.y) + 0.07 * sin(along * 2.1 + vLanding.y * 3.0);
     float width = 1.4 - 0.07 * clamp(along, 0.0, 6.0);
-    diffuseColor.a *= smoothstep(-1.1, -0.3, along) * (1.0 - smoothstep(1.5, 6.5, along))
+    diffuseColor.a *= smoothstep(-1.1, -0.3, along) * (1.0 - smoothstep(vLanding.z - 5.0, vLanding.z, along))
       * (1.0 - smoothstep(0.6, width, edge)) * 0.76;
   `);
 };
-landingPathMaterial.customProgramCacheKey=()=> 'jungle-bridge-landing-v1';
+landingPathMaterial.customProgramCacheKey=()=> 'jungle-bridge-landing-v2';
 registerChunkResources('jungle-discoveries',{parrotGeometry,parrotMaterial,rainbowGeometry,rainbowMaterial,ropeBridgeMaterial,landingPathMaterial});

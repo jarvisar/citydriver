@@ -6,24 +6,29 @@ import { buildJungleTemple } from './jungle-temple.js';
 
 const up=new THREE.Vector3(0,1,0),transform=new THREE.Object3D();
 
-function buildLandingPaths(chunk,a,b) {
-  const floor=chunk.terrain.geometry.attributes.position,vertices=[],coords=[];
+function buildLandingPaths(chunk,a,b,site) {
+  const surfaces=[chunk.terrain,...['road-shoulders','jungle-road'].map(name=>chunk.group.getObjectByName(name))];
+  const vertices=[],coords=[];
   const axis=b.clone().sub(a).setY(0).normalize(),across=axis.clone().cross(up);
-  for(const [end,direction] of [[a,-1],[b,1]]) {
-    for(let i=0;i<floor.count;i+=3) {
-      const tri=Array.from({length:3},(_,j)=>{
-        const x=floor.getX(i+j),y=floor.getY(i+j),z=floor.getZ(i+j),dx=x-end.x,dz=z-end.z;
-        return {x,y,z,along:(dx*axis.x+dz*axis.z)*direction,cross:dx*across.x+dz*across.z};
-      });
-      if(tri.every(p=>p.along<-1.1)||tri.every(p=>p.along>6.5)||tri.every(p=>p.cross<-1.5)||tri.every(p=>p.cross>1.5)) continue;
-      // Reuse whole ground faces. The material softly fades the small worn
-      // footprint, preserving the terrain's exact facets and avoiding seams.
-      for(const p of tri) {vertices.push(p.x,p.y+.025,p.z);coords.push(p.along,p.cross);}
+  // Continue the near landing up the bank, ending just inside the asphalt.
+  for(const [end,direction,length] of [[a,-1,6.5],[b,1,-4.4-site.nearU]]) {
+    for(const surface of surfaces) {
+      const floor=surface.geometry.attributes.position;
+      for(let i=0;i<floor.count;i+=3) {
+        const tri=Array.from({length:3},(_,j)=>{
+          const x=floor.getX(i+j),y=floor.getY(i+j),z=floor.getZ(i+j),dx=x-end.x,dz=z-end.z;
+          return {x,y,z,along:(dx*axis.x+dz*axis.z)*direction,cross:dx*across.x+dz*across.z};
+        });
+        if(tri.every(p=>p.along<-1.1)||tri.every(p=>p.along>length)||tri.every(p=>p.cross<-1.5)||tri.every(p=>p.cross>1.5)) continue;
+        // Follow the actual ground, shoulder and asphalt faces so the dirt
+        // remains flush with each surface all the way to its feathered end.
+        for(const p of tri) {vertices.push(p.x,p.y+.025,p.z);coords.push(p.along,p.cross,length);}
+      }
     }
   }
   const geometry=new THREE.BufferGeometry();
   geometry.setAttribute('position',new THREE.Float32BufferAttribute(vertices,3));
-  geometry.setAttribute('landingCoord',new THREE.Float32BufferAttribute(coords,2));
+  geometry.setAttribute('landingCoord',new THREE.Float32BufferAttribute(coords,3));
   geometry.computeVertexNormals();geometry.computeBoundingSphere();
   chunk.addMesh(geometry,landingPathMaterial,'bridge-landing-paths');
 }
@@ -35,7 +40,7 @@ function buildBridge(chunk,site) {
     return new THREE.Vector3(p.x,chunk.sampleGround(p.x,p.z+chunk.start)??jungleHeight(s,u),p.z+chunk.start);
   };
   const a=ground(site.s,site.farU),b=ground(site.s,site.nearU);
-  buildLandingPaths(chunk,a,b);
+  buildLandingPaths(chunk,a,b,site);
   const landings=[a,b].map((p,i)=>({x:p.x,z:p.z-chunk.start,ground:p.y,u:i?site.nearU:site.farU}));
   a.y+=.16;b.y+=.16;
   const widthAxis=b.clone().sub(a).cross(up).normalize(),length=Math.hypot(b.x-a.x,b.z-a.z);

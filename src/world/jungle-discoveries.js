@@ -81,6 +81,6 @@ export function jungleDiscoveryClears(s, u, sites, radius = 0) {
   return sites.every(site => {
     if (site.kind === 'temple') return Math.abs(s-site.s)>13+radius || Math.abs(u-site.u)>12+radius;
     return site.kind !== 'rope-bridge' || Math.abs(s-site.s)>3+radius
-      || u<site.farU-3-radius || u>site.nearU+3+radius;
+      || u<site.farU-6.5-radius || u>-4.4+radius;
   });
 }
