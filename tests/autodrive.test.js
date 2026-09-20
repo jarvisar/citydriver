@@ -73,28 +73,38 @@ test('passes a slower car and returns to the right lane without contact', () => 
   f.dispose();
 });
 
-test('passing and merging ease the car and windshield view across simulation rates', () => {
+test('curved passes keep the earlier pace with smooth steering across simulation rates', () => {
   const samples = [];
-  for (const fps of [30, 60, 120]) for (const id of ['auto', 'formula']) {
-    const f = setup(id); arrange(f, [55]);
+  // Measured completion times before the slow-steering tuning, rounded up by
+  // less than one 30 Hz step. Include the wait for oncoming traffic and merge.
+  const scenarios = [
+    { positions: [55], deadline: { auto: 8.85, formula: 4.75 } },
+    { positions: [55, 180], deadline: { auto: 10.45, formula: 8.9 } },
+    { positions: [55, -300, 72], deadline: { auto: 10.3, formula: 5.35 } },
+  ];
+  for (const fps of [30, 60, 120]) for (const id of ['auto', 'formula']) for (const scenario of scenarios) {
+    const f = setup(id); arrange(f, scenario.positions);
     f.player.speed = f.player.stats.topSpeed;
     const camera = new FirstPersonCamera(); camera.update(f.player.car, 0);
-    let passedLeft = false, mergedRight = false, peakTurn = 0;
+    let passedLeft = false, mergedAt = null, peakTurn = 0, previousRate = 0;
     for (let i = 0; i < 14 * fps; i++) {
       const before = f.player.heading, rotation = camera.camera.quaternion.clone();
       f.player.update(1 / fps, f.auto.update(f.player, f.traffic, f.player.stats.topSpeed, 1 / fps));
       f.traffic.update(1 / fps, f.player);
       camera.update(f.player.car, 1 / fps);
-      const rate = Math.abs(f.player.heading - before) * fps;
-      peakTurn = Math.max(peakTurn, rate);
-      assert.ok(rate < .65, `${id}/${fps}: no sudden heading change on pull-out or merge (${rate})`);
-      assert.ok(camera.camera.quaternion.angleTo(rotation) * fps < .65, 'windshield view also turns smoothly');
+      const rate = (f.player.heading - before) * fps;
+      peakTurn = Math.max(peakTurn, Math.abs(rate));
+      assert.ok(Math.abs(rate) < .4, `${id}/${fps}: no sudden heading change on pull-out or merge (${rate})`);
+      assert.ok(Math.abs(rate - previousRate) * fps < 2.5, 'steering speed builds gradually rather than snapping on');
+      previousRate = rate;
+      assert.ok(camera.camera.quaternion.angleTo(rotation) * fps < .4, 'windshield view also turns smoothly');
       assert.ok(Math.abs(f.player.u) < 2.41, 'settle inside the lane without overshoot');
-      passedLeft ||= f.player.u < -2;
-      mergedRight ||= passedLeft && f.player.u > 2.3;
-      if (i === fps - 1 && id === 'auto') samples.push(f.player.u);
+      // A gentle arc can clear traffic before reaching the exact lane center.
+      passedLeft ||= f.player.u < 0 && f.player.s > f.traffic.vehicles[0].s;
+      if (mergedAt === null && passedLeft && f.player.u > 2.3 && Math.abs(f.player.heading) < .005) mergedAt = (i + 1) / fps;
+      if (i === fps - 1 && id === 'auto' && scenario === scenarios[0]) samples.push(f.player.u);
     }
-    assert.ok(passedLeft && mergedRight, 'complete the pass and merge');
+    assert.ok(mergedAt !== null && mergedAt <= scenario.deadline[id], `${id}/${fps}: finish within earlier passing time (${mergedAt})`);
     assert.ok(peakTurn > .1, 'exercise steering rather than staying in one lane');
     assert.equal(f.collisions(), 0);
     f.dispose();

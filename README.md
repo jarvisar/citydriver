@@ -120,7 +120,7 @@ A change made by Auto says so in a toast, so the picture never changes without e
 
 ## Controls
 
-**Autodrive:** press **H**, press **D-pad Up** while driving, or toggle **Autodrive** in the pause menu. It aims for the selected car's top speed, passes slower traffic when the opposite lane has enough room, and follows behind until it can pass. Steering eases into passing and merging, with clearance estimates allowing for the gradual lane change, so the windshield view stays steady. Steering, throttle, or braking returns control to you. Autodrive stays enabled through pauses; resume to continue.
+**Autodrive:** press **H**, press **D-pad Up** while driving, or toggle **Autodrive** in the pause menu. It aims for the selected car's top speed, passes slower traffic when the opposite lane has enough room, and follows behind until it can pass. Passing and merging follow an S-shaped path that gradually turns and straightens the car. Its length accounts for speed and acceleration, with faster cars making tighter maneuvers. Clearance checks use that same path, and the car returns once the rear gap is clear instead of lingering in the passing lane. Steering, throttle, or braking returns control to you. Autodrive stays enabled through pauses; resume to continue.
 
 Free driving is a hidden keyboard toggle, off by default. Enter **↑ ↑ ↓ ↓ ← → ← → B A** to enable it across all six journeys. Enter the same code again to turn it off and return to the road at the current route position. While enabled, road-distance limits are removed and lane assistance stops pulling the car toward the road when exploring off-road. The mode lasts for the current page session, including car changes, route changes, and Reset; reloading turns it off. There is no menu, touch, or controller shortcut for enabling it.
 
@@ -284,6 +284,8 @@ With the development server running, `node scripts/us-units-test.mjs` checks mil
 With the development server running, `npm run test:browser` checks keyboard/touch controls and streaming in Chrome, and `npm run test:scenery` checks landmarks, bounded GPU resources, visible water animation, and frozen animation while paused. These browser scripts use the installed Windows Chrome executable. Screenshots and reports are written to `.artifacts/`.
 
 `node scripts/first-person-test.mjs` checks first-person touch steering, stopping, reset, car changes, soft shading, phone rotation, route changes, and returning to an exterior camera. `TEST_URL` can override the development server address.
+
+`node scripts/autodrive-test.mjs` checks complete overtakes from the windshield view on the coast and city roads, returning to the lane without contact, and manual steering takeover. Node tests check steering-rate continuity, passing times against the earlier faster behavior, interrupted curves, and traffic clearance across all routes.
 
 `node scripts/pacific-review.mjs after` captures the Pacific coves, viaduct, headlands, paved overlook, third-person view, reverse travel, and phone layout in `.artifacts/pacific/after/`. It also checks browser errors and bounded geometry/texture counts. Set `TEST_URL` for another development port and `TEST_WORLD_SEED` for another landscape. The coastal Node tests check that the bluff facets join without holes or folds and that the paved turnouts remain above the rendered ground across streaming seams.
 

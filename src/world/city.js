@@ -80,7 +80,7 @@ const WALLS = ['#846159', '#8f7064', '#755955', '#9e9ea2', '#aba7a2', '#b4b7ba',
 const ROOFS = ['#5c6064', '#54585c', '#666a6e', '#4f5357'];
 const GLASS = new THREE.Color('#3d515b'), LIT = ['#baa375', '#c1ab7f', '#b5a079', '#c8b58e'];
 const asphalt = new THREE.Color('#52565a'), gutter = new THREE.Color('#44474b'), pavement = new THREE.Color('#909498'), paving = new THREE.Color('#93979b');
-const lots = new THREE.Color('#868b8f'), vacant = new THREE.Color('#7a7f83'), far = new THREE.Color('#767d84'), fog = new THREE.Color('#aab4bc');
+const lots = new THREE.Color('#868b8f'), vacant = new THREE.Color('#7a7f83'), far = new THREE.Color('#767d84'), fog = new THREE.Color('#aab4bc').multiplyScalar(.9);
 const wall = new THREE.Color('#827f78'), bed = new THREE.Color('#3b464c'), bank = new THREE.Color('#75736e'), bankTop = new THREE.Color('#818486');
 const lawn = new THREE.Color('#587347'), lawnWet = new THREE.Color('#4b653e');
 const waterDeep = new THREE.Color('#5f6d76'), waterLight = new THREE.Color('#6c7a83');

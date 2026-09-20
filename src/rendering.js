@@ -77,7 +77,7 @@ export function createRendering(canvas, graphics = new Graphics()) {
     snow: { color: '#243949', near: 340, far: 760, thirdNear: 190, thirdFar: 330 },
     jungle: { color: '#9ab89a', near: 320, far: 780, thirdNear: 110, thirdFar: 250 },
     plains: { color: '#e9b360', near: 500, far: 1000, thirdNear: 200, thirdFar: 360 },
-    city: { color: '#aab4bc', near: 470, far: 900, thirdNear: 130, thirdFar: 330 },
+    city: { color: new THREE.Color('#aab4bc').multiplyScalar(.9), near: 470, far: 900, thirdNear: 130, thirdFar: 330 },
   };
   function updateFog() {
     const profile = fogProfiles[journey];
@@ -174,7 +174,7 @@ export function createRendering(canvas, graphics = new Graphics()) {
     if (id === 'city') {
       // A daytime storm: a grey sky does most of the lighting, and a weak,
       // cool sun keeps the facets readable with only faint shadows.
-      scene.background.set('#adb7bf'); updateFog();
+      scene.background.set('#adb7bf').multiplyScalar(.9); updateFog();
       sky.color.set('#d8e0e6'); sky.groundColor.set('#5c6369'); sky.intensity = 2;
       sun.color.set('#e2e9ef'); sun.intensity = 1.3; sunOffset.set(-150, 210, 110);
       renderer.toneMappingExposure = .52;
