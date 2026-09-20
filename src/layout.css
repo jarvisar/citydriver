@@ -20,7 +20,7 @@ body[data-controller=true] #app :is(.controls, #pause, #change-journey) { displa
 /* A controller sends no keystroke, so :focus-visible cannot be counted on to
    show where the ring is. While one is connected, the pause screen draws it
    on plain focus. */
-body[data-controller=true] .pause-overlay button:focus { outline: 3px solid #e78858; outline-offset: 3px; }
+body[data-controller=true] .pause-overlay button:focus { outline: 2px solid var(--ink); outline-offset: 3px; }
 .journey-button { position: static; }
 .brand { min-width: 0; }
 #app:has(.welcome.hidden) .topbar .brand,

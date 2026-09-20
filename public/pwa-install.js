@@ -2,7 +2,7 @@
   const appDisplay = window.matchMedia('(display-mode: standalone), (display-mode: fullscreen)');
   let installed = false;
   const isInstalled = () => installed || appDisplay.matches || navigator.standalone === true;
-  const parent = document.querySelector('#pause-overlay');
+  const parent = document.querySelector('#pause-overlay .pause-settings');
   if (isInstalled() || !parent) return;
 
   let installPrompt;

@@ -2,8 +2,8 @@ import * as THREE from 'three';
 import { N8AOPass } from 'n8ao';
 import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 
-// A small, independent AO buffer keeps the normal scene's antialiasing,
-// tone mapping and unlit effects intact. No full-resolution color buffers.
+// Render AO at the drawing-buffer resolution so moving small surfaces do not
+// switch between coarse samples. The original color pass keeps its antialiasing.
 export class AmbientOcclusion {
   constructor(renderer, scene, camera) {
     this.renderer = renderer;
@@ -14,18 +14,19 @@ export class AmbientOcclusion {
     this.pass = new N8AOPass(scene, camera, 2, 2);
     this.pass.setQualityMode('Medium');
     Object.assign(this.pass.configuration, {
+      aoSamples: 64, denoiseSamples: 16, denoiseIterations: 3,
       aoRadius: 2.4, distanceFalloff: 1, intensity: 2,
-      halfRes: true, gammaCorrection: false, autoRenderBeauty: false,
+      halfRes: false, gammaCorrection: false, autoRenderBeauty: false,
       transparencyAware: false, accumulate: false, depthAwareUpsampling: false,
     });
     this.pass.setDisplayMode('AO');
-    // Depth is sampled with nearest filtering. Keep the denoiser's AO samples
-    // on that same surface instead of blending across silhouettes first.
+    // Match AO and depth sampling at silhouettes to avoid pulling background
+    // occlusion into a foreground pixel before the denoiser checks its depth.
     for (const target of [this.pass.writeTargetInternal, this.pass.readTargetInternal, this.pass.accumulationRenderTarget]) {
       target.texture.minFilter = target.texture.magFilter = THREE.NearestFilter;
     }
-    // Supply depth and normals without rendering lighting a second time. N8AO
-    // reconstructs its own normals; ours guide the final surface-aware upscale.
+    // Supply depth without rendering lighting a second time. N8AO reconstructs
+    // its own normals from this full-resolution depth buffer.
     this.normalMaterial = new THREE.MeshNormalMaterial();
     this.pass.beautyRenderTarget.texture.type = THREE.UnsignedByteType;
     this.aoTarget = new THREE.WebGLRenderTarget(2, 2, { depthBuffer: false });
@@ -34,11 +35,6 @@ export class AmbientOcclusion {
       uniforms: {
         tAO: { value: this.aoTarget.texture },
         tDepth: { value: this.pass.beautyRenderTarget.depthTexture },
-        tNormal: { value: this.pass.beautyRenderTarget.texture },
-        tSampleDepth: { value: this.pass.depthDownsampleTarget.textures[0] },
-        tSampleNormal: { value: this.pass.depthDownsampleTarget.textures[1] },
-        aoSize: { value: new THREE.Vector2(1, 1) },
-        inverseProjection: { value: new THREE.Matrix4() },
         intensity: { value: .48 },
       },
       vertexShader: /* glsl */`
@@ -49,48 +45,13 @@ export class AmbientOcclusion {
         }
       `,
       fragmentShader: /* glsl */`
-        #include <packing>
         uniform sampler2D tAO;
         uniform sampler2D tDepth;
-        uniform sampler2D tNormal;
-        uniform sampler2D tSampleDepth;
-        uniform sampler2D tSampleNormal;
-        uniform vec2 aoSize;
-        uniform mat4 inverseProjection;
         uniform float intensity;
         varying vec2 vUv;
-        vec3 viewPosition(vec2 uv, float depth) {
-          vec4 position = inverseProjection * vec4(vec3(uv, depth) * 2.0 - 1.0, 1.0);
-          return position.xyz / position.w;
-        }
-        float surfaceAO(float depth) {
-          vec3 center = viewPosition(vUv, depth);
-          vec3 normal = unpackRGBToNormal(texture2D(tNormal, vUv).rgb);
-          vec2 pixel = vUv * aoSize - 0.5;
-          vec2 base = floor(pixel), fraction = fract(pixel);
-          float shade = 0.0, weightSum = 0.0;
-          // Upscale using only samples on this surface. Ordinary bilinear
-          // filtering drags dark background pixels over moving silhouettes.
-          for (int y = 0; y < 2; y++) for (int x = 0; x < 2; x++) {
-            vec2 offset = vec2(float(x), float(y));
-            vec2 uv = (clamp(base + offset, vec2(0.0), aoSize - 1.0) + 0.5) / aoSize;
-            float sampleDepth = texture2D(tSampleDepth, uv).r;
-            vec3 sampleNormal = texture2D(tSampleNormal, uv).rgb;
-            float planeDistance = abs(dot(viewPosition(uv, sampleDepth) - center, normal));
-            float sameSurface = (1.0 - smoothstep(0.05, 0.3, planeDistance))
-              * smoothstep(0.8, 0.98, dot(normal, sampleNormal)) * (1.0 - step(1.0, sampleDepth));
-            vec2 weights = mix(1.0 - fraction, fraction, offset);
-            float weight = weights.x * weights.y * sameSurface;
-            shade += (texture2D(tAO, uv).r - 1.0) * weight;
-            weightSum += weight;
-          }
-          // Thin features with no matching coarse sample stay unoccluded;
-          // fade weak support smoothly instead of popping to a dark neighbor.
-          return 1.0 + shade / max(weightSum, 0.2);
-        }
         void main() {
           float depth = texture2D(tDepth, vUv).r;
-          float ao = depth >= 1.0 ? 1.0 : surfaceAO(depth);
+          float ao = depth >= 1.0 ? 1.0 : texture2D(tAO, vUv).r;
           // N8AO already fades its mask with fog; preserve the original color.
           float shade = depth >= 1.0 ? 1.0 : mix(1.0, ao, intensity);
           gl_FragColor = vec4(vec3(shade), 1.0);
@@ -136,20 +97,16 @@ export class AmbientOcclusion {
       if (!this.enabled) return;
 
       renderer.getDrawingBufferSize(this.size);
-      const scale = Math.min(.5, 640 / Math.max(this.size.x, this.size.y));
-      const width = Math.max(1, Math.round(this.size.x * scale)) * 2;
-      const height = Math.max(1, Math.round(this.size.y * scale)) * 2;
+      const width = Math.max(1, this.size.x), height = Math.max(1, this.size.y);
       const cameraChanged = Boolean(pass.camera.isOrthographicCamera) !== Boolean(camera.isOrthographicCamera);
       pass.camera = camera;
       if (pass.width !== width || pass.height !== height) pass.setSize(width, height);
-      if (this.aoTarget.width !== width / 2 || this.aoTarget.height !== height / 2) this.aoTarget.setSize(width / 2, height / 2);
+      if (this.aoTarget.width !== width || this.aoTarget.height !== height) this.aoTarget.setSize(width, height);
       // N8AO specializes its shaders for the camera projection at creation.
       if (cameraChanged) {
         pass.configureSampleDependentPasses();
         pass.configureEffectCompositer(pass.configuration.depthBufferType, camera.isOrthographicCamera);
       }
-      this.material.uniforms.aoSize.value.set(width / 2, height / 2);
-      this.material.uniforms.inverseProjection.value.copy(camera.projectionMatrixInverse);
       // Foam, mist, flakes and other overlays must not become opaque AO casters.
       scene.traverseVisible(this.hideOverlay);
       renderer.shadowMap.autoUpdate = false;

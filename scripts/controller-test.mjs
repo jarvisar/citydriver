@@ -167,7 +167,13 @@ try {
   await press(13); await frames();
   assert.equal(await focus(), 'sound', 'down reaches the sound switch');
   await press(13); await frames();
+  assert.equal(await focus(), 'audio-mixer-toggle', 'down reaches audio settings');
+  await press(13); await frames();
   assert.equal(await focus(), 'fullscreen', 'down reaches the fullscreen switch');
+  await press(13); await frames();
+  assert.equal(await focus(), 'graphics-toggle', 'down reaches graphics settings');
+  await press(0); await frames();
+  assert.equal(await page.locator('#graphics-toggle').getAttribute('aria-expanded'), 'true');
   await press(13); await frames();
   const level = await page.evaluate(() => document.activeElement?.dataset?.quality ?? null);
   assert.ok(level, 'down reaches the graphics levels');
@@ -184,6 +190,8 @@ try {
   const shading = await page.locator('#soft-shading').getAttribute('aria-pressed');
   await press(0); await frames();
   assert.notEqual(await page.locator('#soft-shading').getAttribute('aria-pressed'), shading, 'A flips soft shading');
+  await press(12); await frames();
+  assert.equal(await focus(), 'pixel-density', 'up reaches pixel density');
   await press(12); await frames();
   assert.ok(await page.evaluate(() => document.activeElement?.dataset?.quality ?? null), 'up returns to the levels above');
   await press(10); await frames();

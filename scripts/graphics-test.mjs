@@ -109,6 +109,7 @@ try {
 
     // The slider changes the real drawing buffer, including above the old 2x cap.
     await page.evaluate(() => window.__coastline.action('pause'));
+    await page.locator('#graphics-toggle').click();
     const slider = page.locator('#pixel-density');
     assert.equal(await slider.inputValue(), '70');
     await slider.fill('83');
@@ -127,6 +128,7 @@ try {
     await page.waitForFunction(() => window.__coastline && document.querySelector('#loading.loaded'));
     assert.equal(await slider.inputValue(), '83', 'custom density survives reload');
     await page.evaluate(() => window.__coastline.action('pause'));
+    await page.locator('#graphics-toggle').click();
     await page.locator('[data-quality="balanced"]').click();
     assert.equal(await slider.inputValue(), '85', 'a preset restores its density');
     await page.evaluate(() => window.__coastline.action('pause'));

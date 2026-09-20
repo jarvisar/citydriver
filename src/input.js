@@ -23,6 +23,8 @@ export class Input {
       // Native mixer sliders own their arrow, Home and End keys. Editing a
       // volume must not also accelerate the car or swallow keyboard access.
       if (e.target.matches?.('input[type="range"]') && !['Escape', 'KeyP', 'KeyM'].includes(e.code)) return;
+      // Let menu buttons keep their native keyboard activation.
+      if (e.target.closest?.('button') && ['Space', 'Enter'].includes(e.code)) return;
       // This hidden toggle is reachable only through the keyboard sequence.
       if (this.konami.keydown(e)) {
         e.preventDefault(); this.clear(); onFreeDriving();

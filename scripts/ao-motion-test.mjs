@@ -33,7 +33,7 @@ try {
       renderer.render(scene, camera);
       const memoryBefore = { ...renderer.info.memory };
       const ao = new AmbientOcclusion(renderer, scene, camera);
-      ao.pass.setQualityMode(quality);
+      if (quality) ao.pass.setQualityMode(quality);
       const frames = [];
       for (let frame = 0; frame < 28; frame++) {
         camera.position.copy(origin).addScaledVector(right, frame * .025); camera.updateMatrixWorld();
@@ -58,13 +58,13 @@ try {
       }
       return { shimmer: change / ((frames.length - 1) * points.length), darkness: darkness / ((frames.length - 1) * points.length) };
     };
-    const performance = measure('Performance'), medium = measure('Medium');
+    const performance = measure('Performance'), configured = measure(null);
     scene.traverse(object => object.geometry?.dispose()); material.dispose(); renderer.dispose();
-    return { performance, medium };
+    return { performance, configured };
   });
   console.log(JSON.stringify(result, null, 2));
   await mkdir('.artifacts/ambient-occlusion', { recursive: true });
   await writeFile('.artifacts/ambient-occlusion/motion.json', JSON.stringify(result, null, 2));
-  assert.ok(result.medium.shimmer < .03, 'camera motion keeps AO changes below 3% at fixed world points');
-  assert.ok(result.medium.darkness > .01, 'N8AO retains contact shading');
+  assert.ok(result.configured.shimmer < .03, 'camera motion keeps AO changes below 3% at fixed world points');
+  assert.ok(result.configured.darkness > .01, 'N8AO retains contact shading');
 } finally { await browser.close(); }

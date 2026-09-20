@@ -5,6 +5,7 @@ import './layout.css';
 import './car.css';
 import './menu.css';
 import './audio/mixer.css';
+import './pause.css';
 import { createRendering } from './rendering.js';
 import { Graphics } from './graphics.js';
 import { JOURNEYS } from './journeys.js';
@@ -37,7 +38,7 @@ const MENU_CRUISE_SPEED = TRAFFIC_CRUISE_SPEED * 1.1;
 // A chooser's ring holds its cards and paint chips; the pause screen's holds
 // resume, the garage and every driving, sound and graphics setting.
 const MENU_CARDS = '[data-journey], [data-car], [data-paint]';
-const PAUSE_CONTROLS = '#resume, #change-car, #autodrive, #traffic, #sound, #audio-mixer-toggle, #audio-mixer button, #audio-mixer input, #fullscreen, [data-quality], #pixel-density, #soft-shading, #enter-vr-pause, .pwa-install-button';
+const PAUSE_CONTROLS = '#resume, #change-car, #autodrive, #traffic, #sound, #audio-mixer-toggle, #audio-mixer button, #audio-mixer input, #fullscreen, #graphics-toggle, [data-quality], #pixel-density, #soft-shading, #enter-vr-pause, .pwa-install-button';
 const mileageFormat = new Intl.NumberFormat('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 let paused = false, started = false, time = 0, hudTime = 0;
 const frameClock = new FrameClock();
@@ -563,12 +564,18 @@ async function boot() {
     $('#scene').addEventListener('webglcontextlost', event => { event.preventDefault(); setPaused(true); toast('Graphics paused. Reload to restart the game.'); });
     $('#scene').addEventListener('webglcontextrestored', () => { needsRender = true; });
     const qualityButtons = [...document.querySelectorAll('[data-quality]')];
+    const graphicsToggle = $('#graphics-toggle'), graphicsPanel = $('#graphics-settings');
+    graphicsToggle.addEventListener('click', () => {
+      graphicsPanel.hidden = !graphicsPanel.hidden;
+      graphicsToggle.setAttribute('aria-expanded', String(!graphicsPanel.hidden));
+    });
     const softShading = $('#soft-shading'), graphicsStatus = $('#graphics-status');
     const pixelDensity = $('#pixel-density'), pixelDensityValue = $('#pixel-density-value');
     function updateGraphicsUi(settings = graphics.settings) {
       for (const button of qualityButtons) button.setAttribute('aria-checked', String(button.dataset.quality === graphics.mode));
       softShading.setAttribute('aria-pressed', String(settings.ambientOcclusion));
       const densityPercent = Math.round(settings.density * 100);
+      $('#graphics-summary').textContent = `${graphics.auto ? 'Auto' : settings.label} · ${densityPercent}%`;
       pixelDensity.value = String(densityPercent);
       pixelDensityValue.textContent = `${densityPercent}%${densityPercent === 100 ? ' · Native' : ''}`;
       pixelDensity.setAttribute('aria-valuetext', `${densityPercent}% of native resolution`);
