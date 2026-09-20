@@ -22,6 +22,8 @@ import { touchDrivingInput, thirdPersonDrivingInput } from './touch-stick.js';
 import { DriveAudio } from './audio.js';
 import { FrameClock } from './timing.js';
 import { setupControlHelp, controlHelpDismissed } from './control-help.js';
+import { BrowserVR } from './vr.js';
+import { VRStatus } from './vr-status.js';
 
 setupControlHelp();
 
@@ -58,6 +60,9 @@ async function boot() {
     graphics.onChange(settings => setResidentWindow(settings.chunks));
     const rendering = createRendering($('#scene'), graphics);
     const { renderer, scene } = rendering;
+    let vr;
+    const vrStatus = new VRStatus(rendering.vrCamera.camera);
+    const hidden = () => vr?.active ? !vr.visible : document.hidden;
     const fpsCounter = $('#fps-counter');
     let fpsStart = null, fpsFrames = 0;
     function updateFPS(timestamp, rendered) {
@@ -270,7 +275,9 @@ async function boot() {
         rendering.setJourney(id); audio.setJourney(id); updateJourneyUi(); paintCards(); updatePaintUi();
         vehicle.render(1, world.origin);
         rendering.snap(); rendering.update(vehicle.car, 1, world.origin); world.animate(time, vehicle);
-        updateHud(); rendering.render();
+        updateHud();
+        if (renderer.xr.isPresenting) needsRender = true;
+        else rendering.render();
         try { localStorage.setItem(journeyStorageKey, id); } catch { /* Still drive it for this visit. */ }
         toast(regenerate ? 'Scene reset · Fresh area ready' : `${JOURNEYS[id].title} selected`);
       } catch (error) {
@@ -278,7 +285,7 @@ async function boot() {
         console.error('Could not change journey:', error); toast('That road is unavailable. Try again.');
       } finally {
         input.clear(); frameClock.reset(); changingJourney = false;
-        setPaused(journeyWasPaused || document.hidden);
+        setPaused(journeyWasPaused || hidden());
         $('#journey-transition').classList.remove('active');
       }
     }
@@ -312,6 +319,8 @@ async function boot() {
       cards[(index + step + cards.length) % cards.length].focus();
     }
     async function action(name, routeNumber) {
+      if (name === 'exitVR') { if (vr?.active) await vr.toggle(); return; }
+      if (name === 'recenterVR') { rendering.vrCamera.recenter(); return; }
       if (name === 'fps') {
         fpsCounter.hidden = !fpsCounter.hidden;
         fpsCounter.textContent = 'FPS: …'; fpsStart = null; fpsFrames = 0;
@@ -389,6 +398,32 @@ async function boot() {
       frameClock.suspend(); needsRender = true;
       toast(`Free driving ${enabled ? 'on' : 'off'}`);
     });
+    vr = new BrowserVR({
+      renderer, buttons: [$('#enter-vr')], canEnter: () => !changingJourney && !openChooser(),
+      onStart() {
+        $('#vr-error').hidden = true;
+        input.xrActive = true; input.clear();
+        rendering.vrCamera.recenter(); graphics.suspend();
+        setPaused(false); start();
+        audio.setHidden(!vr.visible); needsRender = true;
+        document.body.dataset.vr = 'true';
+      },
+      onEnd() {
+        input.xrActive = false; input.clear();
+        vrStatus.update(''); graphics.suspend();
+        audio.setHidden(document.hidden); setPaused(true); needsRender = true;
+        document.body.dataset.vr = 'false';
+      },
+      onVisibility(visible) {
+        input.clear(); frameClock.suspend(); audio.setHidden(!visible);
+        if (!visible) { if (changingJourney) journeyWasPaused = true; setPaused(true); }
+        needsRender = true;
+      },
+      onError(error) {
+        const message = error.name === 'NotAllowedError' ? 'VR permission was declined. Select Enter VR to try again.' : 'Could not enter VR. Try again in your headset browser.';
+        $('#vr-error').textContent = message; $('#vr-error').hidden = false;
+      },
+    });
     $('#change-journey').addEventListener('click', openJourneys);
     $('#change-car').addEventListener('click', openCars);
     $('#close-cars').addEventListener('click', () => carDialog.close());
@@ -455,9 +490,9 @@ async function boot() {
       if (!event.repeat) $('#start').click();
     });
     $('#resume').addEventListener('click', () => setPaused(false));
-    document.addEventListener('visibilitychange', () => { audio.setHidden(document.hidden); if (document.hidden) { if (openChooser() || changingJourney) journeyWasPaused = true; if (started) setPaused(true); input.clear(); } frameClock.suspend(); });
-    window.addEventListener('blur', () => { audio.setHidden(true); if (openChooser() || changingJourney) journeyWasPaused = true; if (started) setPaused(true); });
-    window.addEventListener('focus', () => audio.setHidden(document.hidden));
+    document.addEventListener('visibilitychange', () => { if (vr.active || vr.pending) return; audio.setHidden(document.hidden); if (document.hidden) { if (openChooser() || changingJourney) journeyWasPaused = true; if (started) setPaused(true); input.clear(); } frameClock.suspend(); });
+    window.addEventListener('blur', () => { if (vr.active || vr.pending) return; audio.setHidden(true); if (openChooser() || changingJourney) journeyWasPaused = true; if (started) setPaused(true); });
+    window.addEventListener('focus', () => audio.setHidden(hidden()));
     window.addEventListener('pointerdown', () => audio.unlock(), { capture: true, passive: true });
     window.addEventListener('keydown', () => audio.unlock(), { capture: true });
     window.addEventListener('pagehide', event => { audio.setHidden(true); if (!event.persisted) { chunkWorker.dispose(); void audio.dispose().catch(() => {}); } });
@@ -510,11 +545,13 @@ async function boot() {
       vehicle.update(dt, state);
       traffic.update(dt, vehicle);
     };
-    function frame(timestamp) {
-      input.gamepad.update({ blocked: document.hidden || !document.hasFocus() || changingJourney, paused, menu: openChooser() ? 'chooser' : openPauseMenu() ? 'pause' : false });
-      frameClock.tick(timestamp, !paused, simulate);
+    function frame(timestamp, xrFrame) {
+      if (vr.active) input.xr.update(vr.session.inputSources, { blocked: !vr.visible || changingJourney, paused });
+      else input.gamepad.update({ blocked: document.hidden || !document.hasFocus() || changingJourney, paused, menu: openChooser() ? 'chooser' : openPauseMenu() ? 'pause' : false });
+      const running = !paused && !hidden();
+      frameClock.tick(timestamp, running, simulate);
       const dt = frameClock.dt;
-      if (!paused) {
+      if (running) {
         time += dt;
         world.update(vehicle.s); vehicle.render(frameClock.alpha, world.origin);
         traffic.render(frameClock.alpha, world.origin);
@@ -522,16 +559,18 @@ async function boot() {
       }
       audio.update(vehicle.audioTelemetry, dt);
       hudTime += dt; if (hudTime > .1) { updateHud(); hudTime = 0; }
-      rendering.recordFrame(timestamp, !paused && !document.hidden && document.hasFocus() && !changingJourney);
-      // Paused water, traffic and shadows are unchanged. Keep polling input
-      // and fading audio, but only redraw the frozen canvas when invalidated.
-      const rendered = !document.hidden && (!paused || needsRender);
+      // The desktop quality sampler targets 60 Hz and resizes a canvas, whereas
+      // the headset owns its framebuffer and refresh rate.
+      rendering.recordFrame(timestamp, !vr.active && !paused && !document.hidden && document.hasFocus() && !changingJourney);
+      // A paused desktop canvas only redraws when invalidated. In VR, keep
+      // drawing every headset frame so head tracking continues while stopped.
+      const rendered = vr.active ? Boolean(xrFrame) : !document.hidden && (!paused || needsRender);
       if (rendered) {
-        rendering.render(); needsRender = false;
+        vrStatus.update(vr.active ? changingJourney ? 'loading' : paused ? 'paused' : '' : '');
+        rendering.render(xrFrame); needsRender = false;
         if (!sceneReady) { sceneReady = true; $('#loading').classList.add('loaded'); }
       }
       updateFPS(timestamp, rendered);
-      requestAnimationFrame(frame);
     }
     await world.chunkSource.prepare(vehicle.s);
     world.update(vehicle.s);
@@ -540,9 +579,10 @@ async function boot() {
     if (renderer.extensions.has('KHR_parallel_shader_compile')) await renderer.compileAsync(scene, rendering.camera);
     else renderer.compile(scene, rendering.camera);
     changingJourney = false;
-    requestAnimationFrame(frame);
+    renderer.setAnimationLoop(frame);
+    void vr.detect().then(() => { for (const help of document.querySelectorAll('.vr-help')) help.hidden = !vr.supported; });
     // Development-only inspection surface for automated driving and streaming checks.
-    if (import.meta.env.DEV) window.__coastline = { seed: SEED, chunkWorker, vehicle, traffic, audio, graphics, get world() { return world; }, rendering, input, action, changeJourney, chooseCar, applyPaint, get carId() { return carId; }, get paint() { return paint; }, get journey() { return journey; }, get changingJourney() { return changingJourney; }, get paused() { return paused; }, get started() { return started; } };
+    if (import.meta.env.DEV) window.__coastline = { seed: SEED, chunkWorker, vehicle, traffic, audio, graphics, vr, get world() { return world; }, rendering, input, action, changeJourney, chooseCar, applyPaint, get carId() { return carId; }, get paint() { return paint; }, get journey() { return journey; }, get changingJourney() { return changingJourney; }, get paused() { return paused; }, get started() { return started; } };
   } catch (error) { chunkWorker?.dispose(); console.error('Could not start Coastline:', error); $('#loading').classList.add('loaded'); $('#error').hidden = false; }
 }
 boot();

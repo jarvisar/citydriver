@@ -1,4 +1,7 @@
 /* Shared limits for the header, panels, HUD and touch controls. */
+#enter-vr[hidden], .vr-help[hidden] { display: none !important; }
+.vr-help { max-width: 420px; line-height: 1.6; }
+#vr-error { position: absolute; top: var(--header-clear); right: var(--ui-right); max-width: min(360px, 85vw); padding: 12px; background: var(--cream); color: var(--ink); border-radius: 6px; z-index: 5; }
 :root {
   --edge: clamp(6px, 1.25vw, 16px);
   --ui-top: calc(var(--edge) + var(--safe-top));

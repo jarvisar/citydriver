@@ -17,6 +17,7 @@
     "test:graphics": "node scripts/graphics-test.mjs",
     "test:responsive": "node scripts/responsive-test.mjs",
     "test:controller": "node scripts/controller-test.mjs",
+    "test:vr": "node scripts/vr-test.mjs",
     "test:scenery": "node scripts/scenery-test.mjs",
     "test:journeys": "node scripts/journey-test.mjs",
     "test:snow": "node scripts/snow-test.mjs",

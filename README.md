@@ -55,6 +55,24 @@ npm run dev
 
 Open the local URL printed by Vite. The server binds every interface, so the **Network** address it also prints (`http://192.168.x.x:5173`) opens the game on a phone or tablet on the same Wi-Fi, which is the only way to judge how it really runs on a handset. On Windows, allow Node through the firewall for private networks when prompted. For a production build, run `npm run build`, then `npm run preview`.
 
+## Quest / browser VR
+
+Open the **HTTPS** site in the Quest 3 browser, choose your route and car, then select **Enter VR** in the toolbar. It appears only when the browser reports immersive WebXR support. A plain HTTP Wi-Fi address such as `http://192.168.x.x:5173` cannot start WebXR; for headset development, serve the game through HTTPS with a certificate trusted by the headset. WebXR's secure-context requirement is described in the [WebXR specification](https://www.w3.org/TR/webxr/#secure-context).
+
+All five views support stereo rendering and head rotation/position tracking. The four overhead views use perspective equivalents of their existing framing; the chase view follows the car as usual. Press **A** to cycle cameras and **right stick press** to recenter your head position and direction.
+
+- **Left stick:** steer (right stick is a fallback when only the right controller is connected).
+- **Right trigger:** analog gas. **Left trigger:** analog brake, then reverse.
+- **Either grip:** strong brake.
+- **B:** pause/resume. Head tracking continues while paused.
+- **X:** reset the current road. **Y:** exit VR.
+
+Exit VR to use the normal route, car, sound, and graphics menus. Leaving VR pauses the drive; headset system menus also pause it, and B resumes once the headset has focus again. Release held controls after entering, resuming, or reconnecting a controller before driving. Controls follow the [Quest Touch Plus profile](https://github.com/immersive-web/webxr-input-profiles/blob/main/packages/registry/profiles/meta/meta-quest-touch-plus.json).
+
+VR renders directly through [Three.js WebXR](https://threejs.org/docs/pages/WebXRManager.html), bypassing monoscopic ambient occlusion, with an 85% headset framebuffer scale and foveation. Desktop graphics settings are preserved and automatic quality sampling is suspended during VR. This support is for the website; Electron does not offer VR entry.
+
+`npm run test:vr` checks browser integration with a simulated XR session; unit tests cover controller mapping, tracked camera offsets, and session lifecycle. Actual headset comfort and performance still require a Quest test.
+
 ## Desktop app
 
 Windows, Linux (including the Steam Deck), and macOS builds wrap this same web build in Electron; nothing in `src/` changes. `npm run electron:dev` opens the game in a desktop window with hot reload, `npm run electron:build` packages it for the current OS, and pushing a `v*` tag builds installers for all three platforms on GitHub Actions. `npm run test:electron` checks the desktop shell against the current web build. See [ELECTRON.md](ELECTRON.md) for options, Steam Deck setup, and how the wrapper stays in sync with the web app.

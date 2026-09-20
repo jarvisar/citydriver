@@ -3,6 +3,7 @@ import { fitSunShadow, stabilizeShadowFiltering } from './shadows.js';
 import { ThirdPersonCamera } from './third-person-camera.js';
 import { AmbientOcclusion } from './ambient-occlusion.js';
 import { Graphics, renderScale } from './graphics.js';
+import { XRCameraRig } from './xr-camera.js';
 
 // How fast the overhead views close on the car, per second. Ground is what the
 // player reads as responsiveness, so it settles in about an eighth of a second;
@@ -16,6 +17,7 @@ export function createRendering(canvas, graphics = new Graphics()) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: graphics.antialias, powerPreference: 'high-performance' });
   let canvasWidth, canvasHeight, pixelRatio;
   function resizeCanvas() {
+    if (renderer.xr.isPresenting) return;
     const width = window.innerWidth, height = window.innerHeight, ratio = renderScale(graphics.settings.density, window.devicePixelRatio);
     if (width === canvasWidth && height === canvasHeight && ratio === pixelRatio) return;
     // Update size and density together: setPixelRatio followed by setSize allocates twice.
@@ -38,6 +40,10 @@ export function createRendering(canvas, graphics = new Graphics()) {
   scene.add(sun); scene.add(sun.target);
   const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 1, 1200);
   const thirdPerson = new ThirdPersonCamera();
+  const vrCamera = new XRCameraRig();
+  scene.add(vrCamera.rig);
+  renderer.xr.cameraAutoUpdate = false;
+  renderer.xr.addEventListener('sessionend', () => { graphics.suspend(); resizeCanvas(); });
   const ambientOcclusion = new AmbientOcclusion(renderer, scene, camera);
   // Resolution, sun-shadow detail and soft shading follow the quality level.
   // A new shadow map size only takes effect once the old texture is released.
@@ -119,6 +125,7 @@ export function createRendering(canvas, graphics = new Graphics()) {
     }
     // Fixed ocean-side azimuth and ~36° elevation preserve the reference's miniature view.
     camera.position.copy(target).add(cameraOffset); camera.lookAt(target);
+    camera.userData.focusDistance = cameraOffset.length();
     if (views[view].thirdPerson) { thirdPerson.update(car, dt); target.copy(car.position); }
     sun.position.copy(target).add(sunOffset); sun.target.position.copy(target);
     fitSunShadow(activeCamera(), sun, journey === 'jungle' ? sun.target.position.y : 0, origin);
@@ -178,5 +185,15 @@ export function createRendering(canvas, graphics = new Graphics()) {
     renderer.toneMappingExposure = desert ? .92 : 1.02;
   }
   setJourney('coast');
-  return { renderer, scene, graphics, ambientOcclusion, render() { ambientOcclusion.render(activeCamera()); }, toggleAO() { return graphics.toggleAmbientOcclusion(); }, get camera() { return activeCamera(); }, update, resize, recordFrame, setJourney, get viewLabel() { return views[view].label; }, toggleView() { view = (view + 1) % views.length; updateFog(); thirdPerson.snap(); return views[view].label; }, snap() { initialized = false; thirdPerson.snap(); } };
+  function render(frame) {
+    if (renderer.xr.isPresenting) {
+      const pose = frame?.getViewerPose(renderer.xr.getReferenceSpace());
+      vrCamera.update(activeCamera(), pose);
+      renderer.xr.updateCamera(vrCamera.camera);
+      // The AO compositor is a monoscopic screen pass. Render the scene
+      // directly so Three.js draws both headset eyes with their own lenses.
+      renderer.render(scene, vrCamera.camera);
+    } else ambientOcclusion.render(activeCamera());
+  }
+  return { renderer, scene, graphics, ambientOcclusion, vrCamera, render, toggleAO() { return graphics.toggleAmbientOcclusion(); }, get camera() { return activeCamera(); }, update, resize, recordFrame, setJourney, get viewLabel() { return views[view].label; }, toggleView() { view = (view + 1) % views.length; updateFog(); thirdPerson.snap(); return views[view].label; }, snap() { initialized = false; thirdPerson.snap(); } };
 }

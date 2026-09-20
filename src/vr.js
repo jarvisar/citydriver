@@ -1,0 +1,58 @@
+export class BrowserVR {
+  constructor({ renderer, buttons, onStart, onEnd, onVisibility, onError, canEnter = () => true, navigator = globalThis.navigator, secure = globalThis.isSecureContext }) {
+    Object.assign(this, { renderer, buttons, onStart, onEnd, onVisibility, onError, canEnter, navigator, secure });
+    this.session = null;
+    this.pending = false;
+    this.supported = false;
+    this.visibilityChanged = () => onVisibility(this.session?.visibilityState === 'visible');
+    this.ended = () => {
+      this.session?.removeEventListener('visibilitychange', this.visibilityChanged);
+      this.session?.removeEventListener('end', this.ended);
+      this.session = null;
+      this.refresh();
+      onEnd();
+    };
+    for (const button of buttons) button.addEventListener('click', () => void this.toggle());
+  }
+  get active() { return this.session !== null; }
+  get visible() { return this.active && this.session.visibilityState === 'visible'; }
+  refresh() {
+    for (const button of this.buttons) {
+      button.hidden = !this.supported;
+      button.disabled = this.pending;
+      button.textContent = this.active ? 'Exit VR' : 'Enter VR';
+      button.setAttribute('aria-label', this.active ? 'Exit virtual reality' : 'Enter virtual reality');
+    }
+  }
+  async detect() {
+    // The desktop wrapper is deliberately outside the scope of browser VR.
+    if (!this.secure || /Electron\//i.test(this.navigator.userAgent) || !this.navigator.xr) return;
+    try { this.supported = await this.navigator.xr.isSessionSupported('immersive-vr'); }
+    catch { this.supported = false; }
+    this.refresh();
+  }
+  async toggle() {
+    if (this.pending || !this.supported || (!this.active && !this.canEnter())) return;
+    this.pending = true; this.refresh();
+    try {
+      if (this.session) { await this.session.end(); return; }
+      // Call directly from the button's user gesture. A local reference space
+      // works seated or standing and does not depend on floor tracking.
+      const session = await this.navigator.xr.requestSession('immersive-vr', { requiredFeatures: ['local'], optionalFeatures: ['layers'] });
+      this.session = session;
+      session.addEventListener('end', this.ended);
+      session.addEventListener('visibilitychange', this.visibilityChanged);
+      this.renderer.xr.enabled = true;
+      this.renderer.xr.setReferenceSpaceType('local');
+      this.renderer.xr.setFramebufferScaleFactor(.85);
+      this.renderer.xr.setFoveation(1);
+      await this.renderer.xr.setSession(session);
+      if (this.session === session) this.onStart();
+    } catch (error) {
+      if (this.session) {
+        try { await this.session.end(); } catch { this.ended(); }
+      }
+      this.onError(error);
+    } finally { this.pending = false; this.refresh(); }
+  }
+}

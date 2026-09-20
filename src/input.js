@@ -1,10 +1,12 @@
 import { GamepadInput } from './gamepad.js';
 import { TouchStick } from './touch-stick.js';
 import { KonamiCode } from './konami-code.js';
+import { XRInput } from './xr-input.js';
 
 export class Input {
   constructor(onAction, onControllerConnection = () => {}, onFreeDriving = () => {}) {
     this.keys = new Set(); this.onAction = onAction;
+    this.xr = new XRInput(onAction); this.xrActive = false;
     this.konami = new KonamiCode();
     this.touchStick = new TouchStick(document.querySelector('#touch-stick'), () => onAction('drive'));
     this.codes = { forward: ['KeyW', 'ArrowUp'], brake: ['KeyS', 'ArrowDown'], left: ['KeyA', 'ArrowLeft'], right: ['KeyD', 'ArrowRight'], handbrake: ['Space'] };
@@ -65,14 +67,14 @@ export class Input {
     const state = this.driving;
     let held = false;
     for (const action of this.actions) {
-      const value = this.codes[action].some(code => this.keys.has(code)) || this.gamepad.state[action] || false;
+      const value = this.xrActive ? this.xr.state[action] || false : this.codes[action].some(code => this.keys.has(code)) || this.gamepad.state[action] || false;
       state[action] = value;
       if (value) held = true;
     }
     state.touchStick = null; state.touchDrive = null;
-    if (held || this.gamepad.connected) this.touchStick.clear();
+    if (held || this.gamepad.connected || this.xrActive) this.touchStick.clear();
     else if (this.touchStick.engaged) state.touchStick = this.touchStick.vector;
     return state;
   }
-  clear() { this.keys.clear(); this.touchStick.clear(); this.gamepad.clear(); this.konami.reset(); }
+  clear() { this.keys.clear(); this.touchStick.clear(); this.gamepad.clear(); this.xr.clear(); this.konami.reset(); }
 }
