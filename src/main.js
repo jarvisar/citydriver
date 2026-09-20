@@ -99,6 +99,21 @@ async function boot() {
     scene.add(vehicle.car);
     const traffic = new Traffic(scene, vehicle.route, vehicle.s, journey);
     const autodrive = new Autodrive();
+    const touchControls = $('.touch-controls');
+    let touchControlsTimer;
+    function revealTouchControls() {
+      clearTimeout(touchControlsTimer);
+      touchControls.classList.remove('autodrive-hidden');
+      touchControls.inert = false;
+      if (autodrive.enabled) touchControlsTimer = setTimeout(() => {
+        touchControls.classList.add('autodrive-hidden');
+        touchControls.inert = true;
+      }, 3000);
+    }
+    // Capture taps even when a menu or the joystick handles the event itself.
+    window.addEventListener('pointerdown', () => {
+      if (autodrive.enabled) revealTouchControls();
+    }, { capture: true, passive: true });
     $('#autodrive').addEventListener('click', () => action('autodrive'));
     const trafficStorageKey = 'coastline-traffic';
     try { traffic.setEnabled(localStorage.getItem(trafficStorageKey) !== 'false', vehicle); } catch { /* Storage is optional. */ }
@@ -360,6 +375,7 @@ async function boot() {
       if (name === 'car') { openCars(); return; }
       if (name === 'autodrive') {
         const enabled = autodrive.toggle();
+        revealTouchControls();
         if (enabled) input.clear();
         $('#autodrive').setAttribute('aria-pressed', String(enabled));
         if (enabled) start();

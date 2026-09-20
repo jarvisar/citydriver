@@ -49,6 +49,8 @@ body[data-controller=true] .pause-overlay button:focus { outline: 3px solid #e78
 .controls { position: static; transform: none; margin: 0; gap: 12px; flex-shrink: 0; }
 .controls button { min-width: 44px; }
 .touch-controls { left: var(--ui-left); right: var(--ui-right); bottom: var(--ui-bottom); align-items: center; gap: 16px; }
+.touch-controls { opacity: 1; transition: opacity .15s; }
+.touch-controls.autodrive-hidden { opacity: 0; transition: opacity 1.5s; }
 #touch-stick { width: var(--stick-size); height: var(--stick-size); opacity: .65; }
 .stick-thumb { width: 52.8px; height: 52.8px; left: calc(50% - 26.4px); top: calc(50% - 26.4px); }
 
