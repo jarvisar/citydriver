@@ -1,6 +1,8 @@
 /* Shared limits for the header, panels, HUD and touch controls. */
 .vr-entry[hidden], .vr-help[hidden], #welcome.hidden .vr-entry { display: none !important; }
-.vr-entry { pointer-events: auto; justify-content: center; max-width: 330px; }
+.vr-entry { pointer-events: auto; justify-content: center; }
+/* The pause screen's entry is a settings row, sized like the panels above it. */
+#enter-vr-pause { width: 340px; max-width: 100%; margin: 0 0 14px; }
 .vr-help { max-width: 420px; line-height: 1.6; }
 #vr-error { position: absolute; top: var(--header-clear); right: var(--ui-right); max-width: min(360px, 85vw); padding: 12px; background: var(--cream); color: var(--ink); border-radius: 6px; z-index: 5; }
 :root {

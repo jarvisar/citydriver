@@ -1,6 +1,6 @@
 export class BrowserVR {
-  constructor({ renderer, buttons, onStart, onEnd, onVisibility, onError, canEnter = () => true, navigator = globalThis.navigator, secure = globalThis.isSecureContext }) {
-    Object.assign(this, { renderer, buttons, onStart, onEnd, onVisibility, onError, canEnter, navigator, secure });
+  constructor({ renderer, buttons, onStart, onEnd, onVisibility, onError, onSupport = () => {}, canEnter = () => true, navigator = globalThis.navigator, secure = globalThis.isSecureContext }) {
+    Object.assign(this, { renderer, buttons, onStart, onEnd, onVisibility, onError, onSupport, canEnter, navigator, secure });
     this.session = null;
     this.pending = false;
     this.supported = false;
@@ -20,16 +20,24 @@ export class BrowserVR {
     for (const button of this.buttons) {
       button.hidden = !this.supported;
       button.disabled = this.pending;
-      button.textContent = this.active ? 'Exit VR' : 'Enter VR';
+      // Buttons that carry an icon keep it: only their label span is rewritten.
+      (button.querySelector?.('.vr-entry-label') ?? button).textContent = this.active ? 'Exit VR' : 'Enter VR';
       button.setAttribute('aria-label', this.active ? 'Exit virtual reality' : 'Enter virtual reality');
     }
   }
   async detect() {
     // The desktop wrapper is deliberately outside the scope of browser VR.
     if (!this.secure || /Electron\//i.test(this.navigator.userAgent) || !this.navigator.xr) return;
+    // A headset can be plugged in or removed long after the page loads, so the
+    // entry stays in step with what the browser reports.
+    this.navigator.xr.addEventListener?.('devicechange', () => void this.check());
+    await this.check();
+  }
+  async check() {
     try { this.supported = await this.navigator.xr.isSessionSupported('immersive-vr'); }
     catch { this.supported = false; }
     this.refresh();
+    this.onSupport(this.supported);
   }
   async toggle() {
     if (this.pending || !this.supported || (!this.active && !this.canEnter())) return;

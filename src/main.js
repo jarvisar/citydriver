@@ -33,7 +33,7 @@ const MENU_CRUISE_SPEED = TRAFFIC_CRUISE_SPEED * 1.1;
 // A chooser's ring holds its cards and paint chips; the pause screen's holds
 // resume, the garage and every driving, sound and graphics setting.
 const MENU_CARDS = '[data-journey], [data-car], [data-paint]';
-const PAUSE_CONTROLS = '#resume, #enter-vr-pause, #change-car, #autodrive, #traffic, #sound, #fullscreen, [data-quality], #soft-shading, .pwa-install-button';
+const PAUSE_CONTROLS = '#resume, #change-car, #autodrive, #traffic, #sound, #fullscreen, [data-quality], #soft-shading, #enter-vr-pause, .pwa-install-button';
 const mileageFormat = new Intl.NumberFormat('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 let paused = false, started = false, time = 0, hudTime = 0;
 const frameClock = new FrameClock();
@@ -421,6 +421,7 @@ async function boot() {
     });
     vr = new BrowserVR({
       renderer, buttons: [$('#enter-vr'), $('#enter-vr-pause')], canEnter: () => !changingJourney && !openChooser(),
+      onSupport(supported) { for (const help of document.querySelectorAll('.vr-help')) help.hidden = !supported; },
       onStart() {
         $('#vr-error').hidden = true;
         input.xrActive = true; input.clear();
@@ -635,7 +636,7 @@ async function boot() {
     else renderer.compile(scene, rendering.camera);
     changingJourney = false;
     renderer.setAnimationLoop(frame);
-    void vr.detect().then(() => { for (const help of document.querySelectorAll('.vr-help')) help.hidden = !vr.supported; });
+    void vr.detect();
     // Development-only inspection surface for automated driving and streaming checks.
     if (import.meta.env.DEV) window.__coastline = { seed: SEED, chunkWorker, vehicle, traffic, audio, graphics, vr, get world() { return world; }, rendering, input, action, changeJourney, chooseCar, applyPaint, get carId() { return carId; }, get paint() { return paint; }, get journey() { return journey; }, get changingJourney() { return changingJourney; }, get paused() { return paused; }, get started() { return started; } };
   } catch (error) { chunkWorker?.dispose(); console.error('Could not start Coastline:', error); $('#loading').classList.add('loaded'); $('#error').hidden = false; }
