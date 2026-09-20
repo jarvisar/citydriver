@@ -10,7 +10,7 @@ try {
   await page.goto(`${process.env.TEST_URL || 'http://127.0.0.1:5173'}/?ao=0`);
   await page.waitForFunction(() => window.__coastline);
   await page.evaluate(() => window.__coastline.action('pause'));
-  const result = await page.evaluate(async () => {
+  const results = await page.evaluate(async () => {
     const THREE = await import('/node_modules/three/build/three.module.js');
     const { AmbientOcclusion } = await import('/src/ambient-occlusion.js');
     const renderer = new THREE.WebGLRenderer(); renderer.setSize(960, 600);
@@ -29,30 +29,37 @@ try {
     card.position.set(.75, 0, -.4).addScaledVector(origin.clone().normalize(), 5).addScaledVector(right, -.5); scene.add(card);
     const points = [];
     for (let y = -.8; y < .8; y += .01) points.push(card.position.clone().addScaledVector(right, .49).addScaledVector(up, y));
-    const ao = new AmbientOcclusion(renderer, scene, camera), gl = renderer.getContext();
-    const read = () => {
-      const data = new Uint8Array(960 * 600 * 4); gl.readPixels(0, 0, 960, 600, gl.RGBA, gl.UNSIGNED_BYTE, data); return data;
-    };
-    let samples = 0, bleeding = 0, contactPixels = 0;
-    for (let frame = 0; frame < 24; frame++) {
-      camera.position.copy(origin).addScaledVector(right, frame * .023); camera.updateMatrixWorld();
-      ao.enabled = false; ao.render(camera); const off = read();
-      ao.enabled = true; ao.render(camera); const on = read();
-      for (const point of points) {
-        const p = point.clone().project(camera), x = Math.floor((p.x * .5 + .5) * 960), y = Math.floor((p.y * .5 + .5) * 600);
-        const index = (y * 960 + x) * 4;
-        if (off[index] > 200) continue; // Only samples inside the cyan card.
-        samples++;
-        if (off[index + 1] - on[index + 1] > 1) bleeding++;
+    const ao = new AmbientOcclusion(renderer, scene, camera), gl = renderer.getContext(), results = [];
+    for (const quality of ['high', 'balanced']) for (const ratio of [1, 3]) {
+      ao.setQuality(quality); renderer.setPixelRatio(ratio);
+      const width = 960 * ratio, height = 600 * ratio;
+      const read = () => {
+        const data = new Uint8Array(width * height * 4); gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, data); return data;
+      };
+      let samples = 0, bleeding = 0, contactPixels = 0;
+      for (let frame = 0; frame < 24; frame++) {
+        camera.position.copy(origin).addScaledVector(right, frame * .023); camera.updateMatrixWorld();
+        ao.enabled = false; ao.render(camera); const off = read();
+        ao.enabled = true; ao.render(camera); const on = read();
+        for (const point of points) {
+          const p = point.clone().project(camera), x = Math.floor((p.x * .5 + .5) * width), y = Math.floor((p.y * .5 + .5) * height);
+          const index = (y * width + x) * 4;
+          if (off[index] > 200) continue; // Only samples inside the cyan card.
+          samples++;
+          if (off[index + 1] - on[index + 1] > 1) bleeding++;
+        }
+        for (let i = 0; i < off.length; i += 4) if (off[i] > 200 && off[i + 1] - on[i + 1] > 2) contactPixels++;
       }
-      for (let i = 0; i < off.length; i += 4) if (off[i] > 200 && off[i + 1] - on[i + 1] > 2) contactPixels++;
+      results.push({ quality, ratio, samples, bleeding, contactPixels });
     }
     ao.dispose(); scene.traverse(object => object.geometry?.dispose()); material.dispose(); cardMaterial.dispose(); renderer.dispose();
-    return { samples, bleeding, contactPixels };
+    return results;
   });
-  console.log(JSON.stringify(result, null, 2));
+  console.log(JSON.stringify(results, null, 2));
   assert.deepEqual(errors, []);
-  assert.ok(result.samples > 3000, 'track the foreground edge across many subpixel camera positions');
-  assert.equal(result.bleeding, 0, 'background AO must not crawl over the foreground silhouette');
-  assert.ok(result.contactPixels > 100, 'contact shading must remain visible behind the card');
+  for (const result of results) {
+    assert.ok(result.samples > 3000, 'track the foreground edge across many subpixel camera positions');
+    assert.equal(result.bleeding, 0, 'background AO must not crawl over the foreground silhouette');
+    assert.ok(result.contactPixels > 100, 'contact shading must remain visible behind the card');
+  }
 } finally { await browser.close(); }

@@ -49,26 +49,18 @@ try {
     });
     const results = [];
     for (const perspective of [false, true]) for (const span of [30, 75]) {
-      for (const variant of ['original', 'previous', 'revised']) {
+      for (const variant of ['full-resolution', 'high', 'balanced']) {
         const camera = perspective ? new THREE.PerspectiveCamera(50, 1.6, .1, 200)
           : new THREE.OrthographicCamera(-span * .8, span * .8, span * .5, -span * .5, .1, 200);
         camera.position.set(8, 16, 22).multiplyScalar(perspective ? span / 26 : 1);
         camera.lookAt(0, 0, 0); camera.updateMatrixWorld();
         const origin = camera.position.clone(), right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
         const ao = new AmbientOcclusion(renderer, scene, camera);
-        if (variant !== 'revised') {
-          ao.pass.configuration.aoSamples = 16;
-          ao.pass.configuration.denoiseSamples = 8;
-        }
-        if (variant === 'original') {
-          const revisedShader = ao.material.fragmentShader;
-          ao.material.fragmentShader = revisedShader
-            .replace('y = -1; y < 3', 'y = 0; y < 2').replace('x = -1; x < 3', 'x = 0; x < 2')
-            .replace('max(vec2(0.0), 1.0 - abs(offset - fraction) / 2.0)', 'mix(1.0 - fraction, fraction, offset)')
-            .replace('max(weightSum, 0.8)', 'max(weightSum, 0.2)');
-          if (ao.material.fragmentShader === revisedShader) throw new Error('The original must use the four-tap reconstruction');
-          ao.material.needsUpdate = true;
-        }
+        if (variant === 'full-resolution') {
+          ao.maxSize = Infinity;
+          Object.assign(ao.pass.configuration, { aoSamples: 64, denoiseSamples: 16,
+            denoiseIterations: 3, halfRes: false, depthAwareUpsampling: false });
+        } else ao.setQuality(variant);
         const frames = [];
         for (let frame = 0; frame < 40; frame++) {
           camera.position.copy(origin).addScaledVector(right, frame * span / 600 * .27); camera.updateMatrixWorld();
@@ -102,16 +94,16 @@ try {
   await writeFile('.artifacts/ambient-occlusion/objects-motion.json', JSON.stringify(results, null, 2));
   assert.deepEqual(errors, []);
   console.log(JSON.stringify(results, null, 2));
-  for (const revised of results.filter(result => result.variant === 'revised')) {
-    const previous = results.find(result => result.variant === 'previous' && result.span === revised.span && result.perspective === revised.perspective);
-    const original = results.find(result => result.variant === 'original' && result.span === revised.span && result.perspective === revised.perspective);
+  for (const revised of results.filter(result => result.variant !== 'full-resolution')) {
+    const previous = results.find(result => result.variant === 'full-resolution' && result.span === revised.span && result.perspective === revised.perspective);
     revised.metrics.forEach((after, index) => {
       const before = previous.metrics[index];
-      const label = `${after.name}, ${revised.perspective ? 'perspective' : 'overhead'}, span ${revised.span}`;
-      assert.ok(after.shimmer < before.shimmer * .97, `${label}: improve on the previous patch`);
-      assert.ok(after.shimmer < original.metrics[index].shimmer * .9, `${label}: improve on the original rendering`);
-      assert.ok(after.darkness > before.darkness * .85 && after.darkness < before.darkness * 1.15, `${label}: retain object shading`);
-      assert.ok(after.contact > before.contact * .85 && after.contact < before.contact * 1.15, `${label}: retain contact shading`);
+      const label = `${revised.variant}, ${after.name}, ${revised.perspective ? 'perspective' : 'overhead'}, span ${revised.span}`;
+      assert.ok(after.shimmer < .03, `${label}: keep frame-to-frame shading changes under 3%`);
+      assert.ok(after.darkness > before.darkness * .65 && after.darkness < before.darkness * 1.4, `${label}: retain object shading`);
+      // Small contact shadows are only a few percent dark; compare their
+      // absolute change so a one-point shift is not treated as a large error.
+      assert.ok(after.contact > before.contact * .65 && Math.abs(after.contact - before.contact) < .03, `${label}: retain contact shading within three percentage points`);
     });
   }
 } finally { await browser.close(); }

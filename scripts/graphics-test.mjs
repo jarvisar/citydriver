@@ -32,8 +32,15 @@ try {
         graphics.setMode(id);
         levels.push({ id, ratio: renderer.getPixelRatio(), width: renderer.domElement.width, height: renderer.domElement.height,
           shadow: rendering.scene.children.find(child => child.isDirectionalLight).shadow.mapSize.x,
-          ambientOcclusion: rendering.ambientOcclusion.enabled });
+          ambientOcclusion: rendering.ambientOcclusion.enabled, aoQuality: rendering.ambientOcclusion.quality });
       }
+      graphics.toggleAmbientOcclusion();
+      const enabledLevels = [];
+      for (const id of ['high', 'balanced', 'smooth', 'basic', 'auto']) {
+        graphics.setMode(id);
+        enabledLevels.push({ enabled: rendering.ambientOcclusion.enabled, quality: rendering.ambientOcclusion.quality });
+      }
+      graphics.toggleAmbientOcclusion();
       reads();
 
       // Deterministic frame delivery. `rates` is either a fixed refresh rate or
@@ -65,7 +72,7 @@ try {
       observer.disconnect();
       graphics.setMode('auto');
       renderer.render(rendering.scene, rendering.camera);
-      return { levels, steady, slowed, recovered, pinned,
+      return { levels, enabledLevels, steady, slowed, recovered, pinned,
         unchangedProjection: JSON.stringify(projection) === JSON.stringify(camera.projectionMatrix.toArray()) };
     });
 
@@ -80,14 +87,16 @@ try {
     }
     assert.equal(density('basic').width, Math.floor(390 * expected('basic')));
     assert.equal(density('basic').height, Math.floor(844 * expected('basic')));
-    assert.deepEqual(result.levels.map(level => level.shadow), [2048, 1536, 1024, 1024]);
-    assert.deepEqual(result.levels.map(level => level.ambientOcclusion), [true, true, false, false]);
+    assert.deepEqual(result.levels.map(level => level.shadow), [2048, 1536, 1024, 512]);
+    assert.deepEqual(result.levels.map(level => level.ambientOcclusion), [false, false, false, false]);
+    assert.deepEqual(result.levels.map(level => level.aoQuality), ['balanced', 'balanced', 'balanced', 'balanced']);
+    assert.deepEqual(result.enabledLevels, Array.from({ length: 5 }, () => ({ enabled: true, quality: 'balanced' })), 'presets preserve both the AO opt-in and its quality');
     assert.ok(result.unchangedProjection, 'density never touches the camera projection');
 
     assert.equal(result.steady.level, 'high', 'a display-rate device keeps its level');
     assert.equal(result.steady.writes, 0, 'no resize without a decision');
-    // Soft shading goes first and costs no resize, then one level step follows.
-    assert.equal(result.slowed.softShading, false, 'soft shading is given up before any resolution is');
+    // Auto changes resolution without changing the independent AO choice.
+    assert.equal(result.slowed.softShading, false, 'soft shading stays off');
     assert.equal(result.slowed.level, 'balanced', 'one step down per decision');
     assert.equal(result.slowed.ratio, expected('balanced'));
     // One resize writes the canvas width and height: two attribute records.

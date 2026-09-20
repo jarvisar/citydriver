@@ -3,10 +3,8 @@
 // display's refresh rate.
 //
 // A level changes the drawing buffer's density, the sun shadow's detail, and
-// how much of the route stays built around the car. Soft ambient shading is
-// deliberately not one of a level's settings: it draws the whole scene a second
-// time, so the controller gives it up on its own, before it touches anything
-// else. Lighting, animation and the scenery inside a chunk are identical at
+// how much of the route stays built around the car. AO is a separate, opt-in
+// setting that neither presets nor Auto change. Lighting and scenery are identical at
 // every level, so a route looks like itself on every device. Nothing here
 // changes the shader light counts, which would make the browser recompile every
 // program mid-drive.
@@ -21,12 +19,12 @@
 // direction is off-screen at every camera height — hiding them was measured
 // pixel-for-pixel identical on all four routes in the widest view, worth eight
 // to eleven per cent of the frame's draw calls — so the cheaper levels drop
-// them, and the top two keep them as headroom for reversing.
+// them, and High keeps them as headroom for reversing.
 export const QUALITY_LEVELS = [
-  { id: 'high', label: 'High', summary: 'Full resolution · soft shading · sharp shadows', density: 1, shadowMap: 2048, chunks: { behind: 3, ahead: 5 }, ambientOcclusion: true, antialias: true },
-  { id: 'balanced', label: 'Balanced', summary: 'Slightly softer resolution · soft shading', density: .85, shadowMap: 1536, chunks: { behind: 3, ahead: 5 }, ambientOcclusion: true, antialias: true },
-  { id: 'smooth', label: 'Smooth', summary: 'Lower resolution · no soft shading', density: .7, shadowMap: 1024, chunks: { behind: 2, ahead: 4 }, ambientOcclusion: false, antialias: true },
-  { id: 'basic', label: 'Basic', summary: 'Lowest resolution · shortest view', density: .55, shadowMap: 1024, chunks: { behind: 1, ahead: 3 }, ambientOcclusion: false, antialias: false },
+  { id: 'high', label: 'High', summary: 'Native resolution · sharp shadows', density: 1, shadowMap: 2048, chunks: { behind: 3, ahead: 5 }, antialias: true },
+  { id: 'balanced', label: 'Balanced', summary: '85% resolution · medium shadows', density: .85, shadowMap: 1536, chunks: { behind: 2, ahead: 4 }, antialias: true },
+  { id: 'smooth', label: 'Smooth', summary: '70% resolution · softer shadows', density: .7, shadowMap: 1024, chunks: { behind: 2, ahead: 4 }, antialias: true },
+  { id: 'basic', label: 'Basic', summary: '50% resolution · simple shadows · shortest view', density: .5, shadowMap: 512, chunks: { behind: 1, ahead: 3 }, antialias: false },
 ];
 const WORST = QUALITY_LEVELS.length - 1;
 export const levelIndex = id => QUALITY_LEVELS.findIndex(level => level.id === id);
@@ -46,14 +44,9 @@ const SLOW = .92, FAST = .97;
 const SLOW_WINDOWS = 2, FAST_WINDOWS = 4;
 // A step down that changes almost nothing means something other than the scene
 // is setting the pace: a capped display, a busy CPU, or a throttled browser.
-// It takes two such steps to say so, because the first thing the controller
-// gives up may simply have been the wrong thing for this device, and one wasted
-// probe is not a reason to stop looking.
+// It takes two such steps to say so: one ineffective level change is not
+// enough to conclude that cheaper graphics cannot help this device.
 const WORTHWHILE = 1.04, GIVE_UP_AFTER = 2;
-// How many times a new route may win soft shading back before the controller
-// accepts that this device cannot afford it. Without a limit, a player hopping
-// between routes would watch it switch on and off every few seconds.
-const SHADING_TRIES = 2;
 
 const STORAGE_KEY = 'coastline.graphics';
 
@@ -150,16 +143,11 @@ export class Graphics {
     this.level = storedLevel === -1 ? this.detected : storedLevel;
     this.mode = QUALITY_LEVELS.some(level => level.id === stored.mode) ? stored.mode : 'auto';
     if (this.mode !== 'auto') this.level = levelIndex(this.mode);
-    // `?ao=0` sets soft shading for this visit, ahead of the level's own answer
-    // and of a remembered choice. It can still be switched back on.
-    this.ambientOcclusionOverride = ambientOcclusion ?? (typeof stored.ambientOcclusion === 'boolean' ? stored.ambientOcclusion : null);
+    // AO defaults off, independently of quality. Preserve an explicit saved
+    // choice; old preset/adaptive defaults (null and softShading) do not opt in.
+    // `?ao=0` overrides a remembered choice for this visit.
+    this.ambientOcclusion = ambientOcclusion ?? (stored.ambientOcclusion === true);
     this.densityOverride = Number.isFinite(stored.density) && stored.density >= MIN_DENSITY && stored.density <= 1 ? stored.density : null;
-    // Soft shading is the controller's own axis, separate from the level, so
-    // that giving up a level can never hand it back. `shadingChosen` records
-    // that the player has had their say and the controller should keep out.
-    this.shading = stored.softShading !== false;
-    this.shadingChosen = this.ambientOcclusionOverride !== null;
-    this.shadingDrops = 0;
     // Never probe above the level a downgrade settled on, so quality ratchets
     // one way and the picture cannot flicker between two levels all drive.
     this.ceiling = 0;
@@ -170,11 +158,6 @@ export class Graphics {
 
   get auto() { return this.mode === 'auto'; }
   get levelId() { return QUALITY_LEVELS[this.level].id; }
-  // A player's own choice wins; then the controller's; then the level's default.
-  get ambientOcclusion() {
-    if (this.ambientOcclusionOverride !== null) return this.ambientOcclusionOverride;
-    return this.shading && QUALITY_LEVELS[this.level].ambientOcclusion;
-  }
   get settings() {
     return { ...QUALITY_LEVELS[this.level], density: this.densityOverride ?? QUALITY_LEVELS[this.level].density, ambientOcclusion: this.ambientOcclusion };
   }
@@ -188,19 +171,17 @@ export class Graphics {
   announce(reason) { for (const listener of this.listeners) listener(this.settings, reason, this); }
 
   save() {
-    writeStored(this.storage, { mode: this.mode, level: this.levelId, density: this.densityOverride, ambientOcclusion: this.ambientOcclusionOverride, softShading: this.shading });
+    writeStored(this.storage, { mode: this.mode, level: this.levelId, density: this.densityOverride, ambientOcclusion: this.ambientOcclusion });
   }
 
   setMode(mode) {
     const index = levelIndex(mode);
     if (mode !== 'auto' && index === -1) return false;
     this.mode = mode === 'auto' ? 'auto' : mode;
-    // A fresh choice clears adaptive history and the player's overrides,
-    // so the level the player picked is the level they get.
+    // A fresh choice clears adaptive history and the density override.
+    // The independent AO choice stays as the player left it.
     this.ceiling = 0; this.cascade = null; this.target = 60;
-    this.ambientOcclusionOverride = null;
     this.densityOverride = null;
-    this.shading = true; this.shadingChosen = false; this.shadingDrops = 0;
     if (index !== -1) this.level = index;
     this.suspend();
     this.save();
@@ -220,42 +201,18 @@ export class Graphics {
 
   toggleAmbientOcclusion() {
     const enabled = !this.ambientOcclusion;
-    // The controller's decision is not one of the level's defaults, so clear it
-    // too: otherwise switching soft shading back on would do nothing at all.
-    this.shading = true; this.shadingChosen = true;
-    this.ambientOcclusionOverride = enabled === QUALITY_LEVELS[this.level].ambientOcclusion ? null : enabled;
+    this.ambientOcclusion = enabled;
     this.suspend();
     this.save();
     this.announce('ambient-occlusion');
     return enabled;
   }
 
-  // Soft shading goes first, and the controller does not take it back on its
-  // own. It draws every object in the scene a second time, so it is the largest
-  // saving on a machine held back by draw calls — and it is the one saving a
-  // smaller drawing buffer cannot make, which is exactly the case the test in
-  // `judge` below used to read as "quality is not the problem", while soft
-  // shading was still on.
-  dimSoftShading(fps) {
-    if (this.shadingChosen || !this.shading || !QUALITY_LEVELS[this.level].ambientOcclusion) return false;
-    this.cascade ??= { level: this.level, shading: true, fps, failures: 0 };
-    this.shading = false;
-    this.shadingDrops++;
-    this.suspend();
-    this.save();
-    this.announce('auto');
-    return true;
-  }
-
   // Put back everything a descent gave up, once that descent has proved it was
   // not buying anything.
-  restore({ level, shading }) {
+  restore({ level }) {
     const next = Math.max(0, Math.min(WORST, level));
-    const changed = shading !== this.shading || next !== this.level;
-    // The drop did not stick, so it should not count against the route changes
-    // that are allowed to offer soft shading again.
-    if (shading && !this.shading) this.shadingDrops = 0;
-    this.shading = shading;
+    const changed = next !== this.level;
     this.level = next;
     this.ceiling = next;
     if (!changed) return false;
@@ -267,12 +224,10 @@ export class Graphics {
 
   // A new route is a different amount of work, so allow one step better than
   // the last one settled on. Lifting it a step at a time keeps route hopping
-  // from walking the whole ladder up and back down. Soft shading comes back
-  // last, because it was the first thing given up. The measured target is kept:
+  // from walking the whole ladder up and back down. The measured target is kept:
   // the display's own limit did not change with the route.
   relax() {
     if (this.ceiling > 0) this.ceiling--;
-    else if (this.shadingDrops < SHADING_TRIES) this.shading = true;
     this.cascade = null;
     this.suspend();
   }
@@ -310,7 +265,7 @@ export class Graphics {
           // That step worked. Judge the next one against what this one bought,
           // not against the rate before it: a big early saving must not go on
           // excusing three later steps that save nothing.
-          this.cascade = { level: this.level, shading: this.shading, fps, failures: 0 };
+          this.cascade = { level: this.level, fps, failures: 0 };
         } else if (++this.cascade.failures >= GIVE_UP_AFTER) {
           // Giving up detail twice over bought nothing. Go back to the last
           // state that was worth reaching and measure against the rate this
@@ -321,9 +276,8 @@ export class Graphics {
           return this.restore(cascade);
         }
       }
-      if (this.dimSoftShading(fps)) return true;
       if (this.level < WORST) {
-        this.cascade ??= { level: this.level, shading: this.shading, fps, failures: 0 };
+        this.cascade ??= { level: this.level, fps, failures: 0 };
         return this.change(this.level + 1);
       }
       this.cascade = null;

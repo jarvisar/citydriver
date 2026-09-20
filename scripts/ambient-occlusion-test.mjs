@@ -23,9 +23,10 @@ try {
   assert.equal(await page.locator('#fps-counter').isVisible(), false);
   assert.equal(await page.locator('#ambient-occlusion').count(), 0);
   await page.evaluate(() => window.__coastline.action('pause'));
-  // Whether soft shading starts on depends on what this machine is, so pin the
-  // level that has it before testing that the key turns it off and back on.
+  // Presets leave AO off; only the independent toggle enables it.
   await page.evaluate(() => window.__coastline.graphics.setMode('high'));
+  assert.equal(await page.evaluate(() => window.__coastline.rendering.ambientOcclusion.enabled), false);
+  await page.keyboard.press('KeyO');
   assert.equal(await page.evaluate(() => window.__coastline.rendering.ambientOcclusion.enabled), true);
   await page.keyboard.press('KeyO');
   assert.equal(await page.evaluate(() => window.__coastline.rendering.ambientOcclusion.enabled), false);
@@ -120,7 +121,7 @@ try {
       assert.ok(result.offError <= 1, 'disabled AO preserves original rendering within GPU rounding');
       assert.ok(result.neutralError <= 1, 'zero-strength AO preserves lighting, fog, sky and antialiasing within GPU rounding');
       assert.equal(result.transformUpdates, 1, 'color and AO reuse the same scene transforms');
-      assert.ok(result.transformError <= 1, 'cached transforms preserve automatic rendering within GPU rounding');
+      assert.ok(result.transformError <= 1, `${journey} (${perspective}): cached transforms preserve automatic rendering within GPU rounding (${result.transformError})`);
       assert.equal(result.autoUpdateRestored, true, 'the next frame must update moving objects');
       assert.ok(result.averageDarkening < 15, 'subtle AO does not dim the whole screen');
       assert.equal(result.texturesAfter, result.textures, 'toggling does not leak textures');

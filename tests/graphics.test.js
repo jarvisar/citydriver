@@ -37,12 +37,11 @@ test('quality levels get cheaper in every dimension, from high down to basic', (
     assert.ok(level.shadowMap <= previous.shadowMap, `${level.id} shadow map`);
     assert.ok(level.chunks.behind <= previous.chunks.behind, `${level.id} chunks behind`);
     assert.ok(level.chunks.ahead <= previous.chunks.ahead, `${level.id} chunks ahead`);
-    assert.ok(Number(level.ambientOcclusion) <= Number(previous.ambientOcclusion), `${level.id} soft shading`);
     assert.ok(Number(level.antialias) <= Number(previous.antialias), `${level.id} antialiasing`);
   }
   // The top level must draw everything, at the density the display asks for.
   assert.deepEqual({ ...QUALITY_LEVELS[0], id: undefined, label: undefined, summary: undefined },
-    { id: undefined, label: undefined, summary: undefined, density: 1, shadowMap: 2048, chunks: { behind: 3, ahead: 5 }, ambientOcclusion: true, antialias: true });
+    { id: undefined, label: undefined, summary: undefined, density: 1, shadowMap: 2048, chunks: { behind: 3, ahead: 5 }, antialias: true });
 });
 
 test('every level removes pixels, on a 1x panel as much as on a dense one', () => {
@@ -105,10 +104,9 @@ test('a device that holds the refresh rate keeps its level, and a single hitch c
 test('a slow device steps down one level at a time and never climbs back', () => {
   const graphics = graphicsAt(levelIndex('high'));
   // An older phone: each step down really does buy frames, and only the
-  // cheapest level reaches the display's rate. Soft shading is given up first,
-  // before any of the picture's resolution is.
+  // cheapest level reaches the display's rate. AO remains off throughout.
   const phone = new Device(graphics, [22, 31, 43, 61]).run(60);
-  assert.deepEqual(phone.steps, ['high-ao', 'balanced-ao', 'smooth-ao', 'basic-ao']);
+  assert.deepEqual(phone.steps, ['balanced-ao', 'smooth-ao', 'basic-ao']);
   assert.equal(graphics.levelId, 'basic');
   // Recovering later must not undo a decision the player has settled into.
   phone.rates = 60;
@@ -130,10 +128,10 @@ test('a climb that turns out to be too much settles one level below it, for good
   // heaviest ones, so the upward probe has to be given back.
   const device = new Device(graphics, [25, 41, 61, 61]).run(200);
   assert.equal(graphics.levelId, 'smooth');
-  assert.deepEqual(device.steps, ['balanced+ao', 'balanced-ao', 'smooth-ao'], 'one probe up, then soft shading, then the level back');
+  assert.deepEqual(device.steps, ['balanced-ao', 'smooth-ao'], 'one probe up, then the level back');
   device.run(400);
   assert.equal(graphics.levelId, 'smooth', 'no flicker between two levels');
-  assert.equal(device.changes, 3);
+  assert.equal(device.changes, 2);
 });
 
 test('a new route may reclaim one level, but not the whole ladder at once', () => {
@@ -156,13 +154,12 @@ test('a new route may reclaim one level, but not the whole ladder at once', () =
 
 test('a capped display gets its quality back instead of being stripped for nothing', () => {
   // 30 Hz throughout: nothing the controller gives up can improve a rate the
-  // display sets. It probes twice — once for soft shading, once for the level —
-  // and hands both back rather than leaving the picture poorer for nothing.
+  // display sets. It probes two cheaper levels and restores the original.
   const graphics = graphicsAt(levelIndex('balanced'));
   const display = new Device(graphics, 30).run(90);
   assert.equal(graphics.levelId, 'balanced');
-  assert.equal(graphics.settings.ambientOcclusion, true, 'soft shading comes back with the level');
-  assert.deepEqual(display.steps, ['balanced-ao', 'smooth-ao', 'balanced+ao']);
+  assert.equal(graphics.settings.ambientOcclusion, false, 'quality recovery leaves AO off');
+  assert.deepEqual(display.steps, ['smooth-ao', 'basic-ao', 'balanced-ao']);
   assert.ok(graphics.target <= 31 && graphics.target >= 29, `target follows the display: ${graphics.target}`);
   display.run(300);
   assert.equal(display.changes, 3, 'and it stops probing once it knows the rate');
@@ -170,13 +167,10 @@ test('a capped display gets its quality back instead of being stripped for nothi
 
 test('a genuine improvement from stepping down is kept', () => {
   const graphics = graphicsAt(levelIndex('high'));
-  // Soft shading goes first and buys nothing on this model device, but one
-  // wasted probe is not a reason to stop: the level step that does work still
-  // happens, and the controller then stops rather than stripping the rest of
-  // the detail to chase the last two frames.
+  // One level step buys enough frames to settle.
   const device = new Device(graphics, [30, 58, 60, 60]).run(200);
   assert.equal(graphics.levelId, 'balanced');
-  assert.deepEqual(device.steps, ['high-ao', 'balanced-ao']);
+  assert.deepEqual(device.steps, ['balanced-ao']);
 });
 
 test('paused, hidden and route-change frames are excluded and restart the grace period', () => {
@@ -197,7 +191,7 @@ test('a chosen level is pinned, adapts to nothing, and is remembered', () => {
   assert.equal(graphics.levelId, 'high');
   new Device(graphics, 8).run(120);
   assert.equal(graphics.levelId, 'high', 'a pinned level stays pinned');
-  assert.deepEqual(stored(storage), { mode: 'high', level: 'high', density: null, ambientOcclusion: null, softShading: true });
+  assert.deepEqual(stored(storage), { mode: 'high', level: 'high', density: null, ambientOcclusion: false });
 
   const next = new Graphics({ storage, detect: () => levelIndex('basic') });
   assert.equal(next.mode, 'high');
@@ -212,32 +206,25 @@ test('auto remembers the level it settled on so the next visit starts there', ()
   const graphics = new Graphics({ storage, detect: () => levelIndex('high') });
   new Device(graphics, [22, 31, 43, 61]).run(60);
   assert.equal(graphics.levelId, 'basic');
-  // The player never touched soft shading, so their override stays empty; what
-  // is remembered is the controller's own decision to stop drawing it.
-  assert.deepEqual(stored(storage), { mode: 'auto', level: 'basic', density: null, ambientOcclusion: null, softShading: false });
+  // Remember the settled level and the unchanged default AO choice.
+  assert.deepEqual(stored(storage), { mode: 'auto', level: 'basic', density: null, ambientOcclusion: false });
   const next = new Graphics({ storage, detect: () => levelIndex('high') });
   assert.equal(next.auto, true);
   assert.equal(next.levelId, 'basic');
   assert.equal(next.settings.ambientOcclusion, false, 'and it is still off on the next visit');
 });
 
-test('soft shading can be turned on or off against the level, and is remembered', () => {
+test('AO defaults off and its explicit choice survives presets and reloads', () => {
   const storage = memoryStorage();
-  const graphics = new Graphics({ storage, detect: () => levelIndex('high') });
-  assert.equal(graphics.settings.ambientOcclusion, true);
-  assert.equal(graphics.toggleAmbientOcclusion(), false);
-  assert.equal(graphics.settings.ambientOcclusion, false);
-  assert.equal(stored(storage).ambientOcclusion, false);
-  const next = new Graphics({ storage, detect: () => levelIndex('high') });
-  assert.equal(next.settings.ambientOcclusion, false);
-  // Back to the level's own answer, which is no longer an override.
-  assert.equal(next.toggleAmbientOcclusion(), true);
-  assert.equal(stored(storage).ambientOcclusion, null);
-  // A level without soft shading can still have it switched on by hand.
-  next.setMode('basic');
-  assert.equal(next.settings.ambientOcclusion, false);
-  assert.equal(next.toggleAmbientOcclusion(), true);
-  assert.equal(next.settings.ambientOcclusion, true);
+  const graphics = graphicsAt(0, { storage });
+  for (const enabled of [false, true, false]) {
+    if (graphics.ambientOcclusion !== enabled) graphics.toggleAmbientOcclusion();
+    for (const mode of ['high', 'balanced', 'smooth', 'basic', 'auto']) {
+      graphics.setMode(mode);
+      assert.equal(graphics.settings.ambientOcclusion, enabled, mode);
+      assert.equal(graphicsAt(0, { storage }).ambientOcclusion, enabled, 'saved independent choice');
+    }
+  }
 });
 
 test('custom density is remembered, survives Auto adjustments, and resets with presets', () => {
@@ -261,7 +248,7 @@ test('custom density is remembered, survives Auto adjustments, and resets with p
   }
   next.setDensity(1);
   next.setMode('auto');
-  assert.equal(next.settings.density, .55, 'Auto restores the current level default');
+  assert.equal(next.settings.density, .5, 'Auto restores the current level default');
 });
 
 test('density validates saved values and clamps user choices to the slider limits', () => {
@@ -309,66 +296,30 @@ test('a stored level that no longer exists falls back to detection', () => {
   assert.equal(graphics.levelId, 'smooth');
 });
 
-test('a machine that only draw calls hold back is not stranded at full quality', () => {
-  // The case this ladder exists for. A 1x panel limited by draw calls gets
-  // nothing from a smaller drawing buffer, so every level costs it the same;
-  // only soft shading, a second pass over every object in the scene, is worth
-  // anything. Giving up a level first and reading "that bought nothing" as
-  // "quality is not the problem" used to park this device at full quality,
-  // soft shading and all, for the rest of the drive.
-  const graphics = graphicsAt(levelIndex('high'));
-  const laptop = new Device(graphics, 60);
-  laptop.rates = [38, 38, 38, 38];
-  const withoutSoftShading = [57, 57, 57, 57];
-  const original = Object.getOwnPropertyDescriptor(Device.prototype, 'hz');
-  Object.defineProperty(laptop, 'hz', { get() { return graphics.settings.ambientOcclusion ? 38 : withoutSoftShading[0]; } });
-  laptop.run(120);
-  assert.equal(graphics.settings.ambientOcclusion, false, 'soft shading is given up, and stays up');
-  assert.equal(graphics.levelId, 'high', 'and nothing else had to be');
-  assert.ok(original, 'Device still defines hz for the other tests');
+test('Auto adjustments and route changes never change the AO choice', () => {
+  for (const enabled of [false, true]) {
+    const graphics = graphicsAt(0, { ambientOcclusion: enabled });
+    const device = new Device(graphics, [22, 31, 43, 61]).run(60);
+    assert.equal(graphics.levelId, 'basic');
+    assert.equal(graphics.ambientOcclusion, enabled);
+    graphics.relax();
+    device.rates = 61; device.run(90);
+    assert.equal(graphics.levelId, 'smooth');
+    assert.equal(graphics.ambientOcclusion, enabled);
+    graphics.setMode('high'); graphics.setMode('auto');
+    new Device(graphics, 30).run(90);
+    assert.equal(graphics.levelId, 'high', 'a capped display restores quality');
+    assert.equal(graphics.ambientOcclusion, enabled);
+  }
 });
 
-test('soft shading survives the level being handed back', () => {
-  // Soft shading buys this device real frames; the levels below it buy nothing.
-  // The guard therefore hands the levels back — and must leave soft shading
-  // off while it does, because that part of the descent was worth it.
-  const graphics = graphicsAt(levelIndex('high'));
-  const laptop = new Device(graphics, 60);
-  Object.defineProperty(laptop, 'hz', { get: () => graphics.settings.ambientOcclusion ? 30 : 40 });
-  laptop.run(120);
-  assert.equal(graphics.levelId, 'high', 'the levels that bought nothing are given back');
-  assert.equal(graphics.settings.ambientOcclusion, false, 'the one that bought something is not');
-  assert.ok(graphics.target <= 41 && graphics.target >= 39, `target follows the device: ${graphics.target}`);
-});
-
-test('a route change offers soft shading back last, and not forever', () => {
-  const graphics = graphicsAt(levelIndex('high'));
-  const device = new Device(graphics, 60);
-  Object.defineProperty(device, 'hz', { get: () => graphics.settings.ambientOcclusion ? 30 : 61 });
-  device.run(60);
-  assert.equal(graphics.settings.ambientOcclusion, false);
-  // A lighter route may be able to afford it, so one is allowed to ask again.
-  graphics.relax();
-  assert.equal(graphics.settings.ambientOcclusion, true);
-  device.run(60);
-  assert.equal(graphics.settings.ambientOcclusion, false, 'this route still cannot');
-  // But a player hopping between routes must not watch it flicker all evening.
-  graphics.relax();
-  assert.equal(graphics.settings.ambientOcclusion, false, 'twice is enough to settle it');
-});
-
-test('the controller never singles out a player\'s own soft shading', () => {
-  const graphics = graphicsAt(levelIndex('high'));
-  assert.equal(graphics.toggleAmbientOcclusion(), false);
-  assert.equal(graphics.toggleAmbientOcclusion(), true, 'and it can be switched straight back on');
-  // Back on is back to the level's own answer, so the level still decides it —
-  // but the controller may no longer take it away on its own, which is what it
-  // would otherwise do first and fastest.
-  new Device(graphics, [20, 20, 61, 61]).run(90);
-  assert.equal(graphics.levelId, 'smooth');
-  assert.equal(graphics.settings.ambientOcclusion, false, 'a level without soft shading still has none');
-  // Asking for it against the level's answer is absolute, at any frame rate.
-  assert.equal(graphics.toggleAmbientOcclusion(), true);
-  new Device(graphics, 8).run(120);
-  assert.equal(graphics.settings.ambientOcclusion, true);
+test('legacy preset and adaptive AO defaults do not count as explicit opt-in', () => {
+  for (const ambientOcclusion of [null, undefined, false, 'true']) {
+    const storage = memoryStorage({ 'coastline.graphics': JSON.stringify({
+      mode: 'high', level: 'high', ambientOcclusion, softShading: true,
+    }) });
+    assert.equal(graphicsAt(0, { storage }).ambientOcclusion, false);
+  }
+  const storage = memoryStorage({ 'coastline.graphics': JSON.stringify({ ambientOcclusion: true }) });
+  assert.equal(graphicsAt(0, { storage }).ambientOcclusion, true, 'explicit opt-in is preserved');
 });

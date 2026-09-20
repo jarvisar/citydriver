@@ -48,7 +48,9 @@ export function createRendering(canvas, graphics = new Graphics()) {
   renderer.xr.cameraAutoUpdate = false;
   renderer.xr.addEventListener('sessionend', () => { graphics.suspend(); resizeCanvas(); });
   const ambientOcclusion = new AmbientOcclusion(renderer, scene, camera);
-  // Resolution, sun-shadow detail and soft shading follow the quality level.
+  // AO always uses the lighter budget, independently of the graphics preset.
+  ambientOcclusion.setQuality('balanced');
+  // Resolution and sun-shadow detail follow the quality level.
   // A new shadow map size only takes effect once the old texture is released.
   function applyQuality(settings) {
     ambientOcclusion.enabled = settings.ambientOcclusion;
