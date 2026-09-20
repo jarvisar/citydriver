@@ -185,15 +185,21 @@ export function createRendering(canvas, graphics = new Graphics()) {
     renderer.toneMappingExposure = desert ? .92 : 1.02;
   }
   setJourney('coast');
-  function render(frame) {
+  function render(frame, beforeXRRender) {
     if (renderer.xr.isPresenting) {
       const pose = frame?.getViewerPose(renderer.xr.getReferenceSpace());
       vrCamera.update(activeCamera(), pose);
       renderer.xr.updateCamera(vrCamera.camera);
+      beforeXRRender?.();
+      if (!renderer.xr.isPresenting) { ambientOcclusion.render(activeCamera()); return; }
       // The AO compositor is a monoscopic screen pass. Render the scene
       // directly so Three.js draws both headset eyes with their own lenses.
       renderer.render(scene, vrCamera.camera);
     } else ambientOcclusion.render(activeCamera());
   }
-  return { renderer, scene, graphics, ambientOcclusion, vrCamera, render, toggleAO() { return graphics.toggleAmbientOcclusion(); }, get camera() { return activeCamera(); }, update, resize, recordFrame, setJourney, get viewLabel() { return views[view].label; }, toggleView() { view = (view + 1) % views.length; updateFog(); thirdPerson.snap(); return views[view].label; }, snap() { initialized = false; thirdPerson.snap(); } };
+  function setView(index) { view = index; updateFog(); thirdPerson.snap(); return views[view].label; }
+  let desktopView;
+  function enterVR() { desktopView = view; setView(views.findIndex(view => view.thirdPerson)); }
+  function exitVR() { if (desktopView !== undefined) setView(desktopView); desktopView = undefined; }
+  return { renderer, scene, graphics, ambientOcclusion, vrCamera, render, enterVR, exitVR, toggleAO() { return graphics.toggleAmbientOcclusion(); }, get camera() { return activeCamera(); }, update, resize, recordFrame, setJourney, get viewLabel() { return views[view].label; }, toggleView() { return setView((view + 1) % views.length); }, snap() { initialized = false; thirdPerson.snap(); } };
 }

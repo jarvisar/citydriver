@@ -8,6 +8,9 @@ try {
   const page = await browser.newPage({ viewport: { width: 1100, height: 720 } });
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
+  page.on('console', message => {
+    if (message.type() === 'error' || /GL_INVALID|INVALID_VALUE|texSubImage/.test(message.text())) errors.push(message.text());
+  });
   // Exercise Three's actual WebXRManager and stereo renderer with an in-page
   // XR device. This cannot measure headset latency, comfort or hardware speed.
   await page.addInitScript(() => {
@@ -17,7 +20,7 @@ try {
       const c = Math.cos(yaw), s = Math.sin(yaw);
       return new Float32Array([c, 0, -s, 0, 0, 1, 0, 0, s, 0, c, 0, x, y, z, 1]);
     };
-    const input = handedness => ({ handedness, targetRayMode: 'tracked-pointer', gamepad: { mapping: 'xr-standard', axes: [0, 0, 0, 0], buttons: Array.from({ length: 7 }, () => ({ value: 0, pressed: false })) } });
+    const input = handedness => ({ handedness, targetRayMode: 'tracked-pointer', targetRaySpace: { handedness }, gamepad: { mapping: 'xr-standard', axes: [0, 0, 0, 0], buttons: Array.from({ length: 7 }, () => ({ value: 0, pressed: false })) } });
     class Session extends EventTarget {
       constructor() {
         super(); this.inputSources = [input('left'), input('right')];
@@ -31,7 +34,7 @@ try {
         return window.requestAnimationFrame(time => {
           if (this.ended) return;
           this.frames++;
-          const frame = { session: this, getViewerPose: () => {
+          const frame = { session: this, getPose: space => space.handedness === 'right' && window.testRayMatrix ? { transform: { matrix: window.testRayMatrix } } : null, getViewerPose: () => {
             const { x, y, z, yaw } = this.head, near = this.renderState.depthNear, far = this.renderState.depthFar;
             const projection = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, -(far + near) / (far - near), -1, 0, 0, -2 * far * near / (far - near), 0]);
             return { transform: { position: { x, y, z }, orientation: { x: 0, y: Math.sin(yaw / 2), z: 0, w: Math.cos(yaw / 2) } }, views: [-.032, .032].map((eye, index) => ({ eye: index ? 'right' : 'left', transform: { matrix: matrix(x + eye * Math.cos(yaw), y, z - eye * Math.sin(yaw), yaw) }, projectionMatrix: projection })) };
@@ -59,6 +62,10 @@ try {
   });
   await page.goto(process.env.TEST_URL || 'http://127.0.0.1:5173');
   await page.waitForFunction(() => window.__coastline && !document.querySelector('#enter-vr').hidden);
+  assert.equal(await page.locator('#welcome #enter-vr').isVisible(), true);
+  assert.equal(await page.locator('#enter-vr-pause').isVisible(), false);
+  assert.equal(await page.locator('.drive-actions .vr-entry').count(), 0);
+  const desktopView = await page.evaluate(() => window.__coastline.rendering.viewLabel);
   await page.evaluate(() => { window.denyVR = true; });
   await page.locator('#enter-vr').click();
   await page.waitForFunction(() => !document.querySelector('#vr-error').hidden);
@@ -75,13 +82,16 @@ try {
   const press = async (hand, index) => { await button(hand, index, 1); await frames(); await button(hand, index, 0); await frames(); };
   assert.equal(await page.evaluate(() => window.__coastline.started), true);
   assert.equal(await page.evaluate(() => window.__coastline.paused), false);
+  assert.equal(await page.evaluate(() => window.__coastline.rendering.viewLabel), 'Third-person view');
+  assert.equal(await page.locator('#enter-vr').isVisible(), false);
+  assert.equal(await page.locator('#enter-vr-pause').isVisible(), false);
   assert.equal(await page.locator('#vr-error').isVisible(), false);
   const stereo = await page.evaluate(() => {
     const { cameras } = window.__coastline.rendering.renderer.xr.getCamera();
     const a = cameras[0].matrixWorld.elements, b = cameras[1].matrixWorld.elements;
     return { count: cameras.length, separation: Math.hypot(a[12] - b[12], a[13] - b[13], a[14] - b[14]) };
   });
-  assert.equal(stereo.count, 2); assert.ok(Math.abs(stereo.separation - .064) < 1e-5);
+  assert.equal(stereo.count, 2); assert.ok(Math.abs(stereo.separation - .064) < 1e-5, `Eye separation: ${stereo.separation}`);
   // Prove the monoscopic compositor is not used in immersive mode.
   await page.evaluate(() => {
     const ao = window.__coastline.rendering.ambientOcclusion;
@@ -91,6 +101,20 @@ try {
   });
   assert.equal(await page.evaluate(() => window.__coastline.paused), false, 'DOM blur must not pause an active headset');
   await frames();
+  const aimAtMenu = async (vertical = .5, horizontal = .5) => page.evaluate(({ vertical, horizontal }) => {
+    const { camera, rig } = window.__coastline.rendering.vrCamera;
+    const panel = camera.children.find(child => child.isMesh && child.material.map);
+    panel.updateWorldMatrix(true, false);
+    const target = camera.position.clone().set(horizontal - .5, .5 - vertical, 0);
+    panel.localToWorld(target); rig.worldToLocal(target);
+    const origin = camera.position.clone().set(0, -.25, 0);
+    window.testRayMatrix = rig.matrixWorld.clone().identity().lookAt(origin, target, rig.up).setPosition(origin).toArray();
+  }, { vertical, horizontal });
+  await aimAtMenu(); await frames(); await press('right', 0);
+  assert.equal(await page.evaluate(() => window.__coastline.paused), true, 'pointing and pulling a trigger opens the actual Pause button');
+  await aimAtMenu(167 / 1024); await frames(); await press('right', 0);
+  assert.equal(await page.evaluate(() => window.__coastline.paused), false, 'the in-headset Resume button is clickable');
+  await page.evaluate(() => { window.testRayMatrix = null; });
   await button('right', 0, .8);
   await page.waitForFunction(() => window.__coastline.input.state.forward > .7);
   await page.evaluate(() => { window.testXR.inputSources[0].gamepad.axes[2] = .6; });
@@ -105,6 +129,14 @@ try {
   const after = await page.evaluate(() => ({ s: window.__coastline.vehicle.s, matrix: [...window.__coastline.rendering.vrCamera.camera.matrixWorld.elements], frames: window.__coastline.rendering.renderer.info.render.frame }));
   assert.equal(after.s, before.s); assert.notDeepEqual(after.matrix, before.matrix); assert.ok(after.frames > before.frames);
   const views = new Set();
+  // Paused, move once from Resume to the Camera menu entry; A selects it.
+  const menuMove = async value => {
+    await page.evaluate(value => { window.testXR.inputSources[0].gamepad.axes[3] = value; }, value);
+    await frames();
+    await page.evaluate(() => { window.testXR.inputSources[0].gamepad.axes[3] = 0; });
+    await frames();
+  };
+  await menuMove(1);
   for (let i = 0; i < 5; i++) {
     views.add(await page.evaluate(() => window.__coastline.rendering.viewLabel));
     await press('right', 4);
@@ -114,7 +146,25 @@ try {
   const screenshotStyle = await page.addStyleTag({ content: '#app > :not(canvas) { display: none !important; }' });
   await page.screenshot({ path: '.artifacts/vr-stereo.png' });
   await screenshotStyle.evaluate(element => element.remove());
+  // Route chooser, garage and settings are usable without ending the session.
+  await menuMove(1); await press('right', 4);
+  assert.equal(await page.locator('#journey-dialog').evaluate(dialog => dialog.open), true);
   await press('right', 5);
+  assert.equal(await page.locator('#journey-dialog').evaluate(dialog => dialog.open), false);
+  assert.equal(await page.evaluate(() => window.__coastline.paused), true);
+  await menuMove(1); await menuMove(1); await menuMove(1); await press('right', 4);
+  assert.equal(await page.locator('#car-dialog').evaluate(dialog => dialog.open), true);
+  await press('right', 5);
+  await menuMove(1); await menuMove(1); await menuMove(1); await menuMove(1); await menuMove(1);
+  const trafficBefore = await page.evaluate(() => window.__coastline.traffic.enabled);
+  await press('right', 4);
+  assert.equal(await page.evaluate(() => window.__coastline.traffic.enabled), !trafficBefore);
+  assert.equal(await page.evaluate(() => window.__coastline.vr.active), true);
+  await press('right', 5);
+  assert.equal(await page.evaluate(() => window.__coastline.paused), false);
+  await press('left', 3);
+  assert.equal(await page.evaluate(() => window.__coastline.paused), true);
+  await press('left', 3);
   assert.equal(await page.evaluate(() => window.__coastline.paused), false);
   await page.evaluate(() => { window.testXR.visibilityState = 'visible-blurred'; window.testXR.dispatchEvent(new Event('visibilitychange')); });
   assert.equal(await page.evaluate(() => window.__coastline.paused), true);
@@ -125,14 +175,20 @@ try {
   await page.waitForFunction(() => !window.__coastline.changingJourney);
   assert.equal(await page.evaluate(() => window.__coastline.vehicle.distance), 0);
   await page.evaluate(() => { window.__coastline.rendering.ambientOcclusion.render = window.originalAORender; });
-  await press('left', 5);
+  await press('right', 5);
+  await aimAtMenu(852 / 1024, 811 / 1024); await frames(); await press('right', 0);
+  await aimAtMenu(615 / 1024); await frames(); await press('right', 0);
   await page.waitForFunction(() => !window.__coastline.vr.active && !window.__coastline.rendering.renderer.xr.isPresenting);
+  await page.evaluate(() => { window.testRayMatrix = null; });
   assert.equal(await page.evaluate(() => window.__coastline.paused), true);
   assert.equal(await page.evaluate(() => window.__coastline.input.xrActive), false);
-  await page.locator('#enter-vr').click();
+  assert.equal(await page.evaluate(() => window.__coastline.rendering.viewLabel), desktopView);
+  assert.equal(await page.locator('#enter-vr').isVisible(), false);
+  assert.equal(await page.locator('#enter-vr-pause').isVisible(), true);
+  await page.locator('#enter-vr-pause').click();
   await page.waitForFunction(() => window.testXR.frames > 3);
   assert.equal(await page.evaluate(() => window.__coastline.vr.active), true);
   await press('left', 5);
   assert.deepEqual(errors, []);
-  console.log('VR browser checks passed: stereo, head tracking, driving, cameras, pause, focus, reset, exit, reentry and denied permission.');
+  console.log('VR browser checks passed: third-person default, stereo, head tracking, clickable pause/resume, controller menus, routes/garage/settings, menu-only entry, focus, reset, exit and reentry.');
 } finally { await browser.close(); }

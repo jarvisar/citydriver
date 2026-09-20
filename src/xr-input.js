@@ -26,22 +26,32 @@ export class XRInput {
       handbrake: Math.max(button(left, 1), button(right, 1)) > .5,
     };
     const buttons = {
-      view: button(right, 4) > .5, pause: button(right, 5) > .5,
+      view: button(right, 4) > .5, pause: button(right, 5) > .5 || button(left, 3) > .5,
       reset: button(left, 4) > .5, exitVR: button(left, 5) > .5,
       recenterVR: button(right, 3) > .5,
+      vrMenuPrevious: (left?.axes[3] ?? right?.axes[3] ?? 0) < -.5,
+      vrMenuNext: (left?.axes[3] ?? right?.axes[3] ?? 0) > .5,
     };
     const pressed = Object.keys(buttons).filter(action => buttons[action] && !this.previous[action]);
     this.previous = buttons;
+    // Pause must remain reachable while a trigger/stick is held after focus
+    // changes. Driving still requires neutral, and blocked sessions consume
+    // every edge so system-menu presses cannot leak back into the game.
+    if (!blocked) for (const action of ['exitVR', 'pause', 'recenterVR']) {
+      if (pressed.includes(action)) { this.state = {}; this.onAction(action); return; }
+    }
     const active = Object.values(state).some(Boolean) || Object.values(buttons).some(Boolean);
     if (blocked || this.requireNeutral) {
       this.state = {}; this.requireNeutral = blocked || active;
       return;
     }
     this.state = paused ? {} : state;
-    // Lifecycle actions also work while paused. Updating edges before callbacks
-    // lets pause/reset clear input without a held button firing again.
-    for (const action of ['exitVR', 'pause', 'recenterVR']) {
-      if (pressed.includes(action)) { this.onAction(action); return; }
+    if (paused) {
+      if (pressed.includes('vrMenuPrevious')) this.onAction('vrMenuPrevious');
+      if (pressed.includes('vrMenuNext')) this.onAction('vrMenuNext');
+      if (pressed.includes('view')) this.onAction('vrMenuConfirm');
+      if (pressed.includes('reset')) this.onAction('reset');
+      return;
     }
     if (pressed.includes('view')) this.onAction('view');
     if (pressed.includes('reset')) { this.onAction('reset'); return; }

@@ -57,17 +57,19 @@ Open the local URL printed by Vite. The server binds every interface, so the **N
 
 ## Quest / browser VR
 
-Open the **HTTPS** site in the Quest 3 browser, choose your route and car, then select **Enter VR** in the toolbar. It appears only when the browser reports immersive WebXR support. A plain HTTP Wi-Fi address such as `http://192.168.x.x:5173` cannot start WebXR; for headset development, serve the game through HTTPS with a certificate trusted by the headset. WebXR's secure-context requirement is described in the [WebXR specification](https://www.w3.org/TR/webxr/#secure-context).
+Open the **HTTPS** site in the Quest 3 browser, choose your route and car, then select **Enter VR** on the main menu or pause menu. It appears only when the browser reports immersive WebXR support and stays out of the driving toolbar. A plain HTTP Wi-Fi address such as `http://192.168.x.x:5173` cannot start WebXR; for headset development, serve the game through HTTPS with a certificate trusted by the headset. WebXR's secure-context requirement is described in the [WebXR specification](https://www.w3.org/TR/webxr/#secure-context).
 
-All five views support stereo rendering and head rotation/position tracking. The four overhead views use perspective equivalents of their existing framing; the chase view follows the car as usual. Press **A** to cycle cameras and **right stick press** to recenter your head position and direction.
+VR starts in **third-person view**, and restores your previous desktop camera when you exit. All five views support stereo rendering and head rotation/position tracking. The four overhead views use perspective equivalents of their existing positions; look down naturally to see the road. The VR rig follows camera heading only: the headset supplies all pitch and roll, so entering or recentering while looking down does not tilt the world. Press **A** while driving to cycle cameras and **right stick press** to recenter your position and heading.
 
 - **Left stick:** steer (right stick is a fallback when only the right controller is connected).
 - **Right trigger:** analog gas. **Left trigger:** analog brake, then reverse.
 - **Either grip:** strong brake.
-- **B:** pause/resume. Head tracking continues while paused.
+- **B / left stick click:** open the pause menu or resume; from a chooser, return to the pause menu. Head tracking continues while paused.
 - **X:** reset the current road. **Y:** exit VR.
 
-Exit VR to use the normal route, car, sound, and graphics menus. Leaving VR pauses the drive; headset system menus also pause it, and B resumes once the headset has focus again. Release held controls after entering, resuming, or reconnecting a controller before driving. Controls follow the [Quest Touch Plus profile](https://github.com/immersive-web/webxr-input-profiles/blob/main/packages/registry/profiles/meta/meta-quest-touch-plus.json).
+An on-screen **Pause** button is always available in VR: point a controller at it and pull its trigger. The in-headset pause menu includes resume, camera, routes, garage and paint presets, autodrive, traffic, sound, graphics quality, reset, recenter, and exit. Use **stick up/down and A** to choose, or point and pull a trigger; a dot marks your target. Longer menus have Previous/Next page buttons. B returns from a chooser or resumes. Custom paint color entry and browser-only settings remain on the regular page.
+
+Leaving VR pauses the drive; headset system menus also pause it, and B resumes once the headset has focus again. Release held controls after entering, resuming, or reconnecting a controller before driving. Pause remains available even while driving controls are held. Controls follow the [Quest Touch Plus profile](https://github.com/immersive-web/webxr-input-profiles/blob/main/packages/registry/profiles/meta/meta-quest-touch-plus.json).
 
 VR renders directly through [Three.js WebXR](https://threejs.org/docs/pages/WebXRManager.html), bypassing monoscopic ambient occlusion, with an 85% headset framebuffer scale and foveation. Desktop graphics settings are preserved and automatic quality sampling is suspended during VR. This support is for the website; Electron does not offer VR entry.
 

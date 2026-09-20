@@ -4,6 +4,16 @@ import * as THREE from 'three';
 import { XRInput } from '../src/xr-input.js';
 import { XRCameraRig } from '../src/xr-camera.js';
 import { BrowserVR } from '../src/vr.js';
+import { VRStatus } from '../src/vr-status.js';
+
+test('VR menu page buttons wrap correctly when the last page is partial', () => {
+  const menu = new VRStatus(new THREE.PerspectiveCamera());
+  menu.model = { items: Array.from({ length: 11 }, () => ({})) };
+  menu.update = () => {};
+  menu.page(-1); assert.equal(menu.selected, 6);
+  menu.page(1); assert.equal(menu.selected, 0);
+  menu.selected = 10; menu.page(-1); assert.equal(menu.selected, 0);
+});
 
 const controller = handedness => ({ handedness, gamepad: { mapping: 'xr-standard', axes: [0, 0, 0, 0], buttons: Array.from({ length: 7 }, () => ({ value: 0 })) } });
 function inputFixture() {
@@ -54,14 +64,53 @@ test('Quest shortcuts fire once, pause can resume, and input remains stopped whi
   const { left, right, actions, input, sources } = inputFixture();
   for (const [source, index, action] of [[right, 4, 'view'], [right, 5, 'pause'], [left, 4, 'reset'], [left, 5, 'exitVR'], [right, 3, 'recenterVR']]) {
     source.gamepad.buttons[index].value = 1;
-    input.update(sources, { paused: true }); input.update(sources, { paused: true });
+    input.update(sources); input.update(sources);
     assert.equal(actions.at(-1), action);
     assert.equal(actions.filter(item => item === action).length, 1);
-    assert.deepEqual(input.state, {});
     source.gamepad.buttons[index].value = 0; input.update(sources);
   }
   right.gamepad.buttons[0].value = 1; input.update(sources, { paused: true });
   assert.deepEqual(input.state, {}); assert.ok(!actions.includes('drive'));
+});
+
+test('pause remains reachable with held driving controls, including left stick click', () => {
+  const { left, right, actions, input, sources } = inputFixture();
+  right.gamepad.buttons[0].value = 1; input.clear(); input.update(sources);
+  left.gamepad.buttons[3].value = 1; input.update(sources); input.update(sources);
+  assert.deepEqual(actions, ['pause']); assert.deepEqual(input.state, {});
+  left.gamepad.buttons[3].value = 0; input.update(sources, { paused: true });
+  right.gamepad.buttons[5].value = 1; input.update(sources, { paused: true });
+  assert.deepEqual(actions, ['pause', 'pause']);
+});
+
+test('paused XR stick and A operate menus without driving or changing camera', () => {
+  const { left, right, actions, input, sources } = inputFixture();
+  left.gamepad.axes[3] = 1; input.update(sources, { paused: true }); input.update(sources, { paused: true });
+  left.gamepad.axes[3] = 0; input.update(sources, { paused: true });
+  left.gamepad.axes[3] = -1; input.update(sources, { paused: true });
+  left.gamepad.axes[3] = 0; right.gamepad.buttons[4].value = 1;
+  input.update(sources, { paused: true }); input.update(sources, { paused: true });
+  assert.deepEqual(actions, ['vrMenuNext', 'vrMenuPrevious', 'vrMenuConfirm']);
+  assert.deepEqual(input.state, {});
+});
+
+test('VR rig stays upright when entering or recentering with a tilted head on hills', () => {
+  const source = new THREE.PerspectiveCamera(), rig = new XRCameraRig();
+  const up = new THREE.Vector3(0, 1, 0);
+  for (const pitch of [-.8, -.3, .2]) {
+    source.quaternion.setFromEuler(new THREE.Euler(pitch, 1.2, .1, 'YXZ'));
+    const orientation = new THREE.Quaternion().setFromEuler(new THREE.Euler(-.4, .7, .25, 'YXZ'));
+    const pose = { transform: { position: new THREE.Vector3(0, 1.6, 0), orientation: { x: orientation.x, y: orientation.y, z: orientation.z, w: orientation.w } } };
+    rig.recenter(); rig.update(source, pose);
+    assert.ok(up.clone().applyQuaternion(rig.rig.quaternion).distanceTo(up) < 1e-10);
+    pose.transform.orientation = { x: 0, y: 0, z: 0, w: 1 }; rig.update(source, pose);
+    const worldHead = rig.rig.quaternion.clone().multiply(new THREE.Quaternion().copy(pose.transform.orientation));
+    assert.ok(up.clone().applyQuaternion(worldHead).distanceTo(up) < 1e-10, 'straightening your head restores a level horizon');
+    const before = rig.rig.position.clone();
+    pose.transform.position.y += .3; rig.update(source, pose);
+    assert.ok(before.distanceTo(rig.rig.position) < 1e-10, 'standing up does not move the rig');
+    assert.ok(new THREE.Vector3(0, .3, 0).applyQuaternion(rig.rig.quaternion).distanceTo(new THREE.Vector3(0, .3, 0)) < 1e-10);
+  }
 });
 
 test('VR rig centers initial pose, preserves later head motion and follows origin shifts', () => {
@@ -73,7 +122,8 @@ test('VR rig centers initial pose, preserves later head motion and follows origi
   const world = pose.transform.position.clone().applyMatrix4(rig.rig.matrixWorld);
   assert.ok(world.distanceTo(source.position) < 1e-10);
   const rotation = rig.rig.quaternion.clone().multiply(pose.transform.orientation);
-  assert.ok(rotation.angleTo(source.quaternion) < 1e-7);
+  const sourceYaw = new THREE.Euler().setFromQuaternion(source.quaternion, 'YXZ').y;
+  assert.ok(rotation.angleTo(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), sourceYaw)) < 1e-7);
   const start = rig.rig.position.clone();
   pose.transform.position.x += .2; rig.update(source, pose);
   assert.ok(start.distanceTo(rig.rig.position) < 1e-10, 'head translation is not canceled each frame');

@@ -33,7 +33,7 @@ const MENU_CRUISE_SPEED = TRAFFIC_CRUISE_SPEED * 1.1;
 // A chooser's ring holds its cards and paint chips; the pause screen's holds
 // resume, the garage and every driving, sound and graphics setting.
 const MENU_CARDS = '[data-journey], [data-car], [data-paint]';
-const PAUSE_CONTROLS = '#resume, #change-car, #autodrive, #traffic, #sound, #fullscreen, [data-quality], #soft-shading, .pwa-install-button';
+const PAUSE_CONTROLS = '#resume, #enter-vr-pause, #change-car, #autodrive, #traffic, #sound, #fullscreen, [data-quality], #soft-shading, .pwa-install-button';
 const mileageFormat = new Intl.NumberFormat('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 let paused = false, started = false, time = 0, hudTime = 0;
 const frameClock = new FrameClock();
@@ -336,6 +336,11 @@ async function boot() {
     async function action(name, routeNumber) {
       if (name === 'exitVR') { if (vr?.active) await vr.toggle(); return; }
       if (name === 'recenterVR') { rendering.vrCamera.recenter(); return; }
+      if (vr?.active && name.startsWith('vrMenu')) {
+        if (name === 'vrMenuConfirm') vrStatus.activate();
+        else vrStatus.move(name === 'vrMenuNext' ? 1 : -1);
+        return;
+      }
       if (name === 'fps') {
         fpsCounter.hidden = !fpsCounter.hidden;
         fpsCounter.textContent = 'FPS: …'; fpsStart = null; fpsFrames = 0;
@@ -350,7 +355,7 @@ async function boot() {
       }
       const chooser = openChooser();
       if (chooser) {
-        if (name === 'menuClose' || (name === 'car' && chooser === carDialog)) chooser.close();
+        if (name === 'menuClose' || (vr?.active && name === 'pause') || (name === 'car' && chooser === carDialog)) chooser.close();
         if (MENU_MOVES.includes(name)) moveMenuFocus(chooser, name);
         if (name === 'menuConfirm' && chooser.contains(document.activeElement)) document.activeElement.click();
         return;
@@ -415,10 +420,11 @@ async function boot() {
       toast(`Free driving ${enabled ? 'on' : 'off'}`);
     });
     vr = new BrowserVR({
-      renderer, buttons: [$('#enter-vr')], canEnter: () => !changingJourney && !openChooser(),
+      renderer, buttons: [$('#enter-vr'), $('#enter-vr-pause')], canEnter: () => !changingJourney && !openChooser(),
       onStart() {
         $('#vr-error').hidden = true;
         input.xrActive = true; input.clear();
+        rendering.enterVR(); rendering.update(vehicle.car, 0, world.origin); updateViewUi();
         rendering.vrCamera.recenter(); graphics.suspend();
         setPaused(false); start();
         audio.setHidden(!vr.visible); needsRender = true;
@@ -426,7 +432,8 @@ async function boot() {
       },
       onEnd() {
         input.xrActive = false; input.clear();
-        vrStatus.update(''); graphics.suspend();
+        vrStatus.update(null); graphics.suspend();
+        rendering.exitVR(); rendering.update(vehicle.car, 0, world.origin); updateViewUi();
         audio.setHidden(document.hidden); setPaused(true); needsRender = true;
         document.body.dataset.vr = 'false';
       },
@@ -548,6 +555,34 @@ async function boot() {
       $('.stick-help-line').textContent = thirdPerson ? '↓ Brake · Release to stop' : 'Release to stop';
       $('#touch-stick').setAttribute('aria-label', thirdPerson ? 'Virtual joystick: up to accelerate, left and right to steer, down to brake or reverse, release to stop' : 'Virtual joystick');
     }
+    function vrMenuModel() {
+      if (!vr.active) return null;
+      if (changingJourney) return { id: 'loading', title: 'Loading road…', items: [] };
+      const item = (label, name) => ({ label, activate: () => action(name) });
+      const chooser = openChooser();
+      if (chooser) {
+        const cars = chooser === carDialog;
+        const buttons = [...chooser.querySelectorAll(cars ? '[data-car], [data-paint]' : '[data-journey]')];
+        return { id: chooser.id, title: cars ? 'Garage & paint' : 'Choose a route', items: [
+          { label: '‹ Back to pause menu', activate: () => chooser.close() },
+          ...buttons.map(button => ({
+            label: (button.hasAttribute('data-paint') ? 'Paint: ' : '') + (button.getAttribute('aria-label') ?? button.querySelector('.chooser-card-title')?.textContent ?? button.textContent).trim() + (button.getAttribute('aria-current') === 'true' || button.getAttribute('aria-checked') === 'true' ? ' ✓' : ''),
+            activate: () => button.click(),
+          })),
+        ] };
+      }
+      if (!paused) return { id: 'driving', title: '', items: [item('Pause', 'pause')] };
+      const modes = ['auto', 'high', 'balanced', 'smooth', 'basic'];
+      return { id: 'pause', title: 'Paused', items: [
+        item('Resume drive', 'pause'), item(`Camera: ${rendering.viewLabel}`, 'view'),
+        item('Change route', 'journey'), item('Garage & paint', 'car'),
+        item(`Autodrive: ${autodrive.enabled ? 'on' : 'off'}`, 'autodrive'),
+        { label: `Traffic: ${traffic.enabled ? 'on' : 'off'}`, activate: () => $('#traffic').click() },
+        item(`Sound: ${$('#sound').getAttribute('aria-pressed') === 'true' ? 'on' : 'off'}`, 'sound'),
+        { label: `Graphics: ${graphics.mode}`, activate: () => graphics.setMode(modes[(modes.indexOf(graphics.mode) + 1) % modes.length]) },
+        item('Reset road', 'reset'), item('Recenter view', 'recenterVR'), item('Exit VR', 'exitVR'),
+      ] };
+    }
     const simulate = dt => {
       let state = started ? input.state : {};
       if (autodrive.enabled && (state.forward || state.brake || state.left || state.right || state.handbrake || state.touchStick)) action('autodrive');
@@ -562,6 +597,7 @@ async function boot() {
       traffic.update(dt, vehicle);
     };
     function frame(timestamp, xrFrame) {
+      vrStatus.update(vrMenuModel());
       if (vr.active) input.xr.update(vr.session.inputSources, { blocked: !vr.visible || changingJourney, paused });
       else input.gamepad.update({ blocked: document.hidden || !document.hasFocus() || changingJourney, paused, menu: openChooser() ? 'chooser' : openPauseMenu() ? 'pause' : false });
       const running = !paused && !hidden();
@@ -582,8 +618,11 @@ async function boot() {
       // drawing every headset frame so head tracking continues while stopped.
       const rendered = vr.active ? Boolean(xrFrame) : !document.hidden && (!paused || needsRender);
       if (rendered) {
-        vrStatus.update(vr.active ? changingJourney ? 'loading' : paused ? 'paused' : '' : '');
-        rendering.render(xrFrame); needsRender = false;
+        vrStatus.update(vrMenuModel());
+        rendering.render(xrFrame, () => {
+          vrStatus.point(xrFrame, renderer.xr.getReferenceSpace(), rendering.vrCamera.rig, vr.visible && !changingJourney);
+          vrStatus.update(vrMenuModel());
+        }); needsRender = false;
         if (!sceneReady) { sceneReady = true; $('#loading').classList.add('loaded'); }
       }
       updateFPS(timestamp, rendered);
