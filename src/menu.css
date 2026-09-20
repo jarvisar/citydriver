@@ -61,22 +61,12 @@ body .start-button:hover { background: var(--action-hover); box-shadow: inset 0 
 #welcome .start-button:hover { background: #fffef9; box-shadow: 0 0 0 5px #fffdf326, 0 12px 32px #10272040, inset 0 1px 0 #ffffff; }
 #welcome .start-button:focus-visible { outline: 3px solid var(--menu-ink); outline-offset: 8px; }
 #welcome .wheel-icon { width: 43px; height: 43px; }
-/* VR is a second way into the same drive, so it echoes the main button at a
-   quieter weight directly beneath it. */
-#welcome .vr-entry {
-  display: flex; align-items: center; gap: 10px;
-  width: clamp(186px, 19vw, 238px); max-width: 100%; min-height: 46px; margin-top: 14px; padding: 10px 22px;
-  border: 1px solid #fffdf34d; border-radius: 999px;
-  color: var(--menu-ink); background: linear-gradient(180deg, #ffffff26, #ffffff0f), #1027203d;
-  backdrop-filter: blur(10px);
-  box-shadow: inset 0 1px 0 #ffffff2e, 0 6px 18px #1027202e;
-  font-size: clamp(13px, 1.25vw, 16px); font-weight: 600; letter-spacing: -.2px; text-shadow: none;
-  transition: background .2s, transform .2s, box-shadow .2s;
+/* Share the main action's finish, with a smaller VR option beneath it. */
+#welcome .start-button.vr-entry {
+  width: clamp(208px, 22vw, 280px); min-height: 64px; margin-top: 14px; padding: 14px 24px; gap: 14px;
+  font-size: clamp(20px, 1.9vw, 23px); letter-spacing: -.4px;
 }
-#welcome .vr-entry:hover { background: linear-gradient(180deg, #ffffff38, #ffffff1a), #10272052; transform: translateY(-2px); box-shadow: inset 0 1px 0 #ffffff3d, 0 10px 26px #10272038; }
-#welcome .vr-entry:active { transform: translateY(1px); }
-#welcome .vr-entry:focus-visible { outline: 3px solid var(--menu-ink); outline-offset: 6px; }
-#welcome .vr-icon { width: 21px; height: 21px; }
+#welcome .vr-icon { width: 32px; height: 32px; }
 #welcome .menu-hint { margin-top: 16px; padding: 0; font-size: 11px; font-weight: 600; line-height: 1.5; letter-spacing: .3px; opacity: 1; text-shadow: 0 1px 3px #102720, 0 3px 12px #10272080; }
 body[data-control-help-dismissed=true] #welcome .start-hint { visibility: hidden; }
 #app:has(#welcome:not(.hidden)) .drive-actions {
@@ -133,8 +123,8 @@ button svg:not(.chooser-art) { stroke-linecap: round; stroke-linejoin: round; }
   #welcome .eyebrow { font-size: 8px; }
   #welcome .start-button { min-height: 60px; padding: 12px 26px; font-size: 22px; width: 242px; }
   #welcome .wheel-icon { width: 32px; height: 32px; }
-  #welcome .vr-entry { width: 198px; min-height: 40px; margin-top: 10px; padding: 8px 18px; font-size: 13px; }
-  #welcome .vr-icon { width: 18px; height: 18px; }
+  #welcome .start-button.vr-entry { width: 198px; min-height: 48px; margin-top: 10px; padding: 10px 18px; font-size: 18px; }
+  #welcome .vr-icon { width: 26px; height: 26px; }
   #welcome .menu-hint { margin-top: 9px; font-size: 10px; }
   .menu-actions { margin-top: 22px; }
   .pause-overlay > .start-button { margin-bottom: 18px; }
@@ -147,5 +137,5 @@ button svg:not(.chooser-art) { stroke-linecap: round; stroke-linejoin: round; }
   #welcome .eyebrow::before, #welcome .eyebrow::after { width: 14px; }
   .menu-actions { margin-top: 12px; }
   #welcome .start-button { min-height: 54px; font-size: 20px; }
-  #welcome .vr-entry { min-height: 38px; margin-top: 8px; }
+  #welcome .start-button.vr-entry { min-height: 44px; margin-top: 8px; padding-block: 8px; font-size: 17px; }
 }
