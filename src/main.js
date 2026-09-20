@@ -448,12 +448,12 @@ async function boot() {
       },
     });
     $('#change-journey').addEventListener('click', openJourneys);
-    // The route button rides the title screen's stack and returns to the
-    // toolbar for the drive, however the menu comes and goes.
+    // The route button rides the title screen's stack and leads the toolbar
+    // for the drive, however the menu comes and goes.
     function placeJourneyButton() {
       const button = $('#change-journey'), onMenu = !$('#welcome').classList.contains('hidden');
       for (const name of ['start-button', 'menu-secondary']) button.classList.toggle(name, onMenu);
-      if (onMenu) $('#enter-vr').before(button); else $('#view').after(button);
+      if (onMenu) $('#enter-vr').before(button); else $('.drive-actions').prepend(button);
     }
     new MutationObserver(placeJourneyButton).observe($('#welcome'), { attributeFilter: ['class'] });
     placeJourneyButton();
