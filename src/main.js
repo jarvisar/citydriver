@@ -130,7 +130,7 @@ async function boot() {
       if (started) return;
       // Reveal the menu already cruising, at a speed that respects traffic.
       vehicle.speed = MENU_CRUISE_SPEED;
-      const state = autodrive.update(vehicle, traffic, MENU_CRUISE_SPEED);
+      const state = autodrive.update(vehicle, traffic, MENU_CRUISE_SPEED, 0);
       vehicle.speed = state.touchDrive.amount * vehicle.stats.topSpeed;
       vehicle.update(0, state);
     }
@@ -588,7 +588,7 @@ async function boot() {
       if (autodrive.enabled && (state.forward || state.brake || state.left || state.right || state.handbrake || state.touchStick)) action('autodrive');
       // Cruise behind the welcome menu without toggling the player's setting
       // or showing a notification. Starting hands control straight to input.
-      if (!started || autodrive.enabled) state = autodrive.update(vehicle, traffic, started ? vehicle.stats.topSpeed : MENU_CRUISE_SPEED);
+      if (!started || autodrive.enabled) state = autodrive.update(vehicle, traffic, started ? vehicle.stats.topSpeed : MENU_CRUISE_SPEED, dt);
       if (state.touchStick) {
         if (rendering.camera.isPerspectiveCamera) Object.assign(state, thirdPersonDrivingInput(state.touchStick));
         else state.touchDrive = touchDrivingInput(state.touchStick, rendering.camera, vehicle.route, vehicle.s, vehicle.u, world.origin);

@@ -58,6 +58,14 @@ assert.match(await page.locator('#view').getAttribute('aria-label'), /Third-pers
 assert.equal(await page.evaluate(() => window.__coastline.rendering.camera.isPerspectiveCamera), true);
 await page.screenshot({ path: '.artifacts/coastline-third-person.png' });
 await page.keyboard.press('KeyV');
+assert.match(await page.locator('#view').getAttribute('aria-label'), /First-person view/);
+await page.waitForFunction(() => {
+  const { rendering, vehicle } = window.__coastline;
+  return rendering.camera.isPerspectiveCamera && rendering.camera.position.distanceTo(vehicle.car.position) < 3;
+});
+assert.equal(await page.evaluate(() => window.__coastline.vehicle.car.visible), true, 'render restores exterior visibility');
+await page.screenshot({ path: '.artifacts/coastline-first-person.png' });
+await page.keyboard.press('KeyV');
 await page.waitForFunction(() => window.__coastline.rendering.camera.top > 113);
 assert.match(await page.locator('#view').getAttribute('aria-label'), /Scenic view/);
 await page.keyboard.press('KeyV');

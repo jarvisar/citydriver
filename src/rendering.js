@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { fitSunShadow, stabilizeShadowFiltering } from './shadows.js';
 import { ThirdPersonCamera } from './third-person-camera.js';
+import { FirstPersonCamera } from './first-person-camera.js';
 import { AmbientOcclusion } from './ambient-occlusion.js';
 import { Graphics, renderScale } from './graphics.js';
 import { XRCameraRig } from './xr-camera.js';
@@ -40,6 +41,8 @@ export function createRendering(canvas, graphics = new Graphics()) {
   scene.add(sun); scene.add(sun.target);
   const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 1, 1200);
   const thirdPerson = new ThirdPersonCamera();
+  const firstPerson = new FirstPersonCamera();
+  let followedCar;
   const vrCamera = new XRCameraRig();
   scene.add(vrCamera.rig);
   renderer.xr.cameraAutoUpdate = false;
@@ -63,8 +66,8 @@ export function createRendering(canvas, graphics = new Graphics()) {
   const framingOffset = new THREE.Vector3();
   const touchScreen = window.matchMedia('(any-pointer: coarse)');
   const sunOffset = new THREE.Vector3(-110, 240, 100);
-  const views = [{ height: 235, label: 'Scenic view' }, { height: 165, label: 'Medium view' }, { height: 115, label: 'Close view' }, { height: 75, label: 'Extra close view' }, { height: 115, label: 'Third-person view', thirdPerson: true }];
-  const activeCamera = () => views[view].thirdPerson ? thirdPerson.camera : camera;
+  const views = [{ height: 235, label: 'Scenic view' }, { height: 165, label: 'Medium view' }, { height: 115, label: 'Close view' }, { height: 75, label: 'Extra close view' }, { height: 115, label: 'Third-person view', thirdPerson: true }, { height: 115, label: 'First-person view', firstPerson: true }];
+  const activeCamera = () => views[view].firstPerson ? firstPerson.camera : views[view].thirdPerson ? thirdPerson.camera : camera;
   let initialized = false; let view = touchScreen.matches ? 2 : 1; let viewHeight = views[view].height; let previousOrigin = 0;
   let snowy = false;
   let journey = 'coast';
@@ -78,9 +81,9 @@ export function createRendering(canvas, graphics = new Graphics()) {
   };
   function updateFog() {
     const profile = fogProfiles[journey];
-    // Keep the miniature views' atmosphere; fade only distant third-person scenery.
+    // Keep the miniature views' atmosphere; fade distant driving-view scenery.
     // Matching the sky exactly lets fully faded terrain disappear without a seam.
-    if (views[view].thirdPerson) {
+    if (activeCamera().isPerspectiveCamera) {
       scene.fog.color.copy(scene.background);
       scene.fog.near = profile.thirdNear; scene.fog.far = profile.thirdFar;
     } else {
@@ -96,9 +99,11 @@ export function createRendering(canvas, graphics = new Graphics()) {
     const size = viewHeight * (aspect < 1 ? 1.12 : 1);
     camera.left = -size * aspect / 2; camera.right = size * aspect / 2; camera.top = size / 2; camera.bottom = -size / 2; camera.updateProjectionMatrix();
     thirdPerson.resize(aspect);
+    firstPerson.resize(aspect);
     if (initialized) fitSunShadow(activeCamera(), sun, journey === 'jungle' ? sun.target.position.y : 0, previousOrigin);
   }
   function update(car, dt, origin) {
+    followedCar = car;
     const originShift = origin - previousOrigin; follow.z += originShift; previousOrigin = origin;
     if (!initialized) { follow.copy(car.position); initialized = true; }
     // Follow the car across the ground quickly and up the hill slowly. The two
@@ -127,6 +132,7 @@ export function createRendering(canvas, graphics = new Graphics()) {
     camera.position.copy(target).add(cameraOffset); camera.lookAt(target);
     camera.userData.focusDistance = cameraOffset.length();
     if (views[view].thirdPerson) { thirdPerson.update(car, dt); target.copy(car.position); }
+    if (views[view].firstPerson) { firstPerson.update(car, dt); target.copy(car.position); }
     sun.position.copy(target).add(sunOffset); sun.target.position.copy(target);
     fitSunShadow(activeCamera(), sun, journey === 'jungle' ? sun.target.position.y : 0, origin);
   }
@@ -185,21 +191,32 @@ export function createRendering(canvas, graphics = new Graphics()) {
     renderer.toneMappingExposure = desert ? .92 : 1.02;
   }
   setJourney('coast');
+  function draw(viewCamera, stereo = false) {
+    // Hide the player's exterior for the whole first-person draw, including
+    // shadows and AO. Restore it for other views and after render failures.
+    const car = views[view].firstPerson ? followedCar : null;
+    const visible = car?.visible;
+    if (car) car.visible = false;
+    try {
+      if (stereo) renderer.render(scene, viewCamera);
+      else ambientOcclusion.render(viewCamera);
+    } finally { if (car) car.visible = visible; }
+  }
   function render(frame, beforeXRRender) {
     if (renderer.xr.isPresenting) {
       const pose = frame?.getViewerPose(renderer.xr.getReferenceSpace());
       vrCamera.update(activeCamera(), pose);
       renderer.xr.updateCamera(vrCamera.camera);
       beforeXRRender?.();
-      if (!renderer.xr.isPresenting) { ambientOcclusion.render(activeCamera()); return; }
+      if (!renderer.xr.isPresenting) { draw(activeCamera()); return; }
       // The AO compositor is a monoscopic screen pass. Render the scene
       // directly so Three.js draws both headset eyes with their own lenses.
-      renderer.render(scene, vrCamera.camera);
-    } else ambientOcclusion.render(activeCamera());
+      draw(vrCamera.camera, true);
+    } else draw(activeCamera());
   }
-  function setView(index) { view = index; updateFog(); thirdPerson.snap(); return views[view].label; }
+  function setView(index) { view = index; updateFog(); thirdPerson.snap(); firstPerson.snap(); return views[view].label; }
   let desktopView;
   function enterVR() { desktopView = view; setView(views.findIndex(view => view.thirdPerson)); }
   function exitVR() { if (desktopView !== undefined) setView(desktopView); desktopView = undefined; }
-  return { renderer, scene, graphics, ambientOcclusion, vrCamera, render, enterVR, exitVR, toggleAO() { return graphics.toggleAmbientOcclusion(); }, get camera() { return activeCamera(); }, update, resize, recordFrame, setJourney, get viewLabel() { return views[view].label; }, toggleView() { return setView((view + 1) % views.length); }, snap() { initialized = false; thirdPerson.snap(); } };
+  return { renderer, scene, graphics, ambientOcclusion, vrCamera, render, enterVR, exitVR, toggleAO() { return graphics.toggleAmbientOcclusion(); }, get camera() { return activeCamera(); }, update, resize, recordFrame, setJourney, get viewLabel() { return views[view].label; }, toggleView() { return setView((view + 1) % views.length); }, snap() { initialized = false; thirdPerson.snap(); firstPerson.snap(); } };
 }

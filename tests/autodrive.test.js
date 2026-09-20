@@ -7,6 +7,7 @@ import { Traffic, TRAFFIC_CRUISE_SPEED } from '../src/traffic.js';
 import { CAR_IDS } from '../src/cars.js';
 import { coastalDrivingRoute } from '../src/world/route.js';
 import { JOURNEYS } from '../src/journeys.js';
+import { FirstPersonCamera } from '../src/first-person-camera.js';
 
 const straight = {
   frame: s => ({ x: 0, y: 0, z: -s, nx: 1, nz: 0, angle: 0, scale: 1 }),
@@ -69,6 +70,52 @@ test('passes a slower car and returns to the right lane without contact', () => 
   assert.equal(f.collisions(), 0);
   assert.ok(f.player.u > 2.3);
   assert.equal(f.auto.passing, null);
+  f.dispose();
+});
+
+test('passing and merging ease the car and windshield view across simulation rates', () => {
+  const samples = [];
+  for (const fps of [30, 60, 120]) for (const id of ['auto', 'formula']) {
+    const f = setup(id); arrange(f, [55]);
+    f.player.speed = f.player.stats.topSpeed;
+    const camera = new FirstPersonCamera(); camera.update(f.player.car, 0);
+    let passedLeft = false, mergedRight = false, peakTurn = 0;
+    for (let i = 0; i < 14 * fps; i++) {
+      const before = f.player.heading, rotation = camera.camera.quaternion.clone();
+      f.player.update(1 / fps, f.auto.update(f.player, f.traffic, f.player.stats.topSpeed, 1 / fps));
+      f.traffic.update(1 / fps, f.player);
+      camera.update(f.player.car, 1 / fps);
+      const rate = Math.abs(f.player.heading - before) * fps;
+      peakTurn = Math.max(peakTurn, rate);
+      assert.ok(rate < .65, `${id}/${fps}: no sudden heading change on pull-out or merge (${rate})`);
+      assert.ok(camera.camera.quaternion.angleTo(rotation) * fps < .65, 'windshield view also turns smoothly');
+      assert.ok(Math.abs(f.player.u) < 2.41, 'settle inside the lane without overshoot');
+      passedLeft ||= f.player.u < -2;
+      mergedRight ||= passedLeft && f.player.u > 2.3;
+      if (i === fps - 1 && id === 'auto') samples.push(f.player.u);
+    }
+    assert.ok(passedLeft && mergedRight, 'complete the pass and merge');
+    assert.ok(peakTurn > .1, 'exercise steering rather than staying in one lane');
+    assert.equal(f.collisions(), 0);
+    f.dispose();
+  }
+  assert.ok(Math.max(...samples) - Math.min(...samples) < .08, 'lane-change timing is consistent');
+});
+
+test('disappearing traffic eases the merge, and reset discards stale steering', () => {
+  const f = setup(); arrange(f, [55]);
+  f.player.speed = f.player.stats.topSpeed;
+  f.step(.5);
+  assert.ok(f.auto.passing);
+  const before = f.player.heading;
+  f.traffic.setEnabled(false, f.player);
+  f.step(1 / 60);
+  assert.equal(f.auto.passing, null);
+  assert.ok(Math.abs(f.player.heading - before) < .011);
+  f.player.reset(); f.auto.reset();
+  const input = f.auto.update(f.player, f.traffic, f.player.stats.topSpeed, 0);
+  assert.equal(input.touchDrive.across, 0);
+  assert.equal(input.touchDrive.heading, f.player.heading);
   f.dispose();
 });
 

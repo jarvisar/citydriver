@@ -160,7 +160,14 @@ export class DrivingController {
     previous?.removeFromParent();
     this.carId = carId;
     Object.assign(this, createCar(carId));
-    const { width, length } = carEntry(carId).shape;
+    const entry = carEntry(carId);
+    const { width, length, cabin, cabinZ, cabinY = 1.22, drop = 0 } = entry.shape;
+    // Center the view just in front of the windshield for every body shape.
+    // Traffic-shaped cabins slope back by .24 m at the top of the glass.
+    const glassSlope = entry.kind === 'classic' ? 0 : .24 * .7;
+    this.car.userData.driverEye = entry.kind === 'formula'
+      ? new THREE.Vector3(0, .88, -.76)
+      : new THREE.Vector3(0, cabinY + cabin[1] * .7 - drop, cabinZ - cabin[2] / 2 + glassSlope - .18);
     this.spec = { name: carId, width, length };
     this.stats = carStats(carId);
     parent?.add(this.car);

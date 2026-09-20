@@ -44,9 +44,11 @@ export class ThirdPersonCamera {
     }
     this.forward.set(Math.sin(this.heading), 0, -Math.cos(this.heading));
     this.camera.position.copy(car.position).addScaledVector(this.forward, -14);
-    this.camera.position.y = this.height + 8 - Math.sin(this.pitch) * 14;
-    this.target.copy(car.position).addScaledVector(this.forward, 5);
-    this.target.y = this.height + 1 + Math.sin(this.pitch) * 5;
+    // A lower chase position and a higher, farther aim show more of the road
+    // and horizon, with the car sitting in the lower part of the frame.
+    this.camera.position.y = this.height + 4.5 - Math.sin(this.pitch) * 14;
+    this.target.copy(car.position).addScaledVector(this.forward, 7);
+    this.target.y = this.height + 2.2 + Math.sin(this.pitch) * 7;
     this.camera.lookAt(this.target);
     this.camera.updateMatrixWorld();
   }

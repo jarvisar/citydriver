@@ -137,11 +137,11 @@ try {
     await frames();
   };
   await menuMove(1);
-  for (let i = 0; i < 5; i++) {
+  for (let i = 0; i < 6; i++) {
     views.add(await page.evaluate(() => window.__coastline.rendering.viewLabel));
     await press('right', 4);
   }
-  assert.equal(views.size, 5);
+  assert.equal(views.size, 6);
   await press('right', 3);
   const screenshotStyle = await page.addStyleTag({ content: '#app > :not(canvas) { display: none !important; }' });
   await page.screenshot({ path: '.artifacts/vr-stereo.png' });
