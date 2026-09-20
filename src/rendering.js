@@ -96,7 +96,9 @@ export function createRendering(canvas, graphics = new Graphics()) {
   function resize() {
     const width = window.innerWidth, height = window.innerHeight;
     const aspect = width / height;
-    const size = viewHeight * (aspect < 1 ? 1.12 : 1);
+    // The alpine road sits high above its lake. Portrait needs room for both
+    // elevations; landscape already has that room across the diagonal view.
+    const size = viewHeight * (aspect < 1 ? (snowy ? 1.55 : 1.12) : 1);
     camera.left = -size * aspect / 2; camera.right = size * aspect / 2; camera.top = size / 2; camera.bottom = -size / 2; camera.updateProjectionMatrix();
     thirdPerson.resize(aspect);
     firstPerson.resize(aspect);
@@ -122,7 +124,12 @@ export function createRendering(canvas, graphics = new Graphics()) {
     // Shorten the look-ahead in close view so the car stays onscreen in portrait layouts.
     const framing = Math.min(1, viewHeight / 165);
     target.copy(follow).addScaledVector(lookAhead, framing);
-    if (snowy) { target.y -= 14 * framing; target.z += 18 * framing; }
+    if (snowy) {
+      const portrait = window.innerWidth < window.innerHeight;
+      target.y -= (portrait ? 60 : 29) * framing;
+      if (portrait) target.x -= 8 * framing;
+      target.z += 22 * framing;
+    }
     if (touchScreen.matches || window.innerWidth < window.innerHeight) {
       // Ease the desktop framing slightly toward center without changing vertical look-ahead.
       const lateralOffset = framingOffset.copy(target).sub(follow).dot(cameraRight);
@@ -141,6 +148,7 @@ export function createRendering(canvas, graphics = new Graphics()) {
   function setJourney(id) {
     journey = fogProfiles[id] ? id : 'coast';
     snowy = id === 'snow';
+    resize();
     if (id === 'snow') {
       scene.background.set('#111f2b'); updateFog();
       sky.color.set('#91afca'); sky.groundColor.set('#2b3b4c'); sky.intensity = .72;

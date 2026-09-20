@@ -4,8 +4,8 @@ import { CHUNK_LENGTH, randomAt, smoothstep } from './route.js';
 import { alpineLake, snowPosition, LAKE_LEVEL } from './snow-route.js';
 
 export const lakeClock = { value: 0 };
-const water = new THREE.MeshStandardMaterial({ color: '#365e70', roughness: .36, metalness: .18,
-  emissive: '#203d51', emissiveIntensity: .28 });
+const water = new THREE.MeshStandardMaterial({ color: '#396d7e', roughness: .36, metalness: .18,
+  emissive: '#264b60', emissiveIntensity: .36 });
 const ice = new THREE.MeshStandardMaterial({ color: '#8aafbb', roughness: .48, metalness: .08, flatShading: true });
 const noise = /* glsl */`
   float lakeHash(vec2 p) { return fract(sin(dot(mod(p, 256.0), vec2(127.1, 311.7))) * 43758.5453); }

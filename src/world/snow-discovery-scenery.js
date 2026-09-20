@@ -9,7 +9,7 @@ const vector = (x, y, z) => new THREE.Vector3(x, y, z);
 
 // Heights sampled from the rendered mountain, so footings and ice meet the
 // facets the player actually sees rather than the smooth analytic surface.
-function terrainSampler(chunk, x, z, reach) {
+export function terrainSampler(chunk, x, z, reach) {
   const position = chunk.terrain?.geometry.attributes.position, faces = [];
   for (let i = 0; position && i < position.count; i += 3) {
     let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;

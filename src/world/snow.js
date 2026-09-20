@@ -4,7 +4,7 @@ import { finalizeChunkTransforms } from './chunk-transforms.js';
 import { splitBatch } from './instance-batches.js';
 import { updateResidentChunks } from './resident.js';
 import { CHUNK_LENGTH, randomAt, seededRandom, smoothstep } from './route.js';
-import { SNOW_STEP, SNOW_COLUMN_COUNT, LAMP_SPACING, snowVertex, snowPosition, snowGroundHeight, snowRoadHeight, snowFrame, snowBridgeAt, lampAt, summitForCell, terrainPocket, alpineLake, onLake } from './snow-route.js';
+import { SNOW_STEP, SNOW_COLUMN_COUNT, LAMP_SPACING, snowVertex, snowPosition, snowGroundHeight, snowRoadHeight, snowFrame, snowBridgeAt, lampAt, terrainPocket, alpineLake, onLake, alpineExposure } from './snow-route.js';
 import { alpineRockVariants } from './alpine-rocks.js';
 import { alpinePines } from './alpine-pines.js';
 import { buildAlpineLake, lakeClock } from './alpine-lake.js';
@@ -12,6 +12,7 @@ import { CABIN_SPACING, alpineCabin, nearCabin, buildAlpineCabin } from './alpin
 import { Snowfall } from './snowfall.js';
 import { snowDiscoveries, snowDiscoveryClears } from './snow-discoveries.js';
 import { buildSnowDiscoveries, animateSnowDiscoveries } from './snow-discovery-scenery.js';
+import { buildAlpineLandmarks, nearAlpineRelay } from './alpine-landmarks.js';
 
 const material = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: .95, flatShading: true, ...extra });
 const terrainMaterial = material('#ffffff', { vertexColors: true });
@@ -20,7 +21,6 @@ const snowMaterial = material('#c7d2df');
 // material shared by instanced and plain meshes makes the renderer
 // re-derive its program on every draw call.
 const snowBankMaterial = material('#c7d2df');
-const rockMaterial = material('#4b5870');
 const stoneMaterial = material('#ffffff');
 const pineMaterial = material('#ffffff', { side: THREE.DoubleSide });
 const metalMaterial = material('#687688', { metalness: .2 });
@@ -33,11 +33,10 @@ const edgeMaterial = material('#b1becf');
 const timberMaterial = material('#7d6a5c', { roughness: .9, emissive: '#5a4636', emissiveIntensity: .24 });
 const glowMaterial = new THREE.MeshBasicMaterial({ color: '#ffe0a0', toneMapped: false });
 const boxGeometry = new THREE.BoxGeometry(1, 1, 1);
-const rockGeometry = new THREE.IcosahedronGeometry(1, 0);
 const poleGeometry = new THREE.CylinderGeometry(1, 1, 1, 6);
 const dummy = new THREE.Object3D(), up = new THREE.Vector3(0, 1, 0);
-registerChunkResources('snow', { terrainMaterial, snowMaterial, snowBankMaterial, rockMaterial, stoneMaterial, pineMaterial, metalMaterial,
-  barkMaterial, roadMaterial, lineMaterial, edgeMaterial, timberMaterial, glowMaterial, boxGeometry, rockGeometry, poleGeometry, alpinePines, alpineRockVariants });
+registerChunkResources('snow', { terrainMaterial, snowMaterial, snowBankMaterial, stoneMaterial, pineMaterial, metalMaterial,
+  barkMaterial, roadMaterial, lineMaterial, edgeMaterial, timberMaterial, glowMaterial, boxGeometry, poleGeometry, alpinePines, alpineRockVariants });
 
 // Road ribbons, guardrails and stakes stop at the abutments of a timber trestle.
 function onDeck(a, b) {
@@ -100,6 +99,7 @@ export class SnowChunk {
       if (cabin.s >= this.start && cabin.s < this.start + CHUNK_LENGTH) this.group.add(buildAlpineCabin(i, this.start));
     }
     buildSnowDiscoveries(this, this.discoveries);
+    buildAlpineLandmarks(this);
     finalizeChunkTransforms(this.group);
   }
   addMesh(g, mat, name) {
@@ -123,9 +123,9 @@ export class SnowChunk {
           const s = tri.reduce((sum, p) => sum + p.s, 0) / 3;
           const u = tri.reduce((sum, p) => sum + p.u, 0) / 3;
           const highSnow = tri.reduce((sum, p) => sum + p.y, 0) / 3 > snowRoadHeight(s) + 54;
-          const exposure = .5 + .5 * Math.sin(s / 29 + u / 19);
-          const snowy = Math.abs(cross.y) > (highSnow ? .5 : .66 + exposure * .07);
-          const color = new THREE.Color(snowy ? '#c2cddb' : '#4f5d6e');
+          const exposure = alpineExposure(s, u);
+          const snowy = Math.abs(cross.y) > (highSnow ? .46 : .53 + exposure * .22);
+          const color = new THREE.Color(snowy ? '#c9d5e3' : '#566475');
           // Broad tonal changes let the actual fracture planes describe the
           // mountain, with only a little variation between adjacent facets so
           // each stratum riser reads as one dark plane.
@@ -171,7 +171,7 @@ export class SnowChunk {
     const pines = alpinePines.map(() => []), caps = alpinePines.map(() => []);
     const rocks = alpineRockVariants.map(() => []), rockCaps = alpineRockVariants.map(() => []);
     const point = (s, u, y) => { const p = snowPosition(s, u, y); return [p.x, p.y, p.z + this.start]; };
-    const clearOfDiscoveries = (s, u, radius) => snowDiscoveryClears(s, u, this.discoveries, radius);
+    const clearOfDiscoveries = (s, u, radius) => snowDiscoveryClears(s, u, this.discoveries, radius) && !nearAlpineRelay(s, u, radius);
     const stone = (s, u, size, snowy = true, tall = false) => {
       if (onLake(s, u, size + .8) || nearCabin(s, u) || !clearOfDiscoveries(s, u, size)) return;
       const variant = Math.floor(random() * rocks.length);
@@ -217,6 +217,7 @@ export class SnowChunk {
       for (let j = 0; j < count; j++) {
         const t = s + (random() - .5) * 9, v = u + (random() - .5) * 7;
         if (t < this.start || t >= this.start + CHUNK_LENGTH || Math.abs(v) < 12 || onLake(t, v, 4)) continue;
+        if (alpineExposure(t, v) > .78 && j > 0) continue;
         if (Math.abs(snowGroundHeight(t, v + 1) - snowGroundHeight(t, v - 1)) > 1.5) continue;
         pine(t, v, snowGroundHeight(t, v), size * (.8 + random() * .5), random() * Math.PI);
       }
@@ -273,11 +274,6 @@ export class SnowChunk {
     });
     instances(this.group, boxGeometry, metalMaterial, metal, 'guardrails-and-lamps');
     instances(this.group, boxGeometry, glowMaterial, lamps, 'amber-lanterns');
-    const cell = Math.floor((this.start - 76) / 280);
-    for (let i = cell; i <= cell + 1; i++) {
-      const summit = summitForCell(i);
-      if ((i % 3 + 3) % 3 === 0 && summit.s >= this.start && summit.s < this.start + CHUNK_LENGTH) this.buildRelay(point, summit);
-    }
   }
   buildBridge(point, random, stone) {
     // A timber trestle carries the road over each stream gully. Planks, bents
@@ -349,24 +345,6 @@ export class SnowChunk {
     }
     instances(this.group, boxGeometry, timberMaterial, timber, 'timber-trestle');
     instances(this.group, boxGeometry, snowMaterial, caps, 'trestle-snow');
-  }
-  buildRelay(point, summit) {
-    // A tiny mountaintop relay hut and antenna echo the reference's summit detail.
-    const s = summit.s, u = summit.u, y = snowGroundHeight(s, u);
-    instances(this.group, boxGeometry, rockMaterial, [{ p: point(s, u, y + 2.1), scale: [5.2, 4.2, 5] }], 'relay-hut');
-    instances(this.group, boxGeometry, snowMaterial, [{ p: point(s, u, y + 4.4), scale: [5.8, .6, 5.7] }], 'relay-roof');
-    instances(this.group, boxGeometry, glowMaterial, [{ p: point(s, u - 2.62, y + 2.4), scale: [.07, 1.1, 1.1] }], 'relay-window');
-    const metal = [];
-    for (const ds of [-2, 2]) for (const du of [-2, 2]) {
-      const ground = snowGroundHeight(s + ds, u + du) - 3;
-      metal.push({ p: point(s + ds, u + du, (y + ground) / 2), scale: [.22, Math.max(.2, y - ground), .22] });
-    }
-    const towerY = snowGroundHeight(s, u + 7) - 1;
-    for (const du of [-1, 1]) for (const ds of [-1, 1]) metal.push({ p: point(s + ds, u + 7 + du, towerY + 8), scale: [.14, 16, .14] });
-    for (let h = 2; h < 16; h += 3) metal.push({ p: point(s, u + 7, towerY + h), scale: [2.2, .15, 2.2] });
-    metal.push({ p: point(s, u + 7, towerY + 17), scale: [.08, 5, .08] });
-    instances(this.group, boxGeometry, metalMaterial, metal, 'summit-relay');
-    instances(this.group, rockGeometry, edgeMaterial, [{ p: point(s, u + 5.8, towerY + 13), scale: [.25, 1.15, .8] }], 'relay-dish');
   }
   dispose() {
     this.group.removeFromParent(); for (const g of this.owned) g.dispose();

@@ -8,7 +8,10 @@ export const ledgeEdge = s => -23 - 7 * Math.sin(s / 91 + .8) - 4 * Math.sin(s /
 
 export const LAKE_LEVEL = -4;
 export function alpineLake(s) {
-  return { near: ledgeEdge(s) - 64 - 12 * Math.sin(s / 117 + .6) - 6 * Math.sin(s / 39),
+  // Sheltered coves reach toward the road; projecting spurs still carry tall
+  // cliffs. The shorter descent exposes water in the portrait driving view.
+  return { near: ledgeEdge(s) - 38 - 7 * Math.sin(s / 117 + .6) - 3 * Math.sin(s / 39)
+      - 30 * smoothstep(-.25, .4, Math.sin(s / 310 - 1)),
     far: -306 + 22 * Math.sin(s / 211 + 1) + 11 * Math.sin(s / 71), y: LAKE_LEVEL };
 }
 export function onLake(s, u, margin = 0) {
@@ -74,9 +77,13 @@ export function mountainHeight(s, u) {
   const cell = Math.floor((s - 76) / 280);
   for (let i = cell - 1; i <= cell + 1; i++) {
     const summit = summitForCell(i);
-    // Elongated, pointed mountain masses meet at saddles along the route.
-    // Their far slopes descend again, producing summits rather than terraces.
-    const distance = Math.hypot((s - summit.s) / summit.rs, (u - summit.u) / summit.ru);
+    // Unequal flanks and oblique ridges break the repeated cone silhouette.
+    // Each peak keeps its own crown and descends into a broad snowy saddle.
+    const along = (s - summit.s) / summit.rs;
+    const across = (u - summit.u) / summit.ru;
+    const skew = across + along * (.22 + randomAt(i, 623) * .24);
+    const distance = Math.max(Math.abs(along) * (.78 + (along > 0 ? .2 : 0)) + Math.abs(skew) * .38,
+      Math.abs(skew) + Math.abs(along) * .19);
     peak = Math.max(peak, summit.height * Math.max(0, 1 - distance));
   }
   const apron = (6 + 5 * Math.sin(s / 94 + u / 67) ** 2) * smoothstep(11, 34, u);
@@ -124,27 +131,38 @@ export function snowBaseHeight(s, u) {
       return lake.y + .45 - 5 * smoothstep(0, 9, bankDistance) - 6 * smoothstep(9, 65, bankDistance);
     }
     const edge = ledgeEdge(s), distance = edge - u, width = edge - lake.near;
-    const t = Math.max(0, Math.min(1, distance / width));
+    // A narrow snow bench at the foot of the cliff gives cabins and landings
+    // dry approaches while the bluff does most of its descending above them.
+    const t = Math.max(0, Math.min(1, distance / (width - 7)));
     const warp = (Math.sin(s / 31 + .5) * .2 + Math.sin(s / 13 - .7) * .08) * Math.sin(t * Math.PI);
     const shoulder = h + smoothstep(-7, -13, u) * (1.1 + .55 * Math.sin(s / 17));
-    const slope = lerp(shoulder, lake.y + .45, smoothstep(0, 1, t + warp));
+    const shore = lake.y + .45 + .025 * Math.min(7, u - lake.near);
+    const slope = lerp(shoulder, shore, smoothstep(0, 1, t + warp));
     const fissure = 2.3 * (.5 + .5 * Math.sin(s / 8.7 + u / 37)) ** 7 * smoothstep(0, 12, distance);
     const bluff = slope + (alpineRelief(s, u) - fissure) * (1 - smoothstep(.45, .78, t));
     // The bluff below the road drops in a few tall tiers, easing off at the
     // ledge and again above the shore so both edges stay exact.
-    return strata(bluff, s, u, 19, .85 * smoothstep(.03, .14, t) * smoothstep(11, 26, u - lake.near));
+    return strata(bluff, s, u, 19, (.4 + alpineExposure(s, u) * .28)
+      * smoothstep(.03, .14, t) * smoothstep(8, 19, u - lake.near));
   }
   const fissure = 2.8 * (.5 + .5 * Math.sin(s / 7.3 + u / 39)) ** 7
     * smoothstep(14, 25, u) * (1 - smoothstep(48, 73, u));
   const rise = h + mountainHeight(s, u) - fissure + alpineRelief(s, u);
-  return strata(rise, s, u, 16, .85 * smoothstep(9, 24, u) * (1 - smoothstep(110, 175, u)));
+  return strata(rise, s, u, 16, (.3 + alpineExposure(s, u) * .55)
+    * smoothstep(9, 24, u) * (1 - smoothstep(110, 175, u)));
+}
+
+// Broad wind-exposed ribs alternate with sheltered, snow-filled bowls. Share
+// the field between the landform, snow cover and fir groves, not triangle noise.
+export function alpineExposure(s, u) {
+  return smoothstep(-.75, .75, Math.sin(s / 83 + u / 59) * .7 + Math.sin(s / 151 - u / 41) * .45);
 }
 
 export function terrainPocket(index, side) {
   const seed = index * 2 + (side > 0 ? 1 : 0);
   const s = index * 80 + 14 + randomAt(seed, 730) * 48;
   const slopeWidth = ledgeEdge(s) - alpineLake(s).near;
-  return { s, u: side < 0 ? ledgeEdge(s) - 12 - randomAt(seed, 731) * (slopeWidth - 38) : 22 + randomAt(seed, 731) * 25,
+  return { s, u: side < 0 ? ledgeEdge(s) - 9 - randomAt(seed, 731) * Math.max(1, slopeWidth - 31) : 22 + randomAt(seed, 731) * 25,
     rs: 14 + randomAt(seed, 732) * 10, ru: 9 + randomAt(seed, 733) * 4, side, seed };
 }
 
@@ -152,8 +170,9 @@ export function snowHeight(s, u) {
   let height = snowBaseHeight(s, u);
   if (u >= -10 && u <= 11) return height;
   const side = u < 0 ? -1 : 1, cell = Math.floor(s / 80);
-  const mask = side < 0 ? smoothstep(7, 23, u - alpineLake(s).near) : 1 - smoothstep(50, 62, u);
-  if (!mask || (side < 0 && (u < ledgeEdge(s) - 105 || u > ledgeEdge(s) - 4))) return height;
+  const mask = side < 0 ? smoothstep(7, 17, u - alpineLake(s).near) * smoothstep(4, 8, ledgeEdge(s) - u)
+    : 1 - smoothstep(50, 62, u);
+  if (!mask) return height;
   for (let i = cell - 1; i <= cell + 1; i++) {
     const pocket = terrainPocket(i, side);
     const radius = Math.hypot((s - pocket.s) / pocket.rs, (u - pocket.u) / pocket.ru);
