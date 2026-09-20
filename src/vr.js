@@ -1,6 +1,6 @@
 export class BrowserVR {
-  constructor({ renderer, buttons, onStart, onEnd, onVisibility, onError, onSupport = () => {}, canEnter = () => true, navigator = globalThis.navigator, secure = globalThis.isSecureContext }) {
-    Object.assign(this, { renderer, buttons, onStart, onEnd, onVisibility, onError, onSupport, canEnter, navigator, secure });
+  constructor({ renderer, buttons, onStart, onEnd, onVisibility, onError, canEnter = () => true, navigator = globalThis.navigator, secure = globalThis.isSecureContext }) {
+    Object.assign(this, { renderer, buttons, onStart, onEnd, onVisibility, onError, canEnter, navigator, secure });
     this.session = null;
     this.pending = false;
     this.supported = false;
@@ -37,7 +37,6 @@ export class BrowserVR {
     try { this.supported = await this.navigator.xr.isSessionSupported('immersive-vr'); }
     catch { this.supported = false; }
     this.refresh();
-    this.onSupport(this.supported);
   }
   async toggle() {
     if (this.pending || !this.supported || (!this.active && !this.canEnter())) return;

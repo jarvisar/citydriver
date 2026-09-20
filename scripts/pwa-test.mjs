@@ -77,7 +77,7 @@ async function checkProduction(base) {
     await page.waitForFunction(() => navigator.serviceWorker.controller);
     assert.equal(await page.locator('#pwa-install-invitation').count(), 0);
     await page.setViewportSize({ width: 393, height: 851 });
-    assert.equal(await page.locator('#welcome button').count(), 1, 'The main menu has one action');
+    assert.equal(await page.locator('#welcome :is(.pwa-install, .pwa-install-button, #pwa-install-invitation)').count(), 0, 'The install prompt stays out of the main menu');
     await page.screenshot({ path: path.resolve('.artifacts', base === '/' ? 'pwa-invitation.png' : 'pwa-invitation-subpath.png') });
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.setViewportSize({ width: 1280, height: 720 });

@@ -24,7 +24,7 @@ try {
   await connect();
   await page.waitForFunction(() => document.body.dataset.controller === 'true');
   assert.equal(await page.locator('.touch-controls').isVisible(), false);
-  assert.equal(await page.locator('#welcome .controller-hint').isVisible(), true);
+  assert.equal(await page.locator('#welcome .menu-hint').count(), 0, 'the title screen carries no control help');
   assert.equal(await page.locator('.touch-hint').isVisible(), false);
   assert.equal(await page.locator('#fps-counter').isVisible(), false);
   await button(11, 1); await frames();

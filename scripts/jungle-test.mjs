@@ -11,7 +11,7 @@ try {
   await page.goto(url, { waitUntil: 'networkidle' });
   await page.waitForFunction(() => window.__coastline && document.querySelector('#loading').classList.contains('loaded'));
   const initial = await page.evaluate(() => { const a = window.__coastline; return { rotation: a.rendering.camera.quaternion.toArray(), top: a.rendering.camera.top, scale: a.vehicle.car.scale.toArray(), color: a.rendering.scene.background.getHex(), exposure: a.rendering.renderer.toneMappingExposure, fog: a.rendering.scene.fog.near }; });
-  await page.getByRole('button', { name: 'Change Route', exact: true }).click();
+  await page.locator('#change-journey').click();
   assert.equal(await page.locator('.journey-card').count(), 6);
   await page.getByRole('button', { name: 'Emerald Jungle', exact: true }).click();
   await page.waitForFunction(() => window.__coastline.journey === 'jungle' && !window.__coastline.changingJourney);
@@ -80,7 +80,7 @@ try {
   const mobile = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
   mobile.on('pageerror', e => errors.push(e.message));
   await mobile.goto(url, { waitUntil: 'networkidle' }); await mobile.waitForFunction(() => window.__coastline);
-  await mobile.getByRole('button', { name: 'Change Route', exact: true }).tap();
+  await mobile.locator('#change-journey').tap();
   await mobile.screenshot({ path: '.artifacts/four-journeys-mobile.png' });
   await mobile.getByRole('button', { name: 'Emerald Jungle', exact: true }).tap();
   await mobile.waitForFunction(() => window.__coastline.journey === 'jungle' && !window.__coastline.changingJourney);

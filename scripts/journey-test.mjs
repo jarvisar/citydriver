@@ -13,7 +13,7 @@ try {
   await page.waitForFunction(() => window.__coastline && document.querySelector('#loading').classList.contains('loaded'));
   await page.waitForTimeout(700);
   const camera = await page.evaluate(() => ({ quaternion: window.__coastline.rendering.camera.quaternion.toArray(), top: window.__coastline.rendering.camera.top, carScale: window.__coastline.vehicle.car.scale.toArray() }));
-  await page.getByRole('button', { name: 'Change Route', exact: true }).click();
+  await page.locator('#change-journey').click();
   assert.equal(await page.locator('#journey-dialog').isVisible(), true);
   await page.screenshot({ path: '.artifacts/journey-chooser.png' });
   await page.keyboard.down('KeyW'); await page.waitForTimeout(150); await page.keyboard.up('KeyW');
@@ -21,7 +21,7 @@ try {
   await page.keyboard.press('Escape');
   await page.waitForFunction(() => !window.__coastline.paused);
   assert.equal(await page.locator('#journey-dialog').isVisible(), false);
-  await page.getByRole('button', { name: 'Change Route', exact: true }).click();
+  await page.locator('#change-journey').click();
   await page.getByRole('button', { name: 'Red Rock Desert', exact: true }).click();
   await page.waitForFunction(() => window.__coastline.journey === 'desert' && !window.__coastline.changingJourney);
   await page.waitForTimeout(600);
@@ -62,7 +62,7 @@ try {
   const zoom = await page.evaluate(() => window.__coastline.rendering.camera.top);
   await page.keyboard.press('KeyP');
   for (const id of ['coast', 'desert', 'coast', 'desert', 'coast', 'desert']) {
-    await page.getByRole('button', { name: 'Change Route', exact: true }).click();
+    await page.locator('#change-journey').click();
     await page.getByRole('button', { name: id === 'coast' ? 'Pacific Coast' : 'Red Rock Desert', exact: true }).click();
     await page.waitForFunction(id => window.__coastline.journey === id && !window.__coastline.changingJourney, id);
     assert.equal(await page.evaluate(() => window.__coastline.paused), true);
@@ -78,7 +78,7 @@ try {
   await mobile.goto('http://127.0.0.1:5173', { waitUntil: 'networkidle' });
   await mobile.waitForFunction(() => window.__coastline && document.querySelector('#loading').classList.contains('loaded'));
   await mobile.waitForTimeout(650);
-  await mobile.getByRole('button', { name: 'Change Route', exact: true }).tap();
+  await mobile.locator('#change-journey').tap();
   await mobile.screenshot({ path: '.artifacts/journey-chooser-mobile.png' });
   await mobile.getByRole('button', { name: 'Red Rock Desert', exact: true }).tap();
   await mobile.waitForFunction(() => window.__coastline.journey === 'desert' && !window.__coastline.changingJourney);

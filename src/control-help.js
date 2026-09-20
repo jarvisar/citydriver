@@ -6,8 +6,7 @@ export const controlHelpDismissed = () => dismissed;
 
 export function setupControlHelp() {
   document.body.dataset.controlHelpDismissed = String(dismissed);
-  for (const help of document.querySelectorAll('.start-hint, .touch-hint, .controller-hint, #stick-help, .controls > span:first-child')) {
-    if (help.classList.contains('menu-hint')) continue;
+  for (const help of document.querySelectorAll('.touch-hint, .controller-hint, #stick-help, .controls > span:first-child')) {
     help.setAttribute('data-control-help', '');
     const close = document.createElement('button');
     close.type = 'button'; close.className = 'dismiss-control-help';
