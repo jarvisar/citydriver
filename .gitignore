@@ -1,6 +1,9 @@
 node_modules/
 dist/
-.artifacts/
+# Ignore dot-prefixed directories at any depth.
+.*/
+# Keep GitHub build and deployment workflows tracked.
+!/.github/
 *.log
 dist-electron/
 release/
