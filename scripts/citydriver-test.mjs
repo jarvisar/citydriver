@@ -14,7 +14,9 @@ try {
   await page.goto(`${url}/?seed=4817`, { waitUntil: 'networkidle' });
   await page.waitForFunction(() => window.__citydriver && document.querySelector('#loading').classList.contains('loaded'), null, { timeout: 60000 });
   assert.match(await page.title(), /^Citydriver\b/);
-  assert.equal(await page.evaluate(() => window.__citydriver.weather.mode), 'sunset');
+  assert.equal(await page.evaluate(() => window.__citydriver.weather.mode), 'auto');
+  assert.equal(await page.evaluate(() => window.__citydriver.weather.state.id), 'sunset');
+  assert.equal(await page.locator('#city-weather').inputValue(), 'auto');
   assert.equal(await page.locator('#change-journey').isVisible(), false);
   await page.screenshot({ path: '.artifacts/citydriver/welcome.png' });
   await page.click('#free-drive');

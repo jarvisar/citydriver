@@ -17,7 +17,7 @@ import { PAINTS, DEFAULT_PAINT, DEFAULT_PAINT_NAME, paintName, readPaint } from 
 import { SEED, journeyStart } from './world/route.js';
 import { freshSceneStart } from './world/generation.js';
 import { CityWeather } from './world/city-weather.js';
-import { cityCell, cityDistrict, nearestCityStreet } from './world/city-grid.js';
+import { CITY_BLOCK, cityCell, cityDistrict, nearestCityStreet, cityStreetProfile } from './world/city-grid.js';
 import { CityGuide } from './city-guide.js';
 import { TaxiRun } from './taxi-run.js';
 import { TaxiView } from './taxi-view.js';
@@ -98,7 +98,7 @@ async function boot() {
     try { const saved = localStorage.getItem(journeyStorageKey); if (saved && Object.hasOwn(JOURNEYS, saved)) journey = saved; } catch { /* Storage is optional. */ }
     let world = new JOURNEYS[journey].World(scene);
     const weather = new CityWeather(scene);
-    try { weather.setMode(localStorage.getItem('citydriver-weather') ?? 'sunset', { immediate: true }); } catch { /* Storage is optional. */ }
+    try { weather.setMode(localStorage.getItem('citydriver-weather') ?? 'auto', { immediate: true }); } catch { /* Storage is optional. */ }
     let changingJourney = true, journeyWasPaused = false;
     const savedJourneys = Object.fromEntries(Object.entries(JOURNEYS).map(([id, data]) => [id, journeyStart(Number(data.routeNumber))]));
     const vehicle = new DrivingController(JOURNEYS[journey].route, savedJourneys[journey], DEFAULT_CAR); const audio = new DriveAudio();
@@ -168,8 +168,9 @@ async function boot() {
     }
     function recoverTaxi(penalty = false) {
       const street = nearestCityStreet(vehicle.s, vehicle.u);
-      vehicle.s = street.s - (street.axis === 'east' ? 3 : 0);
-      vehicle.u = street.u + (street.axis === 'north' ? 3 : 0);
+      const profile = cityStreetProfile(street.axis, Math.round((street.axis === 'north' ? street.u : street.s) / CITY_BLOCK));
+      vehicle.s = street.s - (street.axis === 'east' ? profile.lane : 0);
+      vehicle.u = street.u + (street.axis === 'north' ? profile.lane : 0);
       vehicle.heading = street.axis === 'north' ? 0 : Math.PI / 2;
       vehicle.speed = 0; vehicle.knock.x = vehicle.knock.z = vehicle.knock.spin = 0; vehicle.update(0, {});
       if (penalty) { taxi.timeLeft = Math.max(0, taxi.timeLeft - 5); toast('Reset −5s'); }
@@ -346,7 +347,7 @@ async function boot() {
         primeMenuDrive();
         rendering.setJourney(id); audio.setJourney(id); updateJourneyUi(); paintCards(); updatePaintUi();
         vehicle.render(1, world.origin);
-        rendering.snap(); rendering.update(vehicle.car, 1, world.origin); world.animate(time, vehicle);
+        rendering.snap(); rendering.update(vehicle.car, 1, world.origin); world.animate(time, traffic.time);
         weather.update(time, vehicle, world.origin); rendering.setWeather(weather.state, 0);
         world.setWetness(weather.state.wetness); vehicle.setLights(weather.state.lightLevel); traffic.models.setLights(weather.state.lightLevel);
         updateHud();
@@ -769,7 +770,7 @@ async function boot() {
         time += dt;
         world.update(vehicle.s, vehicle.u); vehicle.render(frameClock.alpha, world.origin);
         traffic.render(frameClock.alpha, world.origin);
-        rendering.update(vehicle.car, dt, world.origin); world.animate(time, vehicle);
+        rendering.update(vehicle.car, dt, world.origin); world.animate(time, traffic.time);
         taxiView.render(taxi, vehicle, world.origin, time);
         weather.update(time, vehicle, world.origin); rendering.setWeather(weather.state, dt);
         world.setWetness(weather.state.wetness); vehicle.setLights(weather.state.lightLevel); traffic.models.setLights(weather.state.lightLevel);

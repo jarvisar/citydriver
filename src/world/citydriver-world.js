@@ -4,9 +4,11 @@ import { seededRandom } from './route.js';
 import { residentWindow } from './resident.js';
 import { buildLandmark } from './city-landmarks.js';
 import { buildCityBuildings, SHOP_NAMES, shopSignMaterial } from './city-buildings.js';
+import { blockStreets, buildStreets } from './city-streets.js';
+import { cityGreen } from '../city-junctions.js';
 import { CITY_PLACES } from './city-places.js';
 import { cityWalker, cityBoat, walkerPose } from './city-life.js';
-import { CITY_BLOCK, DISTANT_CITY_RADIUS, ROAD_HALF_WIDTH, ROAD_LEVEL, PAVEMENT_LEVEL, WATER_LEVEL, RIVER_MARGIN, cityCell, cityBlock } from './city-grid.js';
+import { CITY_BLOCK, DISTANT_CITY_RADIUS, ROAD_LEVEL, PAVEMENT_LEVEL, WATER_LEVEL, RIVER_MARGIN, cityCell, cityBlock } from './city-grid.js';
 export { DISTANT_CITY_RADIUS } from './city-grid.js';
 
 const boxGeometry = new THREE.BoxGeometry(1, 1, 1);
@@ -68,7 +70,7 @@ export class CitydriverChunk {
     this.ix = ix; this.iz = iz; this.start = iz * CITY_BLOCK; this.east = ix * CITY_BLOCK;
     this.index = `${ix},${iz}`; this.plan = cityBlock(ix, iz); this.materials = materials; this.distant = distant;
     this.group = new THREE.Group(); this.group.name = `citydriver-block-${this.index}`;
-    this.features = { colliders: [], bridges: [], buildings: [], discoveries: [] };
+    this.features = { colliders: [], bridges: [], buildings: [], discoveries: [], medians: [], junctions: [], signals: [] };
     this.batches = new Map(); this.random = seededRandom(this.plan.seed);
     this.buildGround(); this.buildRoads();
     if (this.plan.kind === 'river') this.buildRiver();
@@ -106,42 +108,25 @@ export class CitydriverChunk {
     this.post(x, s, .28);
   }
   buildGround() {
+    const { west, east, south, north } = blockStreets(this.ix, this.iz);
     if (this.plan.kind === 'river') {
       for (const x of [RIVER_MARGIN / 2, CITY_BLOCK - RIVER_MARGIN / 2]) this.box(x, 20.85, 56, RIVER_MARGIN, 6.2, CITY_BLOCK, '#888f8e');
-      for (const x of [18, 94]) this.box(x, 24.06, 56, 20, .12, 96, '#afb0a5');
+      const centerS = (south.halfWidth + 112 - north.halfWidth) / 2, length = 112 - south.halfWidth - north.halfWidth;
+      this.box((west.halfWidth + 28) / 2, 24.06, centerS, 28 - west.halfWidth, .12, length, '#afb0a5');
+      this.box((84 + 112 - east.halfWidth) / 2, 24.06, centerS, 28 - east.halfWidth, .12, length, '#afb0a5');
       this.box(56, WATER_LEVEL - .12, 56, 56, .24, CITY_BLOCK, '#ffffff', 'water');
       return;
     }
     this.box(56, 23.75, 56, CITY_BLOCK, .4, CITY_BLOCK, '#858a87');
-    this.box(56, 24.06, 56, 96, .12, 96, '#acafa8');
+    this.box((west.halfWidth + 112 - east.halfWidth) / 2, 24.06, (south.halfWidth + 112 - north.halfWidth) / 2, 112 - west.halfWidth - east.halfWidth, .12, 112 - south.halfWidth - north.halfWidth, '#acafa8');
     if (this.distant) return;
     // Thin paving seams keep sidewalks legible at a low camera angle.
     for (let p = 16; p < 104; p += 8) {
-      for (const side of [11.5, 100.5]) {
-        this.box(side, 24.125, p, 7, .01, .035, '#929a96');
-        this.box(p, 24.125, side, .035, .01, 7, '#929a96');
-      }
+      for (const [edge, sign, profile] of [[0, 1, west], [112, -1, east]]) this.box(edge + sign * (profile.halfWidth + 16) / 2, 24.125, p, 16 - profile.halfWidth, .01, .035, '#929a96');
+      for (const [edge, sign, profile] of [[0, 1, south], [112, -1, north]]) this.box(p, 24.125, edge + sign * (profile.halfWidth + 16) / 2, .035, .01, 16 - profile.halfWidth, '#929a96');
     }
   }
-  buildRoads() {
-    for (const s of [4, 108]) this.box(56, 23.98, s, 112, .04, 8, '#ffffff', 'road');
-    for (const x of [4, 108]) this.box(x, 23.98, 56, 8, .04, 96, '#ffffff', 'road');
-    for (let p = 19; p <= 96; p += 11) {
-      this.box(.18, 24.018, p, .11, .018, 5, '#d3b877');
-      this.box(p, 24.018, .18, 5, .018, .11, '#d3b877');
-    }
-    // A complete junction is assembled from its four neighbouring blocks.
-    for (const edge of [0, 112]) for (let p = 1.2; p < 8; p += 1.8) {
-      this.box(p, 24.016, edge === 0 ? 11 : 101, 1, .015, 3.2, '#d7d8c9');
-      this.box(edge === 0 ? 11 : 101, 24.016, p, 3.2, .015, 1, '#d7d8c9');
-      this.box(112 - p, 24.016, edge === 0 ? 11 : 101, 1, .015, 3.2, '#d7d8c9');
-      this.box(edge === 0 ? 11 : 101, 24.016, 112 - p, 3.2, .015, 1, '#d7d8c9');
-    }
-    for (const p of [14, 98]) {
-      this.box(4, 24.019, p, 6.5, .02, .25, '#d7d8c9');
-      this.box(p, 24.019, 108, .25, .02, 6.5, '#d7d8c9');
-    }
-  }
+  buildRoads() { buildStreets(this); }
   buildBuildings() { buildCityBuildings(this); }
   buildPark() {
     const park = this.plan.kind === 'park';
@@ -168,11 +153,13 @@ export class CitydriverChunk {
   }
   buildRiver() {
     const iron = '#7d6657', trim = '#c9bd9f';
-    for (const s of [5.4, 106.6]) {
-      this.box(56, 23.49, s, 58, .98, 10.8, '#929b99');
-      this.box(56, 24.06, s < 56 ? 9.4 : 102.6, 58, .12, 2.8, '#b6b2a4');
+    const { south, north } = blockStreets(this.ix, this.iz);
+    for (const [edge, sign, street] of [[0, 1, south], [112, -1, north]]) {
+      const width = Math.max(10.8, street.halfWidth + 2.8);
+      this.box(56, 23.49, edge + sign * width / 2, 58, .98, width, '#929b99');
+      this.box(56, 24.06, edge + sign * (street.halfWidth + width) / 2, 58, .12, width - street.halfWidth, '#b6b2a4');
     }
-    for (const s of [10.6, 101.4]) {
+    for (const s of [Math.max(10.8, south.halfWidth + 2.8) - .2, 112 - Math.max(10.8, north.halfWidth + 2.8) + .2]) {
       // Side trusses, parapets and piers all stand beyond the driving lanes.
       this.box(56, 24.8, s, 56, 1.1, .45, trim); this.solid(56, s, 56, .45);
       this.box(56, 30.7, s, 47, .48, .5, iron);
@@ -197,7 +184,7 @@ export class CitydriverChunk {
     }
     // Small water highlights share the glass batch and stay below bridge decks.
     for (let k = 0; k < 8; k++) this.box(34 + this.random() * 44, WATER_LEVEL + .012, 15 + this.random() * 82, 2 + this.random() * 6, .018, .16, '#80a8aa', 'glass');
-    this.features.bridges.push({ s: this.start, u: this.east + 56, minU: this.east + 28, maxU: this.east + 84, halfWidth: ROAD_HALF_WIDTH, height: ROAD_LEVEL });
+    this.features.bridges.push({ s: this.start, u: this.east + 56, minU: this.east + 28, maxU: this.east + 84, halfWidth: south.halfWidth, height: ROAD_LEVEL });
   }
   buildFurniture() {
     const streetTree = (x, s) => {
@@ -215,7 +202,6 @@ export class CitydriverChunk {
       streetTree(x + 12, 11.6); streetTree(x - 12, 100.4);
     }
     if (this.plan.kind !== 'river') for (const s of [38, 70]) { streetTree(11.6, s); streetTree(100.4, s + 7); }
-    for (const [x, s] of [[10, 10], [102, 102]]) { this.prop('signal', x, s); this.post(x, s, .14); }
     this.prop('bin', 11.8, 43); this.post(11.8, 43, .36);
   }
   buildLife() {
@@ -233,7 +219,19 @@ export class CitydriverChunk {
       for (const ds of [-7, 7]) this.box(x < 56 ? 32 : 80, WATER_LEVEL, s + ds, .5, 3, .5, '#6e7568');
     }
   }
-  animate(time) {
+  animate(time, signalTime = time) {
+    const phase = Math.floor(signalTime % 24);
+    if (phase !== this.signalPhase && this.signalMesh) {
+      this.signalPhase = phase;
+      for (const signal of this.features.signals) {
+        const green = cityGreen(signal.axis, signalTime), amber = signal.axis === 'north' ? phase === 10 : phase === 22;
+        for (let i = 0; i < 3; i++) {
+          tint.set((i === 2 && green) ? '#62d996' : (i === 1 && amber) ? '#ffd571' : (i === 0 && !green && !amber) ? '#ed654b' : '#293538');
+          this.signalMesh.setColorAt(signal.indices[i], tint);
+        }
+      }
+      this.signalMesh.instanceColor.needsUpdate = true;
+    }
     const mesh = this.peopleMesh;
     for (let i = 0; i < this.walkers.length; i++) {
       const walker = this.walkers[i], pose = walkerPose(walker, time, this.plan.kind === 'river');
@@ -246,6 +244,7 @@ export class CitydriverChunk {
   }
   finish() {
     renderBatches(this.group, this.batches);
+    this.signalMesh = this.group.getObjectByName('citydriver-lit');
     this.peopleMesh = this.group.getObjectByName('citydriver-residents');
     if (this.peopleMesh) {
       this.peopleMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
@@ -325,7 +324,7 @@ export class CitydriverWorld {
     this.materials.road.roughness = .85 - wet * .58;
     this.materials.road.color.set('#666c70').lerp(new THREE.Color('#424e58'), wet);
   }
-  animate(time) { for (const chunk of this.chunks.values()) chunk.animate(time); }
+  animate(time, signalTime = time) { for (const chunk of this.chunks.values()) chunk.animate(time, signalTime); }
   dispose() {
     for (const chunk of this.chunks.values()) chunk.dispose(); this.chunks.clear(); this.pending = [];
     for (const mesh of this.distantGroup.children) mesh.dispose(); this.distantGroup.removeFromParent(); this.distantChunks.clear();

@@ -36,7 +36,8 @@ export function createRendering(canvas, graphics = new Graphics()) {
   renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFShadowMap;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = .94;
-  const scene = new THREE.Scene(); scene.background = new THREE.Color('#b8dfe0'); scene.fog = new THREE.Fog('#c2e2db', 460, 860);
+  const scene = new THREE.Scene(); scene.background = new THREE.Color('#b8dfe0');
+  const drivingFog = new THREE.Fog('#c2e2db', 460, 860);
   const sky = new THREE.HemisphereLight('#e4f2f5', '#617149', 1.45); scene.add(sky);
   const sun = new THREE.DirectionalLight('#fff1db', 2.5); sun.castShadow = true;
   sun.shadow.camera.near = 1; sun.shadow.camera.far = 650; sun.shadow.normalBias = .65; sun.shadow.bias = -.0003; sun.shadow.radius = 2;
@@ -77,23 +78,21 @@ export function createRendering(canvas, graphics = new Graphics()) {
   const weatherSun = new THREE.Vector3();
   const cityFog = { color: '#c9dbe2', near: 390, far: 780, thirdNear: 190, thirdFar: 420 };
   function updateFog() {
+    // Overhead cameras turn distance fog into a wash across the top of the city.
+    // Only perspective views need fog to conceal the distant streaming boundary.
+    if (!activeCamera().isPerspectiveCamera) { scene.fog = null; return; }
+    scene.fog = drivingFog;
     const profile = weatherFog ?? cityFog;
-    // Keep the miniature views' atmosphere; fade distant driving-view scenery.
     // Matching the sky exactly lets fully faded terrain disappear without a seam.
-    if (activeCamera().isPerspectiveCamera) {
-      scene.fog.color.copy(scene.background);
-      // Fog depth is measured along the camera, so a wide lens can see much
-      // farther at the corners. Keep its entire far plane inside the distant
-      // city ring, with room for the chase camera behind the car.
-      const loadedDistance = graphics.settings.chunks.ahead >= 5 ? 310 : 205;
-      const lens = activeCamera(), slope = Math.tan(THREE.MathUtils.degToRad(lens.getEffectiveFOV()) / 2);
-      const horizonDistance = (CITY_BLOCK * DISTANT_CITY_RADIUS - 20) / Math.hypot(1, slope, slope * lens.aspect);
-      scene.fog.far = Math.min(profile.thirdFar, loadedDistance, horizonDistance);
-      scene.fog.near = weatherFog ? Math.min(profile.thirdNear, scene.fog.far * .5) : profile.thirdNear;
-    } else {
-      scene.fog.color.set(profile.color);
-      scene.fog.near = profile.near; scene.fog.far = profile.far;
-    }
+    scene.fog.color.copy(scene.background);
+    // Fog depth is measured along the camera, so a wide lens can see much
+    // farther at the corners. Keep its entire far plane inside the distant
+    // city ring, with room for the chase camera behind the car.
+    const loadedDistance = graphics.settings.chunks.ahead >= 5 ? 310 : 205;
+    const lens = activeCamera(), slope = Math.tan(THREE.MathUtils.degToRad(lens.getEffectiveFOV()) / 2);
+    const horizonDistance = (CITY_BLOCK * DISTANT_CITY_RADIUS - 20) / Math.hypot(1, slope, slope * lens.aspect);
+    scene.fog.far = Math.min(profile.thirdFar, loadedDistance, horizonDistance);
+    scene.fog.near = weatherFog ? Math.min(profile.thirdNear, scene.fog.far * .5) : profile.thirdNear;
   }
   const lookAhead = new THREE.Vector3(-24, 0, -46);
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;

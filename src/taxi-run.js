@@ -1,4 +1,4 @@
-import { CITY_BLOCK as B, nearestCityStreet } from './world/city-grid.js';
+import { CITY_BLOCK as B, nearestCityStreet, cityStreetProfile } from './world/city-grid.js';
 import { nearbyPlaces, routeDistance } from './city-exploration.js';
 
 export const SHIFT_SECONDS = 90;
@@ -28,10 +28,14 @@ export function leadStop(player) {
   const along = north ? player.s : player.u;
   let middle = Math.floor(along / B) * B + B / 2;
   if ((middle - along) * direction < 30) middle += direction * B;
-  return north ? { s: middle, u: road.u + 3 * direction, axis: 'north', side: direction }
-    : { s: road.s - 3 * direction, u: middle, axis: 'east', side: direction };
+  const street = cityStreetProfile(road.axis, Math.round((north ? road.u : road.s) / B));
+  return north ? { s: middle, u: road.u + street.lane * direction, axis: 'north', side: direction }
+    : { s: road.s - street.lane * direction, u: middle, axis: 'east', side: direction };
 }
-const placeStop = place => ({ s: place.s - B / 2 - 3, u: place.u, axis: 'east', side: 1, name: place.name });
+const placeStop = place => {
+  const center = place.s - B / 2, street = cityStreetProfile('east', Math.round(center / B));
+  return { s: center - street.lane, u: place.u, axis: 'east', side: 1, name: place.name };
+};
 
 export class TaxiRun {
   constructor(storage = null) {
@@ -56,7 +60,7 @@ export class TaxiRun {
         .filter(route => route.length >= 280 && route.length <= 1100);
       const route = choices[(this.delivered * 3 + this.failed + i * 2) % choices.length];
       // A grid fallback keeps a fare valid even if a future map has no POIs.
-      const destination = route?.destination ?? { s: Math.round(stop.s / B) * B - 3, u: Math.round(stop.u / B) * B + 3.5 * B, axis: 'east', side: 1, name: 'Downtown' };
+      const destination = route?.destination ?? placeStop({ s: Math.round(stop.s / B) * B + B / 2, u: Math.round(stop.u / B) * B + 3.5 * B, name: 'Downtown' });
       const length = route?.length ?? routeDistance(taxiRoute(stop, destination));
       return { ...stop, id: `${this.revision}-${i}`, name: 'Passenger', destination, length,
         fare: Math.round(40 + length * .28), limit: Math.ceil(18 + length / 14), color: i === 0 ? '#a4f264' : i === 1 ? '#54dfe0' : '#f8ba55' };

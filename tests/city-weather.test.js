@@ -5,10 +5,19 @@ import { CityWeather, sampleCityWeather, weatherLightning, WEATHER_CYCLE, WEATHE
 import { DriveAudio } from '../src/audio.js';
 import { SoundDirector } from '../src/audio/director.js';
 
-test('new cities start in golden hour and keep it until the player selects another weather mode', () => {
+test('new cities default to automatic weather, starting in golden hour before cycling', () => {
   const weather = new CityWeather(new THREE.Scene());
-  assert.equal(weather.mode, 'sunset');
+  assert.equal(weather.mode, 'auto');
   assert.equal(weather.state.label, 'Golden hour');
+  weather.update(WEATHER_INTERVAL);
+  assert.equal(weather.state.id, 'night');
+  weather.update(WEATHER_INTERVAL * WEATHER_CYCLE.length);
+  assert.equal(weather.state.id, 'sunset');
+  weather.dispose();
+});
+
+test('an explicitly selected golden hour stays fixed', () => {
+  const weather = new CityWeather(new THREE.Scene(), { mode: 'sunset' });
   weather.update(WEATHER_INTERVAL * 12);
   assert.equal(weather.state.id, 'sunset');
   weather.dispose();
@@ -36,12 +45,13 @@ test('the clock makes weather independent of frame delivery and leaves paused ra
   const first = new CityWeather(new THREE.Scene(), { mode: 'auto' });
   const second = new CityWeather(new THREE.Scene(), { mode: 'auto' });
   const car = { u: 500, s: -320, car: { position: { y: 24 } } };
-  for (let tick = 0; tick <= 600; tick++) first.update(tick / 2, car, -1024);
-  second.update(300, car, -1024);
+  for (let tick = 0; tick <= 1200; tick++) first.update(tick / 2, car, -1024);
+  second.update(600, car, -1024);
   assert.deepEqual(first.state, second.state);
+  assert.ok(first.state.rain > 0);
   const drops = first.rainfall.geometry.attributes.position.array.slice();
   const sky = first.state.background.clone();
-  first.update(300, car, -1024);
+  first.update(600, car, -1024);
   assert.deepEqual(first.rainfall.geometry.attributes.position.array, drops);
   assert.deepEqual(first.state.background, sky);
   first.dispose(); second.dispose();
@@ -80,9 +90,10 @@ test('manual weather transitions can be interrupted and paused selections apply 
   assert.equal(weather.state.rain, WEATHER_PRESETS.rain.rain);
   assert.equal(weather.setMode('invalid'), false);
   assert.equal(weather.mode, 'rain');
-  weather.setMode('auto', { immediate: true }); weather.update(WEATHER_INTERVAL * 3);
+  const stormTime = WEATHER_INTERVAL * WEATHER_CYCLE.indexOf('storm');
+  weather.setMode('auto', { immediate: true }); weather.update(stormTime);
   assert.equal(weather.state.id, 'storm');
-  weather.setMode('night'); weather.update(WEATHER_INTERVAL * 3 + 1);
+  weather.setMode('night'); weather.update(stormTime + 1);
   assert.ok(weather.state.rain > 0);
   weather.update(0);
   assert.equal(weather.state.rain, 0);

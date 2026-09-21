@@ -5,7 +5,7 @@ import { Rainfall } from './rainfall.js';
 // the game, so pausing or hiding the tab also pauses the sky and the rain.
 export const WEATHER_INTERVAL = 105;
 export const WEATHER_TRANSITION = 22;
-export const WEATHER_CYCLE = Object.freeze(['clear', 'overcast', 'rain', 'storm', 'rain', 'sunset', 'night', 'clear']);
+export const WEATHER_CYCLE = Object.freeze(['sunset', 'night', 'clear', 'clear', 'overcast', 'rain', 'storm', 'rain']);
 const NUMBER_KEYS = ['rain', 'wetness', 'lightLevel', 'skyIntensity', 'sunIntensity', 'exposure', 'fogNear', 'fogFar', 'drivingFogNear', 'drivingFogFar', 'sunX', 'sunY', 'sunZ'];
 const COLOR_KEYS = ['background', 'fogColor', 'skyColor', 'groundColor', 'sunColor'];
 const clamp = value => Math.max(0, Math.min(1, value));
@@ -79,7 +79,7 @@ export function weatherLightning(time, rain, reducedMotion = false) {
 }
 
 export class CityWeather {
-  constructor(scene, { reducedMotion = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false, mode = 'sunset' } = {}) {
+  constructor(scene, { reducedMotion = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false, mode = 'auto' } = {}) {
     this.mode = Object.hasOwn(WEATHER_PRESETS, mode) ? mode : 'auto';
     this.reducedMotion = reducedMotion;
     this.time = 0;

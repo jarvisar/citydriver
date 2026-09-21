@@ -65,11 +65,11 @@ test('each direction stops before a red junction and resumes on green', t => {
   traffic.vehicles = [traffic.vehicles[0]];
   const car = traffic.vehicles[0];
   for (const axis of ['north', 'east']) for (const direction of [-1, 1]) {
-    place(traffic, car, axis, direction, direction * (CITY_BLOCK - 40));
+    place(traffic, car, axis, direction, -direction * 40);
     traffic.time = axis === 'north' ? 12 : 0;
     for (let tick = 0; tick < 300; tick++) traffic.update(1 / 60, player);
     const stoppedAt = axis === 'north' ? car.s : car.u;
-    assert.ok(stoppedAt * direction <= CITY_BLOCK - 14.9, `${axis}/${direction} crossed its stop line`);
+    assert.ok(stoppedAt * direction <= -14.9, `${axis}/${direction} crossed its stop line`);
     assert.ok(car.speed < .05, `${axis}/${direction} did not stop`);
     traffic.time = axis === 'north' ? 0 : 12;
     for (let tick = 0; tick < 60; tick++) traffic.update(1 / 60, player);
@@ -135,7 +135,7 @@ test('autodrive obeys signal clearance and leaves a following gap', () => {
   assert.equal(cityGreen('north', 10), false); assert.equal(cityGreen('east', 10), false);
   for (const axis of ['north', 'east']) {
     const pilot = new CityAutodrive();
-    const player = { s: axis === 'north' ? CITY_BLOCK - 15 : -3, u: axis === 'north' ? 3 : CITY_BLOCK - 15,
+    const player = { s: axis === 'north' ? -15 : -3, u: axis === 'north' ? 3 : -15,
       heading: axis === 'north' ? 0 : Math.PI / 2, stats: { topSpeed: 25 } };
     const traffic = { enabled: true, vehicles: [], time: axis === 'north' ? 12 : 0 };
     assert.equal(pilot.update(player, traffic).touchDrive.amount, 0);

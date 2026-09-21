@@ -15,7 +15,9 @@ Start a **Taxi run** with 90 seconds. Stop inside a pickup ring to board a passe
 
 **Free drive** has no timer and includes the garage, weather settings, and landmark map.
 
-Blocks mix shops, brick buildings, balcony apartments, stepped towers, and warehouses, with varied rooflines and planted courtyards. Golden hour is the default; your selected weather is saved.
+Blocks mix shops, brick buildings, balcony apartments, stepped towers, and warehouses, with varied rooflines and planted courtyards. Weather defaults to Auto, starting at golden hour and cycling through conditions; your selected weather is saved.
+
+Side streets have stop signs. Avenues connect to wider boulevards with grass and trees in the medians. Traffic stops and yields at smaller junctions.
 
 ## Controls
 

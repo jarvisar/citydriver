@@ -45,7 +45,7 @@
 #journey-transition { position: absolute; inset: 0; display: grid; place-items: center; z-index: 9; pointer-events: none; opacity: 0; transition: opacity .3s; background: #e7e8d8; color: var(--ink); font-size: 11px; letter-spacing: 1px; }
 #journey-transition.active { pointer-events: auto; opacity: 1; }
 body[data-journey=desert] { --ink: #624632; --cream: #fff3dc; color: var(--ink); background: #eac08a; }
-body[data-journey=desert] .vignette { background: linear-gradient(180deg,#ffdbb049,transparent 22%,transparent 82%,#f6c58e30); }
+body[data-journey=desert] .vignette { background: linear-gradient(180deg,transparent 82%,#f6c58e30); }
 body[data-journey=desert] .chooser { background: #fff2ddf7; }
 body[data-journey=desert] .chooser::backdrop { background: #633f2535; }
 body[data-journey=desert] #journey-transition { background: #ecd0a8; }
@@ -54,7 +54,7 @@ body[data-journey=desert] .eyebrow>span { background: #987039; }
 body[data-journey=desert] .start-button:hover { background: #805637; }
 body[data-journey=desert] .touch-controls button.active { background: var(--ink); }
 body[data-journey=snow] { --ink: #dce5f3; --cream: #162339; color: var(--ink); background: #111d30; }
-body[data-journey=snow] .vignette { background: linear-gradient(180deg,#101a2b50,transparent 23%,transparent 77%,#101a2b66); }
+body[data-journey=snow] .vignette { background: linear-gradient(180deg,transparent 77%,#101a2b66); }
 body[data-journey=snow] .welcome, body[data-journey=snow] .brand, body[data-journey=snow] .location { text-shadow: 0 2px 12px #08111c; }
 body[data-journey=snow] :is(.icon-button,.journey-button,.controls,.touch-controls button) { background: #17273ed1; border-color: #93acc64a; }
 body[data-journey=snow] :is(.icon-button,.journey-button,.touch-controls button):hover { background: #304663e0; }
@@ -70,7 +70,7 @@ body[data-journey=snow] .eyebrow>span { background: #e4c68e; }
 body[data-journey=snow] .start-button:hover { background: #b8cde6; }
 body[data-journey=snow] .touch-controls button.active { background: #dce5f3; }
 body[data-journey=jungle] { --ink: #e4efd8; --cream: #1b3320; color: var(--ink); background: #22402a; }
-body[data-journey=jungle] .vignette { background: linear-gradient(180deg,#0f221455,transparent 22%,transparent 80%,#0f221466); }
+body[data-journey=jungle] .vignette { background: linear-gradient(180deg,transparent 80%,#0f221466); }
 body[data-journey=jungle] .welcome, body[data-journey=jungle] .brand, body[data-journey=jungle] .location { text-shadow: 0 2px 12px #0b1a0f; }
 body[data-journey=jungle] :is(.icon-button,.journey-button,.controls,.touch-controls button) { background: #1c3423d1; border-color: #9cbf8f4a; }
 body[data-journey=jungle] :is(.icon-button,.journey-button,.touch-controls button):hover { background: #2f5136e0; }
@@ -86,7 +86,7 @@ body[data-journey=jungle] .eyebrow>span { background: #c9dd7e; }
 body[data-journey=jungle] .start-button:hover { background: #cfe3bf; }
 body[data-journey=jungle] .touch-controls button.active { background: #e4efd8; }
 body[data-journey=plains] { --ink: #5a4422; --cream: #fff7e2; color: var(--ink); background: #e8cd8c; }
-body[data-journey=plains] .vignette { background: linear-gradient(180deg,#ffe8bb4a,transparent 22%,transparent 82%,#f1cf8a33); }
+body[data-journey=plains] .vignette { background: linear-gradient(180deg,transparent 82%,#f1cf8a33); }
 body[data-journey=plains] .chooser { background: #fff6e3f7; }
 body[data-journey=plains] .chooser::backdrop { background: #6a4d2035; }
 body[data-journey=plains] #journey-transition { background: #efd9a8; }
@@ -95,7 +95,7 @@ body[data-journey=plains] .eyebrow>span { background: #a87c2f; }
 body[data-journey=plains] .start-button:hover { background: #7d5a2c; }
 body[data-journey=plains] .touch-controls button.active { background: var(--ink); }
 body[data-journey=city] { --ink: #263039; --cream: #eef1f4; color: var(--ink); background: #b6bfc7; }
-body[data-journey=city] .vignette { background: linear-gradient(180deg,#6f7e8a45,transparent 22%,transparent 82%,#5f6d7a4d); }
+body[data-journey=city] .vignette { background: linear-gradient(180deg,transparent 82%,#5f6d7a4d); }
 body[data-journey=city] .chooser { background: #eef1f4f7; }
 body[data-journey=city] .chooser::backdrop { background: #2a353d45; }
 body[data-journey=city] #journey-transition { background: #b3bcc4; }

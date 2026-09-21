@@ -1,10 +1,10 @@
 import * as THREE from 'three';
 import { randomAt, clamp } from './world/route.js';
-import { CITY_BLOCK } from './world/city-grid.js';
+import { CITY_BLOCK, cityStreetProfile } from './world/city-grid.js';
 import { createTrafficModels, TRAFFIC_MODELS, TRAFFIC_COLORS } from './traffic-models.js';
 import { trafficContact } from './traffic.js';
 import { collisionImpulse, contactPoint } from './impact.js';
-import { cityGreen } from './city-autodrive.js';
+import { junctionSpeed } from './city-junctions.js';
 
 // A bounded fleet on both street axes. Vehicles obey a shared intersection
 // cycle, yield to the player, and recycle beyond the local view in any direction.
@@ -22,6 +22,7 @@ export class CityTraffic {
   }
   reset(route, s, journey = 'city', u = 2.4) {
     this.route = route; this.journey = journey; this.time = 0; this.lastS = s; this.lastU = u;
+    this.junctionReservations = new Map();
     for (const car of this.vehicles) this.spawn(car, s, u, true);
   }
   setEnabled(enabled, player) {
@@ -34,7 +35,9 @@ export class CityTraffic {
     car.direction = Math.floor(car.index / 2) % 2 ? -1 : 1;
     const r = salt => randomAt(car.index + car.generation * 97, 8100 + salt);
     const lateral = Math.round((car.axis === 'north' ? u : s) / CITY_BLOCK) + Math.floor(r(1) * 5) - 2;
-    car.lane = lateral * CITY_BLOCK + (car.axis === 'north' ? 3 : -3) * car.direction;
+    const street = cityStreetProfile(car.axis, lateral);
+    car.lane = lateral * CITY_BLOCK + (car.axis === 'north' ? 1 : -1) * street.lane * car.direction;
+    car.stopKey = null; car.stopWait = 0; car.stopReleased = false;
     const center = car.axis === 'north' ? s : u;
     // Place each new car into an empty stretch. A lane can already contain a
     // queue at a red light when it is recycled, so spacing only from the player
@@ -48,7 +51,7 @@ export class CityTraffic {
       if (!occupied) break;
       along = center + (initial ? (r(10 + attempt) - .5) * 520 : (attempt % 2 ? -1 : 1) * (260 + (attempt * 17 % 91)));
     }
-    car.cruiseSpeed = 11 + r(4) * 5; car.speed = car.cruiseSpeed;
+    car.cruiseSpeed = street.speed * (.75 + r(4) * .25); car.speed = car.cruiseSpeed;
     this.pose(car); car.previousPosition.copy(car.position); car.previousQuaternion.copy(car.quaternion);
   }
   pose(car) {
@@ -66,9 +69,7 @@ export class CityTraffic {
       car.previousPosition.copy(car.position); car.previousQuaternion.copy(car.quaternion);
       let target = car.cruiseSpeed;
       const along = car.axis === 'north' ? car.s : car.u;
-      const intersection = car.direction > 0 ? Math.ceil(along / CITY_BLOCK) * CITY_BLOCK : Math.floor(along / CITY_BLOCK) * CITY_BLOCK;
-      const gap = (intersection - along) * car.direction;
-      if (!cityGreen(car.axis, this.time) && gap > 10) target = Math.min(target, Math.sqrt(2 * 7 * Math.max(0, gap - 15)));
+      target = Math.min(target, junctionSpeed(car, this, car.axis, car.direction, car.lane, along, car.speed, dt));
       for (const other of [...this.vehicles, player]) {
         if (other === car) continue;
         const ds = other.s - car.s, du = other.u - car.u;

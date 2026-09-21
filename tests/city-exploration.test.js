@@ -1,3 +1,4 @@
+import { blockStreets } from '../src/world/city-streets.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
@@ -90,11 +91,13 @@ test('all landmark geometry streams with colliders clear of roads and stable dis
       const chunk = world.chunks.get(place.id);
       assert.equal(chunk.features.discoveries[0].type, type);
       assert.ok(chunk.group.getObjectByName(`citydriver-sign-${type}`));
+      const { west, east, south, north } = blockStreets(chunk.ix, chunk.iz);
       for (const collider of chunk.features.colliders) {
+        if (collider.kind === 'median-tree') continue;
         const x = collider.x - chunk.east, s = -collider.z - chunk.start;
         const halfX = collider.halfWidth ?? collider.reach, halfS = collider.halfLength ?? collider.reach;
-        assert.ok(x - halfX > ROAD_HALF_WIDTH && x + halfX < CITY_BLOCK - ROAD_HALF_WIDTH);
-        assert.ok(s - halfS > ROAD_HALF_WIDTH && s + halfS < CITY_BLOCK - ROAD_HALF_WIDTH);
+        assert.ok(x - halfX > west.halfWidth && x + halfX < CITY_BLOCK - east.halfWidth);
+        assert.ok(s - halfS > south.halfWidth && s + halfS < CITY_BLOCK - north.halfWidth);
       }
       world.animate(0);
       const positions = chunk.peopleMesh.instanceMatrix.array.slice();

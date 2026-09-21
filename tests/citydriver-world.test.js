@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import {
   CITY_BLOCK, ROAD_HALF_WIDTH, ROAD_LEVEL, WATER_LEVEL, RIVER_PERIOD,
-  cityCell, cityBlock, cityRiverAt, cityStreetAt, citydriverRoute,
+  cityCell, cityBlock, cityRiverAt, cityStreetAt, citydriverRoute, cityStreetProfile,
 } from '../src/world/city-grid.js';
 import { CitydriverWorld, DISTANT_CITY_RADIUS } from '../src/world/citydriver-world.js';
 import { residentWindow, setResidentWindow } from '../src/world/resident.js';
@@ -15,7 +15,7 @@ test('the city has connected, level streets in all four directions through negat
   for (let index = -15; index <= 15; index++) {
     const line = index * CITY_BLOCK;
     for (let along = -CITY_BLOCK * 4; along <= CITY_BLOCK * 4; along += 3.5) {
-      for (const lane of [-ROAD_HALF_WIDTH + .1, -3, 0, 3, ROAD_HALF_WIDTH - .1]) {
+      for (const lane of [-cityStreetProfile('north', index).halfWidth + .1, -cityStreetProfile('north', index).lane, cityStreetProfile('north', index).lane, cityStreetProfile('north', index).halfWidth - .1]) {
         for (const [s, u] of [[along, line + lane], [line + lane, along]]) {
           assert.equal(cityStreetAt(s, u).onRoad, true);
           assert.equal(citydriverRoute.height(s, u), ROAD_LEVEL);
@@ -36,7 +36,7 @@ test('every recurring river is crossed by safe east-west bridges', () => {
     assert.equal(cityBlock(ix + RIVER_PERIOD, -11).kind, 'river');
     assert.equal(citydriverRoute.height(CITY_BLOCK / 2, u), WATER_LEVEL);
     assert.equal(citydriverRoute.water(CITY_BLOCK / 2, u), true);
-    for (let row = -4; row <= 4; row++) for (const lane of [-7.9, -3, 0, 3, 7.9]) {
+    for (let row = -4; row <= 4; row++) for (const lane of [-cityStreetProfile('east', row).halfWidth + .1, -3, 0, 3, cityStreetProfile('east', row).halfWidth - .1]) {
       const s = row * CITY_BLOCK + lane;
       assert.equal(cityStreetAt(s, u).bridge, true);
       assert.equal(citydriverRoute.height(s, u), ROAD_LEVEL);
@@ -72,7 +72,7 @@ test('streamed blocks are bounded, move in both axes, and retain collision coord
         for (const collider of chunk.features.colliders) {
           assert.ok(collider.x >= chunk.east && collider.x <= chunk.east + CITY_BLOCK);
           assert.ok(-collider.z >= chunk.start && -collider.z <= chunk.start + CITY_BLOCK);
-          assert.ok(!cityStreetAt(-collider.z, collider.x).onRoad, 'street furniture leaves the travel lanes clear');
+          assert.ok(collider.kind === 'median-tree' ? cityStreetAt(-collider.z, collider.x).median : !cityStreetAt(-collider.z, collider.x).onRoad, 'street furniture leaves the travel lanes clear');
         }
         for (const building of chunk.features.buildings) {
           assert.equal(building.facadeSides, 4); assert.ok(building.windows >= 8, 'even the smallest shop has windows on every side');
@@ -103,7 +103,7 @@ test('river deck meshes match the physical road height and keep their piers outs
     }
     for (const collider of chunk.features.colliders) {
       const s = -collider.z, u = collider.x;
-      assert.equal(cityStreetAt(s, u).onRoad, false);
+      assert.ok(collider.kind === 'median-tree' ? cityStreetAt(s, u).median : !cityStreetAt(s, u).onRoad);
       if (cityRiverAt(u)) assert.ok(cityStreetAt(s, u).eastDistance > ROAD_HALF_WIDTH + 1);
     }
   } finally { world.dispose(); }

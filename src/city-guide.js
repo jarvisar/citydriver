@@ -1,4 +1,4 @@
-import { CITY_BLOCK, cityBlock } from './world/city-grid.js';
+import { CITY_BLOCK, cityBlock, cityStreetProfile, cityMedianRange } from './world/city-grid.js';
 import { CITY_PLACES, PLACE_TYPES } from './world/city-places.js';
 import { CityExploration, placeRoute, routeDistance } from './city-exploration.js';
 import { taxiRoute } from './taxi-run.js';
@@ -69,11 +69,22 @@ export class CityGuide {
     const point = p => [width / 2 + (p.u - vehicle.u) * scale, height / 2 - (p.s - vehicle.s) * scale];
     const ix = Math.floor(vehicle.u / CITY_BLOCK), iz = Math.floor(vehicle.s / CITY_BLOCK);
     for (let x = ix - 4; x <= ix + 4; x++) for (let z = iz - 3; z <= iz + 3; z++) {
-      const b = cityBlock(x, z), [px, py] = point({ u: x * CITY_BLOCK + 9, s: (z + 1) * CITY_BLOCK - 9 });
+      const west = cityStreetProfile('north', x), east = cityStreetProfile('north', x + 1), south = cityStreetProfile('east', z), north = cityStreetProfile('east', z + 1);
+      const b = cityBlock(x, z), [px, py] = point({ u: x * CITY_BLOCK + west.halfWidth, s: (z + 1) * CITY_BLOCK - north.halfWidth });
+      const blockWidth = (CITY_BLOCK - west.halfWidth - east.halfWidth) * scale;
       ctx.fillStyle = b.kind === 'river' ? '#477e8b' : b.kind === 'park' || b.landmark === 'garden' ? '#4e705d' : b.landmark ? '#697369' : '#3a5155';
-      ctx.fillRect(px, py, 94 * scale, 94 * scale);
+      ctx.fillRect(px, py, blockWidth, (CITY_BLOCK - south.halfWidth - north.halfWidth) * scale);
       if (b.kind === 'river') {
-        ctx.fillStyle = '#718e8d'; ctx.fillRect(px, py - 6, 94 * scale, 4);
+        ctx.fillStyle = '#718e8d'; ctx.fillRect(px, py - 6, blockWidth, 4);
+      }
+      ctx.fillStyle = '#7c9667';
+      if (west.median) {
+        const [start, end] = cityMedianRange('north', z), [mx, my] = point({ u: x * CITY_BLOCK, s: z * CITY_BLOCK + end });
+        ctx.fillRect(mx - .6, my, 1.2, (end - start) * scale);
+      }
+      if (south.median && b.kind !== 'river') {
+        const [start, end] = cityMedianRange('east', x), [mx, my] = point({ u: x * CITY_BLOCK + start, s: z * CITY_BLOCK });
+        ctx.fillRect(mx, my - .6, (end - start) * scale, 1.2);
       }
     }
     ctx.lineJoin = 'round'; ctx.lineCap = 'round'; ctx.lineWidth = 2; ctx.strokeStyle = '#efca8b';

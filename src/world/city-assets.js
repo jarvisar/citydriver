@@ -63,8 +63,19 @@ function trafficSignal() {
   const p = new Parts();
   p.cylinder([0, 2.2, 0], .07, .1, 4.4, iron, 6);
   p.box([0, 4.6, 0], [.34, 1.05, .3], darkIron);
-  for (const [y, color] of [[4.92, '#c8382b'], [4.6, '#d9a23a'], [4.28, '#3f9a55']]) p.box([-.15, y, 0], [.06, .22, .22], color);
-  p.box([-.2, 5.16, 0], [.24, .06, .4], darkIron);
+  for (const y of [4.92, 4.6, 4.28]) p.box([0, y, .16], [.22, .22, .05], '#293538');
+  p.box([0, 5.16, .08], [.44, .06, .5], darkIron);
+  return p.finish();
+}
+function stopSign() {
+  const p = new Parts();
+  p.cylinder([0, 1.4, 0], .055, .07, 2.8, galvanised, 6);
+  p.cylinder([0, 2.8, 0], .7, .7, .08, '#e9e2cd', 8, [Math.PI / 2, Math.PI / 8, 0]);
+  p.cylinder([0, 2.8, .05], .62, .62, .03, '#b74635', 8, [Math.PI / 2, Math.PI / 8, 0]);
+  const letters = ['111100111001111', '111010010010010', '111101101101111', '110101110100100'];
+  letters.forEach((letter, l) => [...letter].forEach((pixel, i) => {
+    if (pixel === '1') p.box([-.35 + (l * 4 + i % 3) * .049, 2.9 - Math.floor(i / 3) * .049, .072], [.045, .045, .012], '#fff2d9');
+  }));
   return p.finish();
 }
 // A promenade bench facing the water.
@@ -170,7 +181,7 @@ function streetTree(variant) {
 }
 
 export const cityTrees = [streetTree(0), streetTree(1)];
-export const cityAssets = { lamp: lampPost(), signal: trafficSignal(), bench: bench(), shelter: busShelter(), railing: railing(), bollard: bollard(), manhole: manhole(), tank: waterTank(), kiosk: kiosk(), bin: litterBin() };
+export const cityAssets = { lamp: lampPost(), signal: trafficSignal(), stop: stopSign(), bench: bench(), shelter: busShelter(), railing: railing(), bollard: bollard(), manhole: manhole(), tank: waterTank(), kiosk: kiosk(), bin: litterBin() };
 
 // Parked cars reuse the traffic fleet's bodies: the paint shell carries a
 // per-instance colour and everything else keeps its own baked colours.

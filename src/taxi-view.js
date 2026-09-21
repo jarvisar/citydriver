@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { cityWalker } from './world/city-life.js';
-import { ROAD_LEVEL, PAVEMENT_LEVEL } from './world/city-grid.js';
+import { CITY_BLOCK, ROAD_LEVEL, PAVEMENT_LEVEL, cityStreetProfile } from './world/city-grid.js';
 import { STOP_SECONDS, taxiRoute } from './taxi-run.js';
 import { routeDistance } from './city-exploration.js';
 
@@ -26,20 +26,24 @@ export class TaxiView {
     this.materials = []; this.markers = []; this.revision = run.revision;
     const stops = run.status === 'pickup' ? run.customers : run.status === 'driving' ? [{ ...run.target, color: '#ffd240' }] : [];
     for (const stop of stops) {
+      const street = cityStreetProfile(stop.axis, Math.round((stop.axis === 'north' ? stop.u : stop.s) / CITY_BLOCK));
+      const acrossScale = Math.min(.65, (street.halfWidth - street.lane - .4) / 6.5);
       const group = new THREE.Group(), solid = new THREE.MeshBasicMaterial({ color: stop.color, side: THREE.DoubleSide });
       const glow = new THREE.MeshBasicMaterial({ color: stop.color, transparent: true, opacity: .08, depthWrite: false, side: THREE.DoubleSide });
       this.materials.push(solid, glow);
       const ring = new THREE.Mesh(this.ring, solid); ring.position.y = ROAD_LEVEL + .07; group.add(ring);
       const beam = new THREE.Mesh(this.beam, glow); beam.position.y = ROAD_LEVEL + 2.5; group.add(beam);
+      if (stop.axis === 'north') beam.scale.x = acrossScale; else beam.scale.z = acrossScale;
       const arrow = new THREE.Mesh(this.cone, solid); arrow.position.y = ROAD_LEVEL + 7; group.add(arrow);
       if (run.status === 'pickup') {
         const person = new THREE.Mesh(cityWalker, this.people); person.scale.setScalar(1.25); person.position.y = PAVEMENT_LEVEL;
-        if (stop.axis === 'north') person.position.x = stop.side * 8;
-        else person.position.z = stop.side * 8;
+        const curb = street.halfWidth - street.lane + 2;
+        if (stop.axis === 'north') person.position.x = stop.side * curb;
+        else person.position.z = stop.side * curb;
         group.add(person);
       }
       group.traverse(object => { object.userData.ambientOcclusion = false; });
-      this.markers.push({ group, stop, arrow, ring }); this.group.add(group);
+      this.markers.push({ group, stop, arrow, ring, acrossScale }); this.group.add(group);
     }
   }
   reset() { this.trails = []; this.trailIndex = 0; this.lastTrail = 0; this.skids.count = 0; this.revision = -1; }
@@ -52,7 +56,8 @@ export class TaxiView {
       marker.group.position.set(marker.stop.u, 0, -marker.stop.s);
       marker.arrow.position.y = ROAD_LEVEL + 7 + Math.sin(time * 3) * .35;
       marker.arrow.visible = run.status === 'driving' || marker.stop.id === run.target?.id;
-      marker.ring.scale.setScalar(1 + Math.sin(time * 4) * .035);
+      const pulse = 1 + Math.sin(time * 4) * .035;
+      marker.ring.scale.set(marker.stop.axis === 'north' ? marker.acrossScale * pulse : pulse, 1, marker.stop.axis === 'east' ? marker.acrossScale * pulse : pulse);
     }
     if (vehicle.drifting && time - this.lastTrail > .065) {
       this.lastTrail = time;
