@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import { roadX, roadHeight, roadFrame, terrainHeight, groundHeight, terrainVertex, terrainColumns, coastOffset, shorelineOffset, beachWidth, bridgeAt, pondAt, pondRadius, positionAt, CHUNK_LENGTH, randomAt } from '../src/world/route.js';
+import { roadX, roadHeight, roadFrame, terrainHeight, groundHeight, terrainVertex, terrainColumns, coastOffset, shorelineOffset, beachWidth, bridgeAt, pondAt, pondRadius, positionAt, COAST_VERGE, CHUNK_LENGTH, randomAt } from '../src/world/route.js';
 import { DrivingController } from '../src/vehicle.js';
 import { CoastalWorld } from '../src/world/environment.js';
 
@@ -63,7 +63,7 @@ test('soft roadside limits keep a continuously steered car on safe ground', () =
     const car = new DrivingController();
     for (let i = 0; i < 3600; i++) {
       car.update(1 / 60, { forward: true, [side]: true });
-      assert.ok(car.u >= Math.max(coastOffset(car.s) + 6, -15) - .0001 && car.u <= 17.0001);
+      assert.ok(car.u >= Math.max(coastOffset(car.s) + 6, -COAST_VERGE.ocean) - .0001 && car.u <= COAST_VERGE.inland + .0001);
       assert.ok(Number.isFinite(car.car.position.y));
     }
   }

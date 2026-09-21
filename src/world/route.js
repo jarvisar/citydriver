@@ -421,14 +421,20 @@ export function coastalGuardrail(s) {
     && (guardrailBeam(middle - GUARDRAIL_SEGMENT) || guardrailBeam(middle + GUARDRAIL_SEGMENT));
 }
 
+// How far the car may roam from the centre line where nothing stands in its
+// way. The inland meadow stays gentle well past this, and the ponds sit far
+// beyond it; the ocean side is cut short by the cliff term in bounds().
+export const COAST_VERGE = { ocean: 18, inland: 22 };
+
 export const coastalDrivingRoute = {
   frame: roadFrame,
   position: positionAt,
   height: terrainHeight,
   bounds(s) {
     if (Math.abs(s - bridgeAt(s).center) < 49) return [-4.65, 4.65];
-    const open = Math.max(drivingCoastOffset(s) + 6, -15);
+    // Open meadow either side, but never nearer the cliff edge than six metres.
+    const open = Math.max(drivingCoastOffset(s) + 6, -COAST_VERGE.ocean);
     // A rail is solid; without one the roadside limit stays soft.
-    return [coastalGuardrail(s) ? Math.max(open, GUARDRAIL_STOP) : open, 17];
+    return [coastalGuardrail(s) ? Math.max(open, GUARDRAIL_STOP) : open, COAST_VERGE.inland];
   },
 };

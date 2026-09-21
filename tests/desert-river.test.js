@@ -2,11 +2,27 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { roadHeight } from '../src/world/route.js';
-import { desertBridgeAt, desertCreek, desertGroundHeight, desertHeight, desertDrivingRoute, desertRiverRockEdge, DESERT_BRIDGE_SPACING } from '../src/world/desert-route.js';
+import { desertBridgeAt, desertCreek, desertGroundHeight, desertHeight, desertDrivingRoute, desertRiverRockEdge, insideMesa, desertCreekDistance, DESERT_VERGE, DESERT_BRIDGE_SPACING } from '../src/world/desert-route.js';
 import { DesertChunk, DesertWorld } from '../src/world/desert.js';
 import { desertWaterClock } from '../src/world/desert-river.js';
 import { DrivingController } from '../src/vehicle.js';
 import { packChunk, unpackChunk } from '../src/world/chunk-transfer.js';
+
+test('the valley floor a car may roam is open sand: no water, no channel, no rock', () => {
+  let widest = 0;
+  for (let s = -20000; s <= 20000; s += 5) {
+    const [left, right] = desertDrivingRoute.bounds(s), bridge = desertBridgeAt(s);
+    if (s > bridge.start - 6 && s < bridge.end + 6) continue;
+    widest = Math.max(widest, right, -left);
+    for (let u = left; u <= right; u += .5) {
+      assert.equal(desertGroundHeight(s, u), desertHeight(s, u), `the creek channel is within reach at ${s}, ${u}`);
+      assert.ok(desertCreekDistance(s, u) > 2, `water within reach at ${s}, ${u}`);
+      assert.ok(!insideMesa(s, u), `rock within reach at ${s}, ${u}`);
+      assert.ok(Math.abs(desertHeight(s, u + .5) - desertHeight(s, u)) < .45, `steep ground within reach at ${s}, ${u}`);
+    }
+  }
+  assert.equal(widest, DESERT_VERGE);
+});
 
 test('the river stays in the valley, crosses beneath bridges, and preserves the canyon terrain', () => {
   for (let s = -20000; s <= 20000; s += 13) {

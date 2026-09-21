@@ -250,6 +250,9 @@ export function insideMesa(s, u, padding = 1.28) {
   return false;
 }
 
+// The valley floor is open sand well short of the mesas, which start at 35 m.
+export const DESERT_VERGE = 22;
+
 export const desertDrivingRoute = {
   frame: roadFrame,
   position: desertPosition,
@@ -258,6 +261,6 @@ export const desertDrivingRoute = {
     const bridge = desertBridgeAt(s);
     if (s > bridge.start - 6 && s < bridge.end + 6) return [-4.8, 4.8];
     const creek = desertCreek(s), margin = creek.width + 4.7;
-    return creek.center < 0 ? [Math.max(-17, creek.center + margin), 17] : [-17, Math.min(17, creek.center - margin)];
+    return creek.center < 0 ? [Math.max(-DESERT_VERGE, creek.center + margin), DESERT_VERGE] : [-DESERT_VERGE, Math.min(DESERT_VERGE, creek.center - margin)];
   },
 };
