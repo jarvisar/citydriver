@@ -30,6 +30,7 @@ class Device {
 const graphicsAt = (level, options = {}) => new Graphics({ storage: memoryStorage(), detect: () => level, ...options });
 
 test('quality levels get cheaper in every dimension, from high down to basic', () => {
+  const AO_COST = { low: 0, high: 1 };
   assert.deepEqual(QUALITY_LEVELS.map(level => level.id), ['high', 'balanced', 'smooth', 'basic']);
   for (let i = 1; i < QUALITY_LEVELS.length; i++) {
     const previous = QUALITY_LEVELS[i - 1], level = QUALITY_LEVELS[i];
@@ -38,10 +39,11 @@ test('quality levels get cheaper in every dimension, from high down to basic', (
     assert.ok(level.chunks.behind <= previous.chunks.behind, `${level.id} chunks behind`);
     assert.ok(level.chunks.ahead <= previous.chunks.ahead, `${level.id} chunks ahead`);
     assert.ok(Number(level.antialias) <= Number(previous.antialias), `${level.id} antialiasing`);
+    assert.ok(AO_COST[level.aoQuality] <= AO_COST[previous.aoQuality], `${level.id} AO budget`);
   }
   // The top level must draw everything, at the density the display asks for.
   assert.deepEqual({ ...QUALITY_LEVELS[0], id: undefined, label: undefined, summary: undefined },
-    { id: undefined, label: undefined, summary: undefined, density: 1, shadowMap: 2048, chunks: { behind: 3, ahead: 5 }, antialias: true });
+    { id: undefined, label: undefined, summary: undefined, density: 1, shadowMap: 2048, chunks: { behind: 3, ahead: 5 }, antialias: true, aoQuality: 'high' });
 });
 
 test('every level removes pixels, on a 1x panel as much as on a dense one', () => {

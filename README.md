@@ -73,7 +73,7 @@ For free driving off-road, enter **↑ ↑ ↓ ↓ ← → ← → B A** on the 
 
 The pause menu has traffic, sound, fullscreen, and graphics controls. **Auto** adjusts graphics quality while driving; High, Balanced, Smooth, and Basic set a fixed level. Lower levels reduce resolution, shadow detail, and view distance. The pixel-density slider adjusts resolution separately. Changes to multisampling take effect on the next load.
 
-**Soft shading** adds ambient occlusion and starts off. It is saved separately from graphics quality; `?ao=0` disables it for a visit. Sound also starts off. Press **M** to enable it, and use **Audio settings** for channel volumes, presets, and optional music. See [audio.md](docs/audio.md).
+**Soft shading** adds ambient occlusion and starts off. Whether it is on is saved separately from graphics quality, and neither a preset nor Auto switches it; while it is on, its cost follows the quality level. `?ao=0` disables it for a visit. Sound also starts off. Press **M** to enable it, and use **Audio settings** for channel volumes, presets, and optional music. See [audio.md](docs/audio.md).
 
 ## Quest / browser VR
 

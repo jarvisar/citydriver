@@ -89,8 +89,8 @@ try {
     assert.equal(density('basic').height, Math.floor(844 * expected('basic')));
     assert.deepEqual(result.levels.map(level => level.shadow), [2048, 1536, 1024, 512]);
     assert.deepEqual(result.levels.map(level => level.ambientOcclusion), [false, false, false, false]);
-    assert.deepEqual(result.levels.map(level => level.aoQuality), ['balanced', 'balanced', 'balanced', 'balanced']);
-    assert.deepEqual(result.enabledLevels, Array.from({ length: 5 }, () => ({ enabled: true, quality: 'balanced' })), 'presets preserve both the AO opt-in and its quality');
+    assert.deepEqual(result.levels.map(level => level.aoQuality), ['high', 'high', 'low', 'low'], 'the AO budget follows the level');
+    assert.ok(result.enabledLevels.every(level => level.enabled), 'no preset, nor Auto, switches the AO opt-in off');
     assert.ok(result.unchangedProjection, 'density never touches the camera projection');
 
     assert.equal(result.steady.level, 'high', 'a display-rate device keeps its level');

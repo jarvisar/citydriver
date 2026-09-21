@@ -49,7 +49,7 @@ try {
     });
     const results = [];
     for (const perspective of [false, true]) for (const span of [30, 75]) {
-      for (const variant of ['full-resolution', 'high', 'balanced']) {
+      for (const variant of ['full-resolution', 'high', 'low']) {
         const camera = perspective ? new THREE.PerspectiveCamera(50, 1.6, .1, 200)
           : new THREE.OrthographicCamera(-span * .8, span * .8, span * .5, -span * .5, .1, 200);
         camera.position.set(8, 16, 22).multiplyScalar(perspective ? span / 26 : 1);
@@ -57,7 +57,6 @@ try {
         const origin = camera.position.clone(), right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
         const ao = new AmbientOcclusion(renderer, scene, camera);
         if (variant === 'full-resolution') {
-          ao.maxSize = Infinity;
           Object.assign(ao.pass.configuration, { aoSamples: 64, denoiseSamples: 16,
             denoiseIterations: 3, halfRes: false, depthAwareUpsampling: false });
         } else ao.setQuality(variant);

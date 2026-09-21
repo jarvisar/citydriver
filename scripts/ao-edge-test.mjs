@@ -27,11 +27,14 @@ try {
     const cardMaterial = new THREE.MeshBasicMaterial({ color: '#40ffff' });
     const card = new THREE.Mesh(new THREE.PlaneGeometry(1, 4), cardMaterial); card.quaternion.copy(camera.quaternion);
     card.position.set(.75, 0, -.4).addScaledVector(origin.clone().normalize(), 5).addScaledVector(right, -.5); scene.add(card);
-    const points = [];
-    for (let y = -.8; y < .8; y += .01) points.push(card.position.clone().addScaledVector(right, .49).addScaledVector(up, y));
     const ao = new AmbientOcclusion(renderer, scene, camera), gl = renderer.getContext(), results = [];
-    for (const quality of ['high', 'balanced']) for (const ratio of [1, 3]) {
+    for (const quality of ['high', 'low']) for (const ratio of [1, 3]) {
       ao.setQuality(quality); renderer.setPixelRatio(ratio);
+      // At one device pixel per CSS pixel the silhouette is exact. A denser
+      // screen filters the finished mask up, which may reach one CSS pixel (a
+      // sixtieth of a metre here) into the card and no further.
+      const inset = ratio === 1 ? .01 : 1.05 / 60, points = [];
+      for (let y = -.8; y < .8; y += .01) points.push(card.position.clone().addScaledVector(right, .5 - inset).addScaledVector(up, y));
       const width = 960 * ratio, height = 600 * ratio;
       const read = () => {
         const data = new Uint8Array(width * height * 4); gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, data); return data;

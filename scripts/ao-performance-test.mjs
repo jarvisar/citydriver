@@ -16,20 +16,18 @@ try {
   await page.evaluate(() => { window.__coastline.action('pause'); window.__coastline.graphics.setMode('high'); });
   for (const journey of ['coast', 'jungle']) {
     await page.evaluate(id => window.__coastline.changeJourney(id), journey);
-    const result = await page.evaluate(async () => {
+    const result = await page.evaluate(async baseline => {
       const { rendering: r } = window.__coastline;
       const { AmbientOcclusion } = await import('/src/ambient-occlusion.js');
+      // AO_BASELINE_MODULE times another implementation on the same buffers.
+      const Baseline = baseline ? (await import(baseline)).AmbientOcclusion : null;
       const gl = r.renderer.getContext();
       const extension = gl.getExtension('WEBGL_debug_renderer_info');
       const measure = profile => {
         const texturesBefore = r.renderer.info.memory.textures;
-        const ao = new AmbientOcclusion(r.renderer, r.scene, r.camera);
-        if (profile === 'before') {
-          // The previous full-resolution, 64-sample implementation.
-          ao.maxSize = Infinity;
-          Object.assign(ao.pass.configuration, { halfRes: false, depthAwareUpsampling: false,
-            aoSamples: 64, denoiseSamples: 16, denoiseIterations: 3 });
-        } else if (profile === 'off') ao.enabled = false;
+        const ao = new (profile === 'baseline' ? Baseline : AmbientOcclusion)(r.renderer, r.scene, r.camera);
+        if (profile === 'baseline') ao.setQuality('balanced');
+        else if (profile === 'off') ao.enabled = false;
         else ao.setQuality(profile);
         const pixel = new Uint8Array(4);
         // A readback waits for actual GPU completion; gl.finish alone can leave
@@ -43,7 +41,7 @@ try {
         }
         const target = ao.pass.writeTargetInternal;
         const result = { profile, medianMs: samples.sort((a, b) => a - b)[7],
-          aoSize: [target.width, target.height], samplesPerPixel: ao.pass.configuration.aoSamples,
+          depthSize: [ao.pass.width, ao.pass.height], aoSize: [target.width, target.height],
           sampleWork: target.width * target.height * ao.pass.configuration.aoSamples,
           drawCalls: r.renderer.info.render.calls };
         ao.dispose();
@@ -53,14 +51,16 @@ try {
         return result;
       };
       return { gpu: extension ? gl.getParameter(extension.UNMASKED_RENDERER_WEBGL) : 'unknown',
-        buffer: [gl.canvas.width, gl.canvas.height], profiles: ['off', 'before', 'high', 'balanced'].map(measure) };
-    });
-    const [off, before, high, balanced] = result.profiles;
-    assert.ok(Math.max(...high.aoSize) <= 640);
-    assert.ok(Math.max(...balanced.aoSize) <= 384);
-    assert.ok(high.sampleWork < before.sampleWork / 20, 'High bounds AO work on a 3x phone viewport');
-    assert.ok(balanced.sampleWork < high.sampleWork / 4, 'Balanced has a distinctly cheaper AO budget');
-    assert.ok(off.drawCalls < balanced.drawCalls, 'disabling AO skips the extra geometry pass');
+        buffer: [gl.canvas.width, gl.canvas.height], profiles: ['off', 'high', 'low', ...(Baseline ? ['baseline'] : [])].map(measure) };
+    }, process.env.AO_BASELINE_MODULE || null);
+    const [off, high, low] = result.profiles;
+    // A 390 x 844 phone: depth stops at 1.5 and 1 device pixels per CSS pixel,
+    // and N8AO shades at exactly half of that.
+    assert.deepEqual(high.depthSize, [584, 1266]);
+    assert.deepEqual(low.depthSize, [390, 844]);
+    for (const profile of [high, low]) assert.deepEqual(profile.aoSize, profile.depthSize.map(size => size / 2), 'AO is exactly half its depth');
+    assert.ok(low.sampleWork < high.sampleWork / 2, 'Low has a distinctly cheaper AO budget on a dense screen');
+    assert.ok(off.drawCalls < low.drawCalls, 'disabling AO skips the extra geometry pass');
     results.push({ journey, ...result });
   }
   assert.deepEqual(errors, []);

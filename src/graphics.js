@@ -4,7 +4,10 @@
 //
 // A level changes the drawing buffer's density, the sun shadow's detail, and
 // how much of the route stays built around the car. AO is a separate, opt-in
-// setting that neither presets nor Auto change. Lighting and scenery are identical at
+// setting that neither presets nor Auto switch on or off. While it is on it
+// costs what the level can afford: it is drawn from the same drawing buffer, so
+// it shrinks with `density`, and `aoQuality` bounds it on dense screens.
+// Lighting and scenery are identical at
 // every level, so a route looks like itself on every device. Nothing here
 // changes the shader light counts, which would make the browser recompile every
 // program mid-drive.
@@ -21,10 +24,10 @@
 // to eleven per cent of the frame's draw calls — so the cheaper levels drop
 // them, and High keeps them as headroom for reversing.
 export const QUALITY_LEVELS = [
-  { id: 'high', label: 'High', summary: 'Native resolution · sharp shadows', density: 1, shadowMap: 2048, chunks: { behind: 3, ahead: 5 }, antialias: true },
-  { id: 'balanced', label: 'Balanced', summary: '85% resolution · medium shadows', density: .85, shadowMap: 1536, chunks: { behind: 2, ahead: 4 }, antialias: true },
-  { id: 'smooth', label: 'Smooth', summary: '70% resolution · softer shadows', density: .7, shadowMap: 1024, chunks: { behind: 2, ahead: 4 }, antialias: true },
-  { id: 'basic', label: 'Basic', summary: '50% resolution · simple shadows · shortest view', density: .5, shadowMap: 512, chunks: { behind: 1, ahead: 3 }, antialias: false },
+  { id: 'high', label: 'High', summary: 'Native resolution · sharp shadows', density: 1, shadowMap: 2048, chunks: { behind: 3, ahead: 5 }, antialias: true, aoQuality: 'high' },
+  { id: 'balanced', label: 'Balanced', summary: '85% resolution · medium shadows', density: .85, shadowMap: 1536, chunks: { behind: 2, ahead: 4 }, antialias: true, aoQuality: 'high' },
+  { id: 'smooth', label: 'Smooth', summary: '70% resolution · softer shadows', density: .7, shadowMap: 1024, chunks: { behind: 2, ahead: 4 }, antialias: true, aoQuality: 'low' },
+  { id: 'basic', label: 'Basic', summary: '50% resolution · simple shadows · shortest view', density: .5, shadowMap: 512, chunks: { behind: 1, ahead: 3 }, antialias: false, aoQuality: 'low' },
 ];
 const WORST = QUALITY_LEVELS.length - 1;
 export const levelIndex = id => QUALITY_LEVELS.findIndex(level => level.id === id);
