@@ -12,6 +12,8 @@ Packages are unsigned. Windows may require **More info → Run anyway**; macOS m
 chmod +x Coastline-*.AppImage
 ```
 
+The installed Windows app and the AppImage check for a new release at launch, download it in the background, and install it when you quit. The portable executable and the macOS app can't update themselves; when a new version is out, a **Get version** button on the title screen and pause menu opens the download page.
+
 The app starts fullscreen. F, F11, Alt+Enter, LB / L1, or the pause menu toggle fullscreen. Escape opens or closes menus without leaving fullscreen. F12 opens DevTools.
 
 ## Run from source
@@ -34,6 +36,7 @@ Pass these to the executable, through Steam launch options, or after `npm run el
 | `--fullscreen` / `--windowed` | `COASTLINE_FULLSCREEN=1` / `0` | Set the starting window mode. Default: fullscreen. |
 | `--seed=<n>` | | Open a specific world. |
 | `--software-gl` | `COASTLINE_SOFTWARE_GL=1` | Use SwiftShader for testing GPU problems. Runs slowly. |
+| `--no-update` | `COASTLINE_NO_UPDATE=1` | Skip the update check at launch. |
 | `--devtools` | `COASTLINE_DEVTOOLS=1` | Open DevTools on launch. |
 | `--dev-url=<url>` | `COASTLINE_DEV_URL` | Load a dev server instead of the built game. |
 | | `COASTLINE_USER_DATA=<dir>` | Use a separate profile directory. |
@@ -86,11 +89,13 @@ npm version patch
 git push --follow-tags
 ```
 
+Each release also carries `latest.yml`, `latest-linux.yml`, `latest-mac.yml`, and a `.blockmap` for the installer. [electron-updater](https://www.electron.build/auto-update) in installed apps reads these to find and download the new version, so don't delete them from a release. A release only reaches users once it is published; drafts and pre-releases are ignored.
+
 The macOS smoke test is informational and doesn't block releases; its CI runner hasn't loaded the WebGL scene reliably.
 
 ## Wrapper and tests
 
-[main.js](electron/main.js) serves `dist-electron/` at `app://coastline/`. The renderer is sandboxed, with a [preload bridge](electron/preload.cjs) for fullscreen and Escape. PWA installation and service worker scripts are disabled in Electron. External links open in the system browser.
+[main.js](electron/main.js) serves `dist-electron/` at `app://coastline/`. The renderer is sandboxed, with a [preload bridge](electron/preload.cjs) for fullscreen, Escape, and the update notice. PWA installation and service worker scripts are disabled in Electron. External links open in the system browser. The update check runs only in packaged builds, and the tests turn it off.
 
 Web changes reach the desktop app on the next build. If asset paths or extensions change, check the protocol handler and MIME table. If PWA script names change, update `WEB_ONLY_SCRIPTS`. The manifest supplies app metadata; `package.json` supplies the version. Regenerate the desktop icon after changing the favicon.
 

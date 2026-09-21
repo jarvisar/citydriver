@@ -104,6 +104,8 @@ jobs:
             release/*.AppImage
             release/*.dmg
             release/*.zip
+            release/latest*.yml
+            release/*.exe.blockmap
           if-no-files-found: error
       - uses: actions/upload-artifact@v6
         if: always()
@@ -125,15 +127,16 @@ jobs:
           pattern: desktop-*
           path: packages
           merge-multiple: true
+      # latest*.yml and the blockmap are what installed apps read to update themselves.
       - name: Remove smoke-test files from the release set
-        run: find packages -type f ! \( -name '*.exe' -o -name '*.AppImage' -o -name '*.dmg' -o -name '*.zip' \) -delete && ls -la packages
+        run: find packages -type f ! \( -name '*.exe' -o -name '*.AppImage' -o -name '*.dmg' -o -name '*.zip' -o -name 'latest*.yml' -o -name '*.blockmap' \) -delete && ls -la packages
       - uses: softprops/action-gh-release@v2
         with:
           files: packages/*
           generate_release_notes: true
           fail_on_unmatched_files: true
           body: |
-            Desktop builds of Coastline. All packages are unsigned:
+            Desktop builds of Coastline. The Windows installer and the AppImage update themselves; the portable exe and macOS app tell you when a new version is out. The `.yml` and `.blockmap` files are for the updater. All packages are unsigned:
 
             - **Windows:** run the `-setup.exe` installer or the `-portable.exe`. SmartScreen may show "Windows protected your PC"; choose *More info* → *Run anyway*.
             - **Linux / Steam Deck:** download the `.AppImage`, mark it executable, and run it. On a Steam Deck, add it as a non-Steam game to launch from Game Mode with the controller. See ELECTRON.md for details.

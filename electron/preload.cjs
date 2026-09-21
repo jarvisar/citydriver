@@ -9,4 +9,8 @@ contextBridge.exposeInMainWorld('coastlineDesktop', {
   onEscape: callback => {
     ipcRenderer.on('coastline:escape', () => callback());
   },
+  getUpdate: () => ipcRenderer.invoke('coastline:update-get'),
+  onUpdate: callback => {
+    ipcRenderer.on('coastline:update-available', (_event, update) => callback(update));
+  },
 });

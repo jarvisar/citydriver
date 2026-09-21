@@ -3,8 +3,10 @@
 // The renderer is the unmodified Vite build (dist-electron/), served through a
 // privileged app:// scheme so absolute asset URLs, the module Web Worker,
 // storage, and secure-context APIs behave exactly as on the HTTPS deployment.
-// A sandboxed preload exposes only native fullscreen controls and Escape input.
+// A sandboxed preload exposes only native fullscreen controls, Escape input, and
+// the update notice.
 import { app, BrowserWindow, Menu, dialog, ipcMain, net, protocol, shell } from 'electron';
+import electronUpdater from 'electron-updater'; // CommonJS: no named exports
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -15,6 +17,7 @@ const root = path.join(here, '..');
 const rendererDir = path.join(root, 'dist-electron');
 const APP_HOST = 'coastline';
 const APP_ORIGIN = `app://${APP_HOST}`;
+const RELEASES_URL = 'https://github.com/jarvisar/coastline/releases/latest';
 // Web-only helpers (install banner, offline service worker) are served as empty
 // scripts instead of being stripped from the build, so index.html stays untouched.
 const WEB_ONLY_SCRIPTS = new Set(['/pwa-register.js', '/pwa-install.js']);
@@ -39,6 +42,7 @@ const options = {
   seed: value('--seed'),
   devtools: has('--devtools') || process.env.COASTLINE_DEVTOOLS === '1',
   softwareGl: has('--software-gl') || process.env.COASTLINE_SOFTWARE_GL === '1',
+  noUpdate: has('--no-update') || process.env.COASTLINE_NO_UPDATE === '1',
   fullscreen: has('--fullscreen') ? true : has('--windowed') ? false
     : process.env.COASTLINE_FULLSCREEN ? process.env.COASTLINE_FULLSCREEN === '1' : true,
 };
@@ -48,6 +52,7 @@ if (has('--help') || has('-h')) {
     '  --fullscreen | --windowed   Start fullscreen or windowed (default: fullscreen)',
     '  --seed=<number>             Open a specific world, like ?seed= on the web',
     '  --software-gl               Render with SwiftShader instead of the GPU (slow; for testing)',
+    '  --no-update                 Skip the update check at startup',
     '  --devtools                  Open DevTools at startup (F12 toggles them any time)',
     '  --dev-url=<url>             Load a running Vite dev server instead of dist-electron/',
     '',
@@ -200,6 +205,27 @@ function installMenu() {
   ]));
 }
 
+// --- Updates ----------------------------------------------------------------
+// The Windows install and the Linux AppImage download a newer GitHub release in the
+// background and install it on quit. The portable exe cannot replace itself and the
+// unsigned macOS app cannot be updated in place, so for those the game's menus show a
+// button that opens the download page.
+let availableUpdate;
+function checkForUpdates() {
+  if (!app.isPackaged || options.noUpdate) return;
+  const { autoUpdater } = electronUpdater;
+  const selfUpdating = process.platform === 'linux' || (process.platform === 'win32' && !process.env.PORTABLE_EXECUTABLE_FILE);
+  autoUpdater.autoDownload = selfUpdating;
+  if (!selfUpdating) {
+    autoUpdater.on('update-available', info => {
+      availableUpdate = { version: info.version, url: RELEASES_URL };
+      mainWindow?.webContents.send('coastline:update-available', availableUpdate);
+    });
+  }
+  // Failures (offline, rate limit) are logged by the updater and never block the game.
+  autoUpdater.checkForUpdates().catch(() => {});
+}
+
 // --- Lifecycle --------------------------------------------------------------
 app.whenReady().then(() => {
   if (!options.devUrl && !existsSync(path.join(rendererDir, 'index.html'))) {
@@ -216,7 +242,10 @@ app.whenReady().then(() => {
       return mainWindow.isFullScreen();
     });
   }
+  // The page asks once it has loaded, in case the check finished first.
+  ipcMain.handle('coastline:update-get', () => availableUpdate);
   createWindow();
+  checkForUpdates();
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 });
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });

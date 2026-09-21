@@ -38,7 +38,7 @@ const MENU_CRUISE_SPEED = TRAFFIC_CRUISE_SPEED * 1.4;
 // A chooser's ring holds its cards and paint chips; the pause screen's holds
 // resume, the garage and every driving, sound and graphics setting.
 const MENU_CARDS = '[data-journey], [data-car], [data-paint]';
-const PAUSE_CONTROLS = '#resume, #change-car, #autodrive, #traffic, #sound, #audio-mixer-toggle, #audio-mixer button, #audio-mixer input, #fullscreen, #graphics-toggle, [data-quality], #pixel-density, #soft-shading, #enter-vr-pause, .pwa-install-button';
+const PAUSE_CONTROLS = '#resume, #change-car, #autodrive, #traffic, #sound, #audio-mixer-toggle, #audio-mixer button, #audio-mixer input, #fullscreen, #graphics-toggle, [data-quality], #pixel-density, #soft-shading, #enter-vr-pause, .update-entry, .pwa-install-button';
 const mileageFormat = new Intl.NumberFormat('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 let paused = false, started = false, time = 0, hudTime = 0;
 const frameClock = new FrameClock();
@@ -516,6 +516,23 @@ async function boot() {
         const chooser = openChooser();
         if (chooser) chooser.close(); else action('pause');
       });
+      // Desktop builds that cannot update themselves get a download button on both menus.
+      let updateShown = false;
+      const showUpdate = update => {
+        if (!update || updateShown) return;
+        updateShown = true;
+        for (const [anchor, classes] of [['#enter-vr', 'start-button menu-secondary'], ['#enter-vr-pause', 'panel-button']]) {
+          const button = document.createElement('button');
+          button.type = 'button'; button.className = `${classes} update-entry`;
+          button.innerHTML = '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3v12m-4-4 4 4 4-4M5 15v5h14v-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg><span></span>';
+          button.lastChild.textContent = `Get version ${update.version}`;
+          button.title = 'Opens the download page';
+          button.addEventListener('click', () => window.open(update.url)); // the wrapper hands it to the system browser
+          $(anchor).after(button);
+        }
+      };
+      desktop.onUpdate(showUpdate);
+      desktop.getUpdate().then(showUpdate);
     }
     updateFullscreenUi();
     $('#fullscreen').addEventListener('click', event => {

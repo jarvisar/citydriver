@@ -53,7 +53,8 @@ const appArgs = ['--seed=4817', ...(flags.has('--windowed') ? ['--windowed'] : [
 const { ELECTRON_RUN_AS_NODE: _ignored, ...env } = process.env;
 const launchOptions = {
   cwd: root,
-  env: { ...env, COASTLINE_FULLSCREEN: '', COASTLINE_USER_DATA: userData },
+  // No update check: a packaged build must not download a release or show a dialog mid-test.
+  env: { ...env, COASTLINE_FULLSCREEN: '', COASTLINE_USER_DATA: userData, COASTLINE_NO_UPDATE: '1' },
   args: packaged ? appArgs : ['.', ...appArgs],
   ...(packaged ? { executablePath: packagedExecutable() } : {}),
   timeout: 60_000,

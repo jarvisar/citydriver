@@ -60,19 +60,22 @@ module.exports = {
   },
   directories: { buildResources: 'electron/build', output: 'release' },
   electronDist,
-  // The renderer is fully bundled by Vite: no runtime node_modules are shipped.
+  // The renderer is fully bundled by Vite, so its libraries stay out of the package. The only
+  // runtime node_modules shipped are electron-updater and its dependencies, for electron/main.js.
   files: [
     'electron/main.js',
     'electron/preload.cjs',
     'electron/window-state.js',
     'electron/build/icon.png',
     'dist-electron/**/*',
-    '!node_modules/**',
+    ...Object.keys(pkg.dependencies).filter(name => name !== 'electron-updater').map(name => `!node_modules/${name}/**`),
   ],
   asar: true,
   npmRebuild: false,
   nodeGypRebuild: false,
-  publish: null,
+  // Tells electron-updater where releases live and makes each build emit its latest*.yml
+  // update manifest. The build scripts pass --publish never: the workflow uploads the files.
+  publish: { provider: 'github', owner: 'jarvisar', repo: 'coastline' },
   artifactName: '${productName}-${version}-${os}-${arch}.${ext}',
 
   win: {
