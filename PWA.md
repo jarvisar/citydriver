@@ -19,7 +19,7 @@ Development with `npm run dev` shows the install help but does not register a se
 
 The build hashes the generated files into a cache version. A new service worker waits while the current game is open; closing the game's tabs allows the new version to become active. Cache cleanup only removes old Citydriver caches within the same scope.
 
-The manifest and generated asset URLs work at the site root or under a subdirectory. For a future Citydriver deployment under a subdirectory, build with `npm run build -- --base=/citydriver/`. No hosting destination is configured or published by this repository yet.
+The manifest and generated asset URLs work at the site root or under a subdirectory. The GitHub Pages workflow builds with `npm run build -- --base=/citydriver/` and deploys successful builds from `main`. Use the same command to preview the hosted layout locally.
 
 ## Assets and checks
 

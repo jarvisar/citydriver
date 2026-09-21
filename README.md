@@ -59,4 +59,15 @@ Browser checks require a dev server. Set `TEST_URL` for a different URL and `CHR
 
 [Desktop setup](ELECTRON.md) · [Offline installation](PWA.md)
 
-Work stays in this directory. The original game and its repository are separate. No public deployment is configured.
+## GitHub Pages
+
+In repository **Settings → Pages**, set **Source** to **GitHub Actions**. The workflow tests and builds each pull request, then deploys successful builds from `main` to Pages. The production build uses `/citydriver/` as its base path.
+
+Commit `package-lock.json` whenever dependencies change. If `npm ci` reports missing lockfile entries, regenerate the lockfile with a current npm 11 version:
+
+```sh
+npx --yes --package=npm@11.19.1 npm install --package-lock-only --ignore-scripts
+npx --yes --package=npm@11.19.1 npm ci --dry-run --ignore-scripts
+```
+
+Work stays in this directory. The original game and its repository are separate.
