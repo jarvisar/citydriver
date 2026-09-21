@@ -10,24 +10,43 @@ const palette = car => {
   return [...colors].sort();
 };
 
-test('every car cycles rainbow paint while stationary in free drive and restores its finish', () => {
+test('every car cycles rainbow paint while stationary and restores its finish', () => {
   for (const id of CAR_IDS) {
     const car = new DrivingController(undefined, {}, id);
     const original = palette(car);
-    car.toggleFreeDriving();
+    assert.equal(car.rainbow, false);
+    assert.equal(car.toggleRainbow(), true);
     const red = palette(car);
     for (let frame = 0; frame < 60; frame++) car.update(1 / 60, {});
     assert.notDeepEqual(palette(car), red, `${id} should animate at rest`);
     assert.equal(car.speed, 0);
-    car.toggleFreeDriving();
+    assert.equal(car.toggleRainbow(), false);
     assert.deepEqual(palette(car), original, `${id} restores its factory finish`);
     car.disposeModel();
   }
 });
 
+test('rainbow paint and free driving are independent', () => {
+  const car = new DrivingController();
+  const original = palette(car);
+  car.toggleFreeDriving();
+  for (let frame = 0; frame < 60; frame++) car.update(1 / 60, {});
+  assert.equal(car.rainbow, false);
+  assert.deepEqual(palette(car), original, 'free driving leaves the paint alone');
+  car.toggleRainbow();
+  car.u = 1000; car.update(0, {});
+  car.toggleRainbow();
+  assert.equal(car.freeDriving, true);
+  assert.equal(car.u, 1000, 'the paint toggle does not return the car to the road');
+  car.toggleRainbow(); car.toggleFreeDriving();
+  assert.equal(car.rainbow, true);
+  assert.ok(palette(car).includes('ff0000'));
+  car.disposeModel();
+});
+
 test('rainbow survives garage and route changes and restores the latest chosen paint', () => {
   const car = new DrivingController();
-  car.toggleFreeDriving();
+  car.toggleRainbow();
   for (const id of CAR_IDS) {
     car.setCar(id, { paint: '#123456' });
     car.setAppearance('desert');
@@ -37,11 +56,11 @@ test('rainbow survives garage and route changes and restores the latest chosen p
   }
   car.setPaint('#654321');
   assert.ok(palette(car).includes('ff0000'));
-  car.toggleFreeDriving();
+  car.toggleRainbow();
   assert.ok(palette(car).includes('654321'));
   car.setCar('auto'); car.setAppearance('desert');
   const desert = palette(car);
-  car.toggleFreeDriving(); car.setAppearance('snow'); car.toggleFreeDriving();
+  car.toggleRainbow(); car.setAppearance('snow'); car.toggleRainbow();
   assert.notDeepEqual(palette(car), desert, 'factory paint follows the latest route');
   const snow = new DrivingController(); snow.setAppearance('snow');
   assert.deepEqual(palette(car), palette(snow));

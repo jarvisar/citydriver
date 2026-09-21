@@ -22,7 +22,7 @@ function enterCode(input, device, sequence = konamiButtons, options) {
 test('controller Konami code toggles once per entry, including through autodrive input clearing', () => {
   const { input, device } = fixture();
   let toggles = 0;
-  input.onFreeDriving = () => toggles++;
+  input.onKonami = () => toggles++;
   input.onAction = action => { if (action === 'autodrive') input.clear({ preserveKonami: true }); };
   enterCode(input, device);
   assert.equal(toggles, 1);
@@ -35,7 +35,7 @@ test('controller code requires distinct, ordered presses and resets on interrupt
   for (const interrupt of ['wrong', 'held', 'blocked', 'clear', 'menu', 'replacement']) {
     const { input, device, devices } = fixture();
     let toggles = 0;
-    input.onFreeDriving = () => toggles++;
+    input.onKonami = () => toggles++;
     if (interrupt === 'held') {
       enterCode(input, device, [12]);
       enterCode(input, device, konamiButtons.slice(2));

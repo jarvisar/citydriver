@@ -67,7 +67,9 @@ On a controller, use the D-pad or stick to move through menus, A / Cross to sele
 
 On touchscreens, tap **Let's drive**, then drag the joystick in the direction you want to move on screen. Drag farther to go faster; release to stop. In first-person and third-person views, push up to accelerate, left/right to steer, and down to brake or reverse.
 
-For free driving off-road, enter **↑ ↑ ↓ ↓ ← → ← → B A** on the keyboard. On a controller, use the same D-pad sequence, then B and A (Circle and Cross), while driving. Enter it again to return to the road. Reloading turns it off. Off-road, water and cliffs still stop the car, as buildings, tree trunks, fences and other solid scenery do everywhere.
+You can drive off the road anywhere. Water and cliffs still stop the car, as buildings, tree trunks, fences and other solid scenery do everywhere.
+
+For rainbow paint, enter **↑ ↑ ↓ ↓ ← → ← → B A** on the keyboard. On a controller, use the same D-pad sequence, then B and A (Circle and Cross), while driving. Enter it again to get your paint back. Reloading turns it off.
 
 ## Settings
 

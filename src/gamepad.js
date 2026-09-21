@@ -10,11 +10,11 @@ const buttonValue = (pad, index) => {
 // Use the browser's standard Xbox / PlayStation layout, with the same indices
 // as a best-effort fallback for handhelds exposing an unmapped gamepad.
 export class GamepadInput {
-  constructor(onAction, onConnection, getGamepads = () => navigator.getGamepads?.() ?? [], onFreeDriving = () => {}) {
+  constructor(onAction, onConnection, getGamepads = () => navigator.getGamepads?.() ?? [], onKonami = () => {}) {
     this.onAction = onAction; this.onConnection = onConnection; this.getGamepads = getGamepads;
     this.index = null; this.connected = false; this.state = {};
     this.previousButtons = []; this.requireNeutral = false;
-    this.konami = new KonamiCode(); this.onFreeDriving = onFreeDriving;
+    this.konami = new KonamiCode(); this.onKonami = onKonami;
   }
   clear({ preserveKonami = false } = {}) {
     this.state = {}; this.requireNeutral = true;
@@ -66,7 +66,7 @@ export class GamepadInput {
       const presses = buttons.flatMap((down, index) => down && pressed(index) && index < 17 ? [index] : []);
       if (presses.length > 1) this.konami.reset();
       else if (presses.length === 1 && this.konami.press(CODE_BUTTONS[presses[0]] ?? 'Other')) {
-        this.previousButtons = buttons; this.clear(); this.onFreeDriving();
+        this.previousButtons = buttons; this.clear(); this.onKonami();
         return;
       }
     }

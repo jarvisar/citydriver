@@ -60,7 +60,8 @@ try {
   // The D-pad shares Up with autodrive; that shortcut must not break the code.
   const konami = [12, 12, 13, 13, 14, 15, 14, 15, 1, 0];
   for (const index of konami) await press(index);
-  assert.equal(await page.evaluate(() => window.__coastline.vehicle.freeDriving), true);
+  assert.equal(await page.evaluate(() => window.__coastline.vehicle.rainbow), true);
+  assert.equal(await page.evaluate(() => window.__coastline.vehicle.freeDriving), true, 'the code leaves free driving alone');
   const carColors = () => page.evaluate(() => {
     const colors = new Set();
     window.__coastline.vehicle.car.traverse(object => { if (object.isMesh) colors.add(object.material.color.getHexString()); });
@@ -68,9 +69,10 @@ try {
   });
   const rainbowStart = await carColors();
   await page.waitForTimeout(250);
-  assert.notEqual(await carColors(), rainbowStart, 'free-drive paint cycles through the rainbow');
+  assert.notEqual(await carColors(), rainbowStart, 'the paint cycles through the rainbow');
   for (const index of konami) await press(index);
-  assert.equal(await page.evaluate(() => window.__coastline.vehicle.freeDriving), false);
+  assert.equal(await page.evaluate(() => window.__coastline.vehicle.rainbow), false);
+  assert.equal(await page.evaluate(() => window.__coastline.vehicle.freeDriving), true);
   await press(9); assert.equal(await page.evaluate(() => window.__coastline.paused), true);
   await press(11);
   assert.equal(await page.locator('#fps-counter').textContent(), 'FPS: paused');

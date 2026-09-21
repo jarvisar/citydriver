@@ -209,17 +209,30 @@ test('a car hit from behind is pushed on rather than stopped, and a shoved car e
   traffic.dispose();
 });
 
-test('an oncoming car can be stopped but not bulldozed back up the road', () => {
-  const { player, traffic } = setup();
-  const car = traffic.vehicles.find(car => car.direction < 0);
-  traffic.respawn(car, player.s + 30); player.u = -2.4; player.speed = 20; player.update(0, {});
-  for (let i = 0; i < 60 * 6; i++) {
-    const s = car.s;
-    player.update(1 / 60, { forward: true }); traffic.update(1 / 60, player);
-    assert.ok(car.speed >= 0 && car.s <= s && player.s < car.s, 'the oncoming car was driven backwards');
-  }
-  assert.ok(player.speed < 2, `held against the car, the player is still doing ${player.speed}`);
-  traffic.dispose();
+test('weight decides a head-on: a family car is held, the rig ploughs on, and never through the car behind', () => {
+  const held = id => {
+    const scene = new THREE.Scene(), player = new DrivingController(straightRoute, { s: 24 }, id), traffic = new Traffic(scene, straightRoute, 24);
+    const [car, behind] = traffic.vehicles.filter(car => car.direction < 0);
+    traffic.respawn(car, player.s + 30); player.u = -2.4; player.speed = 20; player.update(0, {});
+    const from = car.s;
+    let thrown = 0, furthest = from;
+    for (let i = 0; i < 60 * 12; i++) {
+      // Another oncoming car draws up behind the struck one part way through.
+      if (i === 120) traffic.respawn(behind, car.s + 60);
+      player.update(1 / 60, { forward: true }); traffic.update(1 / 60, player);
+      thrown = Math.max(thrown, car.recoil); furthest = Math.max(furthest, car.s);
+      assert.ok(car.speed >= 0 && car.recoil >= 0 && player.s < car.s);
+      if (i >= 120) assert.ok(behind.s - car.s > (car.spec.length + behind.spec.length) / 2, `${id} pushed one car through another`);
+    }
+    const result = { thrown, pushed: furthest - from, speed: player.speed, mass: player.spec.mass };
+    traffic.dispose(); player.disposeModel();
+    return result;
+  };
+  const family = held('auto'), rig = held('rig');
+  assert.ok(family.mass < 1.5 && rig.mass === 8);
+  assert.ok(family.pushed < 3 && family.speed < 2.5, `a family car bulldozed the oncoming car ${family.pushed} m and is doing ${family.speed}`);
+  assert.ok(rig.thrown > family.thrown * 1.5 && rig.pushed > 6, `the rig only pushed the car ${rig.pushed} m`);
+  assert.ok(rig.speed < 2.5, 'with a second car stopped behind the first, even the rig is held');
 });
 
 test('traffic brakes behind a parked player and maintains a gap', () => {

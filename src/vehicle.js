@@ -6,6 +6,7 @@ import { CARS, DEFAULT_CAR, DRAG, ROUTE_PAINT, carEntry, carStats } from './cars
 import { createShapeCar } from './car-models.js';
 import { createFormulaCar } from './formula-model.js';
 import { createSpecialCar } from './special-models.js';
+import { footprintMass } from './impact.js';
 
 const mat = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: .74, flatShading: true, ...extra });
 function box(group, size, location, material) {
@@ -153,7 +154,7 @@ export class DrivingController {
   constructor(route = coastalDrivingRoute, state = {}, carId = DEFAULT_CAR, paint = null) {
     this.route = route;
     this.freeDriving = false;
-    this.rainbowHue = 0; this.rainbowColor = new THREE.Color();
+    this.rainbow = false; this.rainbowHue = 0; this.rainbowColor = new THREE.Color();
     this.night = false; this.journeyId = 'coast';
     this.setCar(carId, { rebuild: false, paint });
     this.s = state.s ?? 24; this.u = 2.4; this.speed = 0; this.steer = 0; this.heading = route.frame(this.s).angle;
@@ -185,7 +186,7 @@ export class DrivingController {
       ? new THREE.Vector3(...eye)
       : new THREE.Vector3(0, cabinY + cabin[1] * .7 - drop, cabinZ - cabin[2] / 2 + glassSlope - .18);
     this.car.userData.chaseLift = chaseLift;
-    this.spec = { name: carId, width, length };
+    this.spec = { name: carId, width, length, mass: entry.mass ?? footprintMass(width, length) };
     this.stats = carStats(carId);
     parent?.add(this.car);
     this.setLights(Number(this.night)); this.setAppearance(this.journeyId); this.setPaint(paint);
@@ -197,7 +198,7 @@ export class DrivingController {
   // A garage colour, or null for the finish the car left the factory in.
   setPaint(color) { this.paintColor = color ?? null; this.updatePaint(); }
   updatePaint(dt = 0) {
-    if (this.freeDriving) {
+    if (this.rainbow) {
       // A smooth six-second RGB loop, without changing the garage's chosen paint.
       this.rainbowHue = (this.rainbowHue + dt / 2.8) % 1;
       this.rainbowColor.setHSL(this.rainbowHue, 1, .5, THREE.SRGBColorSpace);
@@ -205,10 +206,14 @@ export class DrivingController {
     } else this.paintCar(this.paintColor);
   }
   reset() { this.u = 2.4; this.speed = 0; this.steer = 0; this.knock.x = this.knock.z = this.knock.spin = 0; this.heading = this.route.frame(this.s).angle; this.update(0, {}); }
+  toggleRainbow() {
+    this.rainbow = !this.rainbow;
+    if (this.rainbow) this.rainbowHue = 0;
+    this.updatePaint();
+    return this.rainbow;
+  }
   toggleFreeDriving() {
     this.freeDriving = !this.freeDriving;
-    if (this.freeDriving) this.rainbowHue = 0;
-    this.updatePaint();
     if (!this.freeDriving) this.reset();
     return this.freeDriving;
   }
@@ -321,7 +326,7 @@ export class DrivingController {
     }
   }
   update(dt, input) {
-    if (this.freeDriving) this.updatePaint(dt);
+    if (this.rainbow) this.updatePaint(dt);
     this.copyPose(this.previousPose, this.currentPose);
     const { frame: roadFrame, position: positionAt } = this.route;
     const stats = this.stats;

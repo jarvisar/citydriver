@@ -1,10 +1,13 @@
 // Two cars meeting, as rigid rectangles sliding on a flat plane. Each is
-// { x, z, heading, halfWidth, halfLength, vx, vz } in the coordinates
-// trafficContact reads, and weighs what its footprint covers, so a van moves a
-// hatchback further than the hatchback moves it. Turning is measured the way
-// heading is: positive swings the nose to the car's own right.
+// { x, z, heading, halfWidth, halfLength, vx, vz, mass? } in the coordinates
+// trafficContact reads. Unless it says what it weighs, a car weighs what its
+// footprint covers, so a van moves a hatchback further than the hatchback
+// moves it. Turning is measured the way heading is: positive swings the nose
+// to the car's own right.
 
 const BOUNCE = .2;  // cars crumple far more than they rebound
+// Tonnes: .18 to the square metre puts a hatchback at 1.1 and a van at 1.8.
+export const footprintMass = (width, length) => width * length * .18;
 
 // Where they touch: the middle of whichever corners have gone inside the other
 // car. That is the nose for a square hit, the overlap for an offset one, and
@@ -31,7 +34,7 @@ export function collisionImpulse(a, b, normal, point) {
   const closing = (a.vx - b.vx) * normal.x + (a.vz - b.vz) * normal.z;
   if (closing >= 0) return null;
   const body = car => {
-    const mass = 4 * car.halfWidth * car.halfLength, inertia = mass * (car.halfWidth ** 2 + car.halfLength ** 2) / 3;
+    const mass = car.mass ?? footprintMass(car.halfWidth * 2, car.halfLength * 2), inertia = mass * (car.halfWidth ** 2 + car.halfLength ** 2) / 3;
     return { mass, inertia, lever: (point.x - car.x) * normal.z - (point.z - car.z) * normal.x };
   };
   const p = body(a), q = body(b);

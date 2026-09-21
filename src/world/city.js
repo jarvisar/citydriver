@@ -18,7 +18,8 @@ import { buildCityRoads } from './city-roads.js';
 import { buildNeighborhoods } from './city-neighborhoods.js';
 import { cityDiscoveries, cityDiscoveryClears, cityLotClears, cityBuildingSpans } from './city-discoveries.js';
 import { buildCityDiscoveries, reserveCityLandmarks } from './city-discovery-scenery.js';
-import { solidModel, solidSpan } from './colliders.js';
+import { solidBox, solidModel, solidSpan } from './colliders.js';
+import { TRAFFIC_MODELS } from '../traffic-models.js';
 import { CityPlanting } from './city-planting.js';
 import { Rainfall } from './rainfall.js';
 
@@ -44,6 +45,9 @@ const leavesMaterial = material('#ffffff', { vertexColors: true });
 const barkMaterial = material('#55483b');
 const boxGeometry = new THREE.BoxGeometry(1, 1, 1);
 const dummy = new THREE.Object3D(), up = new THREE.Vector3(0, 1, 0);
+// Street furniture a car cannot push over, and whether it stands on a round
+// base. Railings, manhole covers and rooftop tanks are out of a car's way.
+const SOLID_FURNITURE = { lamp: true, signal: true, bin: true, bench: false, shelter: false, kiosk: false };
 registerChunkResources('city', { terrainMaterial, roadMaterial, kerbMaterial, edgeMaterial, centerMaterial, waterMaterial, blocksMaterial, streetsMaterial, skylineMaterial, litMaterial,
   furnitureMaterial, paintedMaterial, parkedPaintMaterial, parkedTrimMaterial, leavesMaterial, barkMaterial, boxGeometry, cityAssets, parkedCars, trees: cityTrees });
 
@@ -443,6 +447,7 @@ export class CityChunk {
   furniture(name, s, u, yaw, extra = {}) {
     const p = this.ground(s, u), { furniture } = this.scenery;
     if (!furniture.has(name)) furniture.set(name, []);
+    if (name in SOLID_FURNITURE) solidModel(this, cityAssets[name], [p.x, p.y, p.z], yaw, 1, SOLID_FURNITURE[name]);
     furniture.get(name).push({ p: [p.x, p.y + (extra.lift ?? 0), p.z], r: [0, yaw, 0], scale: extra.scale });
   }
   tree(s, u, height, color, yaw, plantingHeight = null) {
@@ -460,6 +465,9 @@ export class CityChunk {
     // Two body shapes per chunk: variety along the route, few draw calls in it.
     const names = Object.keys(parkedCars), name = names[(Math.abs(this.index) * 2 + (randomAt(seed, 3181) < .5 ? 0 : 1)) % names.length], p = this.ground(s, u), { parked } = this.scenery;
     if (!parked.has(name)) parked.set(name, []);
+    // Handbrake on: a parked car stands as firm as the kerb it is against.
+    const spec = TRAFFIC_MODELS.find(spec => spec.name === name);
+    solidBox(this, p.x, p.z, yaw, spec.width / 2, spec.length / 2);
     parked.get(name).push({ p: [p.x, p.y + .02 + lift, p.z], r: [0, yaw, 0], color: PARKED_PAINTS[Math.floor(randomAt(seed, 3182) * PARKED_PAINTS.length)] });
   }
   beam(list, a, b, width, color) {

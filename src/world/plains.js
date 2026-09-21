@@ -916,6 +916,7 @@ export class PlainsChunk {
       if (!standing(s) || !plainsDiscoveryClears(s, POLE_U, this.discoveries, 1)) continue;
       const p = this.ground(s, POLE_U), angle = -roadFrame(s).angle;
       poles.push({ p: [p.x, p.y + 4.7, p.z], scale: [.21, 9.6, .21] });
+      solidPost(this, p.x, p.z, .15);
       posts.push({ p: [p.x, p.y + 8.95, p.z], scale: [2.3, .15, .15], r: [0, angle, 0] });
       for (const offset of [-.95, .95]) {
         const a = this.ground(s, POLE_U + offset);
@@ -1107,6 +1108,7 @@ export class PlainsChunk {
   cow(s, u, heading, random) { this.cowAt(this.ground(s, u), heading, random); }
   cowAt(p, heading, random) {
     const coats = ['#f0ece2', '#e8e2d4', '#9b7551', '#8a6340', '#f2eee6', '#7d5a3c'];
+    solidModel(this, cowGeometry, [p.x, p.y, p.z], heading);
     this.scenery.cows.push({ p: [p.x, p.y, p.z], scale: [1, 1, 1], r: [0, heading, 0], color: coats[Math.floor(random() * coats.length)] });
   }
   // The farm country's mix of trees: mostly round crowns, with a spruce, a

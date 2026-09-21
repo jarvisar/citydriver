@@ -8,6 +8,8 @@ const LANE = 2.4;
 // A struck car is never knocked further from its lane than this, which keeps
 // it on the tarmac and on its own side of the centre line.
 const REACH = 1.2;
+// How quickly locked tyres take the speed off a car driven backwards.
+const RECOIL_GRIP = 8;
 const BEHIND = 380, AHEAD = 620;
 const DENSITY = { coast: 1, snow: .75, desert: .5, jungle: .6, plains: .5, city: 1 };
 // The city runs half as many cars again over the same stretch of road.
@@ -89,7 +91,7 @@ export class Traffic {
   }
   respawn(car, s) {
     car.s = s; car.generation++;
-    car.u = car.direction * LANE; car.drift = 0; car.yaw = 0; car.spin = 0;
+    car.u = car.direction * LANE; car.drift = 0; car.yaw = 0; car.spin = 0; car.recoil = 0;
     car.cruiseSpeed = car.direction > 0 ? TRAFFIC_CRUISE_SPEED : 20; car.speed = car.cruiseSpeed;
     car.paint.color.set(TRAFFIC_COLORS[Math.floor(this.random(car, 2) * TRAFFIC_COLORS.length)]);
     this.pose(car); car.previousPosition.copy(car.position); car.previousQuaternion.copy(car.quaternion);
@@ -140,11 +142,23 @@ export class Traffic {
     for (const car of this.vehicles) {
       // Braking is for the road ahead. A car shoved past its cruising speed eases back down to it.
       car.speed += clamp(car.targetSpeed - car.speed, -(car.targetSpeed < car.cruiseSpeed ? 14 : 2) * dt, 3 * dt);
-      car.s += car.direction * car.speed * dt / car.routeScale;
+      if (car.recoil) this.giveGround(car, dt);
+      car.s += car.direction * (car.speed - car.recoil) * dt / car.routeScale;
       this.settle(car, dt);
       this.pose(car);
     }
     this.collide(player);
+  }
+  // A blow heavy enough to stop a car and more sends it back up the road, tyres
+  // locked, which takes the speed off again within a few metres. It stops short
+  // of the car behind it rather than being pushed through.
+  giveGround(car, dt) {
+    car.recoil *= Math.exp(-dt * RECOIL_GRIP);
+    const blocked = this.vehicles.some(other => {
+      const behind = (car.s - other.s) * car.direction * car.routeScale;
+      return other !== car && Math.abs(other.u - car.u) < 2.2 && behind > 0 && behind < (car.spec.length + other.spec.length) / 2 + 1;
+    });
+    if (blocked || car.recoil < .05) car.recoil = 0;
   }
   // A struck car has been pushed across its lane and turned. Its driver
   // steers it back: two damped springs, which a car nothing has hit never runs.
@@ -164,22 +178,23 @@ export class Traffic {
     for (const car of this.vehicles) {
       if (Math.abs(car.s - player.s) > 9) continue;
       const p = player.groundedPosition, velocity = player.velocity;
-      const a = { x: p.x, z: p.z, heading: player.heading, halfWidth: player.spec.width / 2, halfLength: player.spec.length / 2, vx: velocity.x, vz: velocity.z };
+      const a = { x: p.x, z: p.z, heading: player.heading, halfWidth: player.spec.width / 2, halfLength: player.spec.length / 2, vx: velocity.x, vz: velocity.z, mass: player.spec.mass };
       // Traffic runs along the road and drifts across it, whichever way a knock has turned it.
       const angle = this.route.frame(car.s).angle, alongX = Math.sin(angle) * car.direction, alongZ = -Math.cos(angle) * car.direction, acrossX = Math.cos(angle), acrossZ = Math.sin(angle);
       const b = { x: car.position.x, z: car.position.z, heading: car.heading, halfWidth: car.spec.width / 2, halfLength: car.spec.length / 2,
-        vx: alongX * car.speed + acrossX * car.drift, vz: alongZ * car.speed + acrossZ * car.drift };
+        vx: alongX * (car.speed - car.recoil) + acrossX * car.drift, vz: alongZ * (car.speed - car.recoil) + acrossZ * car.drift };
       const contact = trafficContact(a, b);
       if (!contact) continue;
       // The player is moved clear, and the two share the blow by weight. The
       // car on its rails takes its share as speed along the road, a drift
-      // across it and a turn, the last two of which settle() steers out. It can
-      // be stopped but not driven backwards, so nothing bulldozes it up the
-      // road into the car behind.
+      // across it and a turn, the last two of which settle() steers out.
+      // What would carry it through rest is recoil instead, so a heavy blow
+      // drives it back and a light car leaning on it barely moves it.
       const blow = collisionImpulse(a, b, contact, contactPoint(a, b));
       player.resolveTrafficCollision(contact.x * (contact.depth + .025), contact.z * (contact.depth + .025), blow?.a.x, blow?.a.z, blow?.a.spin);
       if (!blow) continue;
-      car.speed = Math.max(0, car.speed + blow.b.x * alongX + blow.b.z * alongZ);
+      const along = car.speed - car.recoil + blow.b.x * alongX + blow.b.z * alongZ;
+      car.speed = Math.max(0, along); car.recoil = Math.max(0, -along);
       car.drift += blow.b.x * acrossX + blow.b.z * acrossZ;
       car.spin = clamp(car.spin + blow.b.spin, -3, 3);
     }

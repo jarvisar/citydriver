@@ -153,11 +153,12 @@ test('a farmstead barn stops a free-roaming car driven straight at it', () => {
   car.disposeModel(); chunk.dispose();
 });
 
-test('tree trunks and fence rails are solid wherever they are drawn', async () => {
-  const { CoastalChunk } = await import('../src/world/environment.js'), { JungleChunk } = await import('../src/world/jungle.js');
-  const drawn = { coast: ['coastal-firs', 'headland-cypresses', 'monterey-pines'], jungle: ['jungle-trunks', 'palm-trunks', 'emergent-trunks'], plains: ['plains-trunks', 'fence-rails'] };
+test('tree trunks, fence rails, poles and street furniture are solid wherever they are drawn', async () => {
+  const { CoastalChunk } = await import('../src/world/environment.js'), { JungleChunk } = await import('../src/world/jungle.js'), { CityChunk } = await import('../src/world/city.js');
+  const drawn = { coast: ['coastal-firs', 'headland-cypresses', 'monterey-pines'], jungle: ['jungle-trunks', 'palm-trunks', 'emergent-trunks'], plains: ['plains-trunks', 'fence-rails', 'utility-poles', 'cattle'],
+    city: ['street-lamps', 'traffic-signals', 'benches', 'bus-shelters', 'riverside-kiosks', 'litter-bins'] };
   const matrix = new THREE.Matrix4(), p = new THREE.Vector3();
-  for (const [journey, Chunk] of Object.entries({ coast: CoastalChunk, jungle: JungleChunk, plains: PlainsChunk })) {
+  for (const [journey, Chunk] of Object.entries({ coast: CoastalChunk, jungle: JungleChunk, plains: PlainsChunk, city: CityChunk })) {
     const chunk = new Chunk(3), colliders = chunk.features.colliders;
     let count = 0;
     chunk.group.traverse(mesh => {
@@ -172,6 +173,42 @@ test('tree trunks and fence rails are solid wherever they are drawn', async () =
     assert.ok(count > 10, `${journey} drew only ${count}`);
     chunk.dispose();
   }
+});
+
+test('every parked car a city chunk draws is a solid box of its own size and turn', async () => {
+  const { CityChunk } = await import('../src/world/city.js'), { TRAFFIC_MODELS } = await import('../src/traffic-models.js');
+  const matrix = new THREE.Matrix4(), p = new THREE.Vector3(), forward = new THREE.Vector3();
+  let count = 0;
+  for (let index = 0; index < 12; index++) {
+    const chunk = new CityChunk(index), colliders = chunk.features.colliders;
+    chunk.group.traverse(mesh => {
+      if (mesh.name !== 'parked-cars') return;
+      for (let i = 0; i < mesh.count; i++, count++) {
+        mesh.getMatrixAt(i, matrix); p.setFromMatrixPosition(matrix); forward.set(0, 0, -1).transformDirection(matrix);
+        const box = colliders.find(solid => solid.heading !== undefined && Math.hypot(solid.x - p.x, solid.z - (p.z - chunk.start)) < 1e-3);
+        assert.ok(box, `chunk ${index}: parked car ${i} can be driven through`);
+        assert.ok(TRAFFIC_MODELS.some(spec => Math.abs(spec.width / 2 - box.halfWidth) < 1e-9 && Math.abs(spec.length / 2 - box.halfLength) < 1e-9));
+        // The box lies along the car: its long axis is the way the body points.
+        assert.ok(Math.abs(Math.abs(forward.x * Math.sin(box.heading) - forward.z * Math.cos(box.heading)) - 1) < 1e-6, 'the box is turned differently from the car');
+      }
+    });
+    chunk.dispose();
+  }
+  assert.ok(count > 10, `only ${count} parked cars were drawn`);
+});
+
+test('the alpine road lamps stand on solid posts', async () => {
+  const { SnowChunk } = await import('../src/world/snow.js'), { lampAt, LAMP_SPACING } = await import('../src/world/snow-route.js');
+  const chunk = new SnowChunk(3);
+  let count = 0;
+  for (let i = Math.floor((chunk.start - 40) / LAMP_SPACING); i * LAMP_SPACING < chunk.start + CHUNK_LENGTH + 40; i++) {
+    const lamp = lampAt(i);
+    if (lamp.hidden || lamp.s < chunk.start || lamp.s >= chunk.start + CHUNK_LENGTH) continue;
+    count++;
+    assert.ok(chunk.features.colliders.some(solid => solid.heading === undefined && solid.reach < .2 && Math.hypot(solid.x - lamp.x, solid.z - lamp.z) < 1e-6), `lamp ${i} can be driven through`);
+  }
+  assert.ok(count > 1);
+  chunk.dispose();
 });
 
 test('a free-roaming car keeps its whole length back from a drop, not just its middle', () => {

@@ -26,6 +26,9 @@ export const ROUTE_PAINT = { coast: '#d96143', desert: '#78977b', snow: '#9fc4d5
 //   acceleration        metres per second squared under full throttle
 //   braking             metres per second squared on the brakes
 //   grip                steering rate against the coastal wagon's
+//
+// A car weighs what its footprint covers (see impact.js) unless it gives its
+// own `mass` in tonnes, which decides how a collision with traffic is shared.
 const BASE = { topSpeed: 28, acceleration: 11.3, braking: 20, grip: 1, offRoad: 18.5 };
 
 export const CARS = {
@@ -83,12 +86,12 @@ export const CARS = {
   },
   // Light, short and on knobbly tyres: it barely notices the tarmac ending.
   buggy: {
-    name: 'Sandpiper Buggy', kind: 'special', paint: '#e2a23b', shape: SPECIAL_SHAPES.buggy,
+    name: 'Sandpiper Buggy', mass: .7, kind: 'special', paint: '#e2a23b', shape: SPECIAL_SHAPES.buggy,
     stats: { topSpeed: 25.5, acceleration: 14.5, braking: 19, grip: 1.12, offRoad: 23.5 },
   },
   // Goes anywhere at the same unhurried pace, and leans on its tyres to stop or turn.
   monster: {
-    name: 'Boulder King', kind: 'special', paint: '#3f7fb5', shape: SPECIAL_SHAPES.monster,
+    name: 'Boulder King', mass: 4.5, kind: 'special', paint: '#3f7fb5', shape: SPECIAL_SHAPES.monster,
     stats: { topSpeed: 23.5, acceleration: 10.4, braking: 16.5, grip: .8, offRoad: 21.5 },
   },
   // All engine: quicker in a straight line than the coupe, and nowhere else.
@@ -98,7 +101,7 @@ export const CARS = {
   },
   // Eight tonnes of tractor unit. It gets there, and it needs the room to stop.
   rig: {
-    name: 'Long Hauler', kind: 'special', paint: '#a3312c', shape: SPECIAL_SHAPES.rig,
+    name: 'Long Hauler', mass: 8, kind: 'special', paint: '#a3312c', shape: SPECIAL_SHAPES.rig,
     stats: { topSpeed: 27, acceleration: 8.6, braking: 15.5, grip: .78, offRoad: 16.2 },
   },
   // Out of breath by 48 mph, but it changes lanes like a thought.
@@ -107,7 +110,7 @@ export const CARS = {
     stats: { topSpeed: 21.5, acceleration: 12.6, braking: 22, grip: 1.26, offRoad: 13.2 },
   },
   formula: {
-    name: 'Apex Formula', kind: 'formula', paint: '#d8452f', shape: FORMULA_SHAPE,
+    name: 'Apex Formula', mass: .8, kind: 'formula', paint: '#d8452f', shape: FORMULA_SHAPE,
     // 112 mph, with enough power to overcome air drag at that speed.
     stats: { topSpeed: 50, acceleration: 40, braking: 30, grip: 1.32, offRoad: 20 },
   },

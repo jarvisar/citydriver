@@ -207,6 +207,7 @@ export class SnowChunk {
       const lamp = lampAt(i), ground = snowRoadHeight(lamp.s);
       if (lamp.hidden || lamp.s < this.start || lamp.s >= this.start + CHUNK_LENGTH) continue;
       metal.push({ p: point(lamp.s, lamp.u, ground + 3.75), scale: [.17, 7.5, .17] });
+      solidPost(this, metal.at(-1).p[0], metal.at(-1).p[2], .12);
       beam(point(lamp.s, lamp.u, ground + 7.5), point(lamp.s, 6.2, ground + 7.5), .14);
       lamps.push({ p: point(lamp.s, 6.2, ground + 7.38), scale: [.62, .18, .95] });
     }

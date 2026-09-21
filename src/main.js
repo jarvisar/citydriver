@@ -96,7 +96,7 @@ async function boot() {
     const vehicle = new DrivingController(JOURNEYS[journey].route, savedJourneys[journey], DEFAULT_CAR); const audio = new DriveAudio();
     const refreshAudioMixer = setupAudioMixer(audio);
     // Free driving starts on for now, while off-road collision is being tried
-    // out. The code still turns it off, and a reload turns it back on.
+    // out. The hidden code only changes the paint.
     vehicle.toggleFreeDriving();
     vehicle.setAppearance(journey);
     vehicle.setLights(journey === 'snow' ? 1 : journey === 'city' ? .35 : 0);
@@ -434,11 +434,9 @@ async function boot() {
       if (!connected && started && !paused) setPaused(true);
     }, () => {
       if (changingJourney) return;
-      const enabled = vehicle.toggleFreeDriving();
-      vehicle.render(1, world.origin);
-      rendering.snap(); rendering.update(vehicle.car, 1, world.origin);
-      frameClock.suspend(); needsRender = true;
-      toast(`Free driving ${enabled ? 'on' : 'off'}`);
+      const enabled = vehicle.toggleRainbow();
+      needsRender = true;
+      toast(`Rainbow paint ${enabled ? 'on' : 'off'}`);
     });
     vr = new BrowserVR({
       renderer, buttons: [$('#enter-vr'), $('#enter-vr-pause')], canEnter: () => !changingJourney && !openChooser(),

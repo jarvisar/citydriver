@@ -4,7 +4,7 @@ import { KonamiCode } from './konami-code.js';
 import { XRInput } from './xr-input.js';
 
 export class Input {
-  constructor(onAction, onControllerConnection = () => {}, onFreeDriving = () => {}) {
+  constructor(onAction, onControllerConnection = () => {}, onKonami = () => {}) {
     this.keys = new Set(); this.onAction = onAction;
     this.xr = new XRInput(onAction); this.xrActive = false;
     this.konami = new KonamiCode();
@@ -18,7 +18,7 @@ export class Input {
       this.keys.clear(); this.touchStick.clear();
       document.body.dataset.controller = String(connected);
       onControllerConnection(connected);
-    }, undefined, () => { this.clear(); onFreeDriving(); });
+    }, undefined, () => { this.clear(); onKonami(); });
     window.addEventListener('keydown', e => {
       // Native mixer sliders own their arrow, Home and End keys. Editing a
       // volume must not also accelerate the car or swallow keyboard access.
@@ -27,7 +27,7 @@ export class Input {
       if (e.target.closest?.('button') && ['Space', 'Enter'].includes(e.code)) return;
       // The keyboard and controller sequences share the same hidden toggle.
       if (this.konami.keydown(e)) {
-        e.preventDefault(); this.clear(); onFreeDriving();
+        e.preventDefault(); this.clear(); onKonami();
         return;
       }
       if (e.code === 'F3' && !e.ctrlKey && !e.metaKey && !e.altKey) {
