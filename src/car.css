@@ -1,5 +1,5 @@
 /* The garage names itself on one line and goes straight to the cars: a
-   portrait, a name, and three meters is everything a card needs to say. */
+   portrait, a name, and four meters is everything a card needs to say. */
 #car-dialog .chooser-heading { padding: 6px 0 16px; }
 .garage-title { margin: 0; font-size: 15px; font-weight: 700; letter-spacing: 2.1px; text-transform: uppercase; }
 /* The pause screen's car section matches the graphics panel beside it. */
@@ -61,8 +61,6 @@ body[data-journey=jungle] .paint-shop { background: #ffffff0f; border-color: #8f
 body[data-journey=snow] .paint-custom, body[data-journey=jungle] .paint-custom { border-color: #ffffff4d; }
 
 .car-card { --car-paint: #d96143; }
-/* One word on the card for a car that is not an ordinary tourer. */
-.car-card .chooser-card-title .car-badge { flex-shrink: 0; padding: 3px 7px; border-radius: 20px; background: var(--ink); color: var(--cream); font-size: 8px; font-weight: 700; letter-spacing: 1.3px; text-transform: uppercase; }
 .car-card .chooser-card-copy { padding: 12px 14px 11px; }
 .car-card .chooser-card-title { font-size: 13px; font-weight: 600; letter-spacing: -.1px; }
 .car-card-plain { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 15px 16px; }

@@ -5,6 +5,7 @@ import { stableShadowDepth } from './world/shadow-depth.js';
 import { CARS, DEFAULT_CAR, DRAG, ROUTE_PAINT, carEntry, carStats } from './cars.js';
 import { createShapeCar } from './car-models.js';
 import { createFormulaCar } from './formula-model.js';
+import { createSpecialCar } from './special-models.js';
 
 const mat = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: .74, flatShading: true, ...extra });
 function box(group, size, location, material) {
@@ -134,6 +135,7 @@ export function createClassicCar(entry = carEntry(DEFAULT_CAR)) {
 export function createCar(id = DEFAULT_CAR) {
   const entry = carEntry(id);
   if (entry.kind === 'formula') return createFormulaCar(entry);
+  if (entry.kind === 'special') return createSpecialCar(entry);
   return entry.kind === 'classic' ? createClassicCar(entry) : createShapeCar(entry);
 }
 
@@ -162,13 +164,15 @@ export class DrivingController {
     this.carId = carId;
     Object.assign(this, createCar(carId));
     const entry = carEntry(carId);
-    const { width, length, cabin, cabinZ, cabinY = 1.22, drop = 0 } = entry.shape;
+    const { width, length, cabin, cabinZ, cabinY = 1.22, drop = 0, eye, chaseLift = 0 } = entry.shape;
     // Center the view just in front of the windshield for every body shape.
-    // Traffic-shaped cabins slope back by .24 m at the top of the glass.
+    // Traffic-shaped cabins slope back by .24 m at the top of the glass, and a
+    // car that is not cut from a road-car cabin says where its driver sits.
     const glassSlope = entry.kind === 'classic' ? 0 : .24 * .7;
-    this.car.userData.driverEye = entry.kind === 'formula'
-      ? new THREE.Vector3(0, .88, -.76)
+    this.car.userData.driverEye = eye
+      ? new THREE.Vector3(...eye)
       : new THREE.Vector3(0, cabinY + cabin[1] * .7 - drop, cabinZ - cabin[2] / 2 + glassSlope - .18);
+    this.car.userData.chaseLift = chaseLift;
     this.spec = { name: carId, width, length };
     this.stats = carStats(carId);
     parent?.add(this.car);
@@ -232,7 +236,10 @@ export class DrivingController {
     this.body.rotation.z = THREE.MathUtils.lerp(a.bodyRoll, b.bodyRoll, alpha);
     const steer = THREE.MathUtils.lerp(a.steer, b.steer, alpha);
     const spin = THREE.MathUtils.lerp(a.wheelSpin, b.wheelSpin, alpha);
-    for (const w of this.wheels) { if (w.front) w.pivot.rotation.y = -steer * .38; w.wheel.rotation.x = spin; w.hub.rotation.x = spin; }
+    for (const w of this.wheels) {
+      if (w.front) w.pivot.rotation.y = -steer * .38;
+      w.wheel.rotation.x = w.hub.rotation.x = spin * (w.spinRatio ?? 1);
+    }
   }
   update(dt, input) {
     if (this.freeDriving) this.updatePaint(dt);

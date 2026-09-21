@@ -134,7 +134,7 @@ export class DriveAudio {
     set(g.wind.level, state.windLevel * (1 + .09 * Math.sin(now * .71)), .4); set(g.wind.frequency, 650 + state.motion * 1350, .4);
     set(g.skid.level, state.skidLevel); set(g.skid.frequency, state.skidFrequency);
     set(g.skidTone.frequency, state.skidFrequency * 1.13); set(g.skidToneLevel, state.skidLevel * .12);
-    const cabin = scene?.interior && this.car !== 'formula';
+    const cabin = scene?.interior && !profile.open;
     for (const name of ['engine', 'road', 'ambience', 'traffic']) set(g.perspective[name], cabin ? name === 'engine' ? 2200 : 1600 : 14000, .35);
     this.ambience(state, now);
     if (this.audible) {

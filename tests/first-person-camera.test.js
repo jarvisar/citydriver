@@ -16,7 +16,8 @@ test('first-person camera follows every windshield and faces the car heading', (
       rig.snap(); rig.update(car, 0);
       const eye = car.userData.driverEye;
       assert.equal(eye.x, 0, 'view is centered across the windshield');
-      assert.ok(eye.y > .7 && eye.y < 2.5);
+      // The rig and the monster truck seat their drivers well above a road car's roof.
+      assert.ok(eye.y > .7 && eye.y < 3);
       const expected = eye.clone().applyQuaternion(car.quaternion).add(car.position);
       assert.ok(rig.camera.position.distanceTo(expected) < 1e-9);
       const forward = new THREE.Vector3(-Math.sin(heading), 0, -Math.cos(heading));

@@ -41,8 +41,11 @@ test('every car builds a solid, steerable model', () => {
   }
 });
 
-// The two chooser-only cars are the ones allowed to break the tourer's mould.
+// The chooser-only cars are the ones allowed to break the tourer's mould: the
+// two racers by being quicker at everything, the specials by being lopsided.
 const RACERS = ['sports', 'formula'];
+const SPECIALS = ['buggy', 'monster', 'hotrod', 'rig', 'micro'];
+const CHOOSER_ONLY = [...RACERS, ...SPECIALS];
 
 test('every car can reverse from rest and after braking off road', () => {
   for (const id of CAR_IDS) for (const fps of [30, 60, 144]) for (const startingSpeed of [0, 12]) {
@@ -62,7 +65,7 @@ test('the coastal wagon keeps the original handling and every car stays close to
   assert.equal(base.topSpeed, 28); assert.equal(base.acceleration, 11.3); assert.equal(base.braking, 20);
   assert.equal(base.grip, 1); assert.equal(base.offRoad, 18.5);
   for (const id of CAR_IDS) {
-    if (RACERS.includes(id)) continue;
+    if (CHOOSER_ONLY.includes(id)) continue;
     const stats = carStats(id);
     assert.ok(Math.abs(stats.topSpeed / base.topSpeed - 1) < .1, `${id} top speed is too far from the original`);
     assert.ok(Math.abs(stats.acceleration / base.acceleration - 1) < .15, `${id} acceleration is too far from the original`);
@@ -78,14 +81,67 @@ test('the coastal wagon keeps the original handling and every car stays close to
   assert.ok(Math.abs(flatOut('formula', 30).speed / .44704 - 100) < .1, 'the Formula car must actually reach 100 mph under throttle');
   // Leaving the tarmac costs every car a third of its top end, give or take,
   // and the order is the character: off-roaders keep most, racers least.
-  for (const id of CAR_IDS) {
-    const ratio = carStats(id).offRoad / carStats(id).topSpeed;
-    assert.ok(ratio >= (id === 'formula' ? .53 : .6) && ratio <= .7, `${id} keeps ${(ratio * 100).toFixed(0)}% off the tarmac`);
-  }
+  // The specials sit outside that band on purpose, in both directions.
   const share = id => carStats(id).offRoad / carStats(id).topSpeed;
+  const looseShare = { formula: [.35, .45], hotrod: [.5, .6], buggy: [.88, .95], monster: [.88, .95] };
+  for (const id of CAR_IDS) {
+    const [least, most] = looseShare[id] ?? [.6, .7];
+    assert.ok(share(id) >= least && share(id) <= most, `${id} keeps ${(share(id) * 100).toFixed(0)}% off the tarmac`);
+  }
   assert.ok(share('pickup') > share('van') && share('jungle') > share('hatchback'));
   assert.ok(share('formula') < share('sports'), 'slicks should be the worst of it');
   assert.ok(share('sports') < share(DEFAULT_CAR));
+});
+
+test('each special is the best in the garage at one thing and pays for it', () => {
+  const road = CAR_IDS.filter(id => !CHOOSER_ONLY.includes(id));
+  const best = (key, ids = road) => Math.max(...ids.map(id => carStats(id)[key]));
+  const worst = (key, ids = road) => Math.min(...ids.map(id => carStats(id)[key]));
+  const { buggy, monster, hotrod, rig, micro } = Object.fromEntries(SPECIALS.map(id => [id, carStats(id)]));
+  // The buggy is the quickest thing across open ground, racers included.
+  assert.ok(buggy.offRoad > best('offRoad', CAR_IDS.filter(id => id !== 'buggy')));
+  assert.ok(buggy.acceleration > best('acceleration') && buggy.topSpeed < worst('topSpeed'));
+  // The monster truck gives up the least when the road ends, and is clumsy on it.
+  assert.ok(monster.offRoad > best('offRoad', [...road, ...RACERS]) && monster.topSpeed - monster.offRoad <= 2);
+  assert.ok(monster.grip < worst('grip') && monster.braking < worst('braking'));
+  // The hot rod beats the coupe in a straight line and nothing at a corner.
+  const sports = carStats('sports');
+  assert.ok(hotrod.topSpeed > sports.topSpeed && hotrod.acceleration > sports.acceleration && hotrod.topSpeed < carStats('formula').topSpeed);
+  assert.ok(hotrod.grip < worst('grip') && hotrod.braking < worst('braking'));
+  // The rig keeps up once it is rolling, and is last away and last to stop.
+  assert.ok(Math.abs(rig.topSpeed / carStats(DEFAULT_CAR).topSpeed - 1) < .1);
+  assert.ok(CAR_IDS.every(id => id === 'rig' || (carStats(id).acceleration > rig.acceleration && carStats(id).braking > rig.braking)));
+  // The microcar is the slowest car here and the nimblest with number plates.
+  assert.ok(CAR_IDS.every(id => id === 'micro' || carStats(id).topSpeed > micro.topSpeed));
+  assert.ok(micro.grip > best('grip', [...road, 'sports']) && micro.grip < carStats('formula').grip && micro.braking > best('braking'));
+  // Every one of them can still hold the top speed on its card against the air.
+  for (const id of SPECIALS) assert.ok(Math.abs(flatOut(id, 60).speed - carStats(id).topSpeed) < .01, `${id} cannot reach its top speed`);
+});
+
+test('the specials are their own shapes, on their own wheels', () => {
+  const bounds = id => { const model = createCar(id), box = new THREE.Box3().setFromObject(model.car); model.disposeModel(); return box; };
+  for (const id of SPECIALS) {
+    const box = bounds(id), { width, length, wheels, eye } = CARS[id].shape;
+    // The collision box is the footprint the model actually has.
+    assert.ok(Math.abs(box.max.x - box.min.x - width) < .12, `${id} is ${(box.max.x - box.min.x).toFixed(2)} m wide, not ${width}`);
+    assert.ok(Math.abs(box.max.z - box.min.z - length) < .12, `${id} is ${(box.max.z - box.min.z).toFixed(2)} m long, not ${length}`);
+    assert.ok(Math.abs(box.max.x + box.min.x) < .01, `${id} is not symmetrical`);
+    assert.ok(wheels.front.z < 0 && wheels.rear.z > 0);
+    // First person looks out from inside the model, above the wheels.
+    assert.ok(eye[1] > wheels.front.radius * 2 - .3 && eye[1] < box.max.y && Math.abs(eye[2]) < length / 2, `${id} has its driver outside the car`);
+    const car = new DrivingController(straightRoute, {}, id);
+    assert.deepEqual(car.car.userData.driverEye.toArray(), eye);
+    car.disposeModel();
+  }
+  const height = id => bounds(id).max.y;
+  assert.ok(height('monster') > height('van') * 1.15 && height('rig') > height('monster'));
+  assert.ok(height('micro') < height('hatchback') && height('hotrod') < height('sedan'));
+  // Tall tyres turn slower than small ones at the same road speed.
+  const car = new DrivingController(straightRoute, {}, 'hotrod');
+  for (let i = 0; i < 30; i++) car.update(1 / 60, { forward: true });
+  const [front, rear] = [car.wheels.find(wheel => wheel.front), car.wheels.find(wheel => !wheel.front)];
+  assert.ok(Math.abs(rear.wheel.rotation.x) < Math.abs(front.wheel.rotation.x) * .7);
+  car.disposeModel();
 });
 
 test('loose ground takes the speed instead of the game capping it', () => {
@@ -199,24 +255,31 @@ test('a chosen car keeps its own paint and kit on every route', () => {
   assert.equal(paints.size, Object.keys(JOURNEYS).length);
 });
 
-test('the racers stay in the chooser, and traffic keeps its own five shapes', () => {
-  for (const id of RACERS) {
+test('the racers and specials stay in the chooser, and traffic keeps its own five shapes', () => {
+  for (const id of CHOOSER_ONLY) {
     assert.ok(CARS[id], `the chooser needs the ${id} car`);
     assert.ok(!TRAFFIC_MODELS.some(spec => spec.name === CARS[id].shape.name), `${id} must not join traffic`);
     assert.ok(!Object.values(JOURNEYS).some(data => data.car === id), `no route may default to ${id}`);
   }
   assert.equal(DEFAULT_CAR, 'auto');
   for (const id of CAR_IDS) {
-    assert.equal(carMeters(id).length, 3);
+    assert.equal(carMeters(id).length, 4);
     for (const { level } of carMeters(id)) assert.ok(level >= 6 && level <= 100, `${id} meter out of range`);
   }
-  // The meters are scaled for the road fleet, so the racer pegs all three and
-  // the coupe leads everything that is still an ordinary tourer.
-  assert.ok(carMeters('formula').every(({ level }) => level === 100));
+  // The meters are scaled for cars with number plates, so the racer pegs the
+  // first three and shows what its slicks cost on the fourth. The coupe leads
+  // everything that is still an ordinary tourer, and no bar sits at either stop.
+  const [, , , looseMeter] = carMeters('formula');
+  assert.ok(carMeters('formula').slice(0, 3).every(({ level }) => level === 100));
+  assert.ok(looseMeter.label === 'Off road' && looseMeter.level < 80);
   for (const [index, meter] of carMeters('sports').entries()) {
-    const road = CAR_IDS.filter(id => id !== 'formula');
+    const road = CAR_IDS.filter(id => !['formula', ...SPECIALS].includes(id));
     assert.ok(road.every(id => carMeters(id)[index].level <= meter.level), `${meter.label} should top out at the coupe`);
   }
+  for (const id of CAR_IDS.filter(id => id !== 'formula')) for (const { label, level } of carMeters(id)) {
+    assert.ok(level > 6 && level < 100, `${id} is off the ${label} scale`);
+  }
+  assert.ok(carMeters('buggy')[3].level > 90 && carMeters('hotrod')[0].level > 90 && carMeters('micro')[2].level > 90);
 });
 
 test('the racer is an open-wheeler, not a road car with new numbers', () => {

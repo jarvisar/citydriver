@@ -15,7 +15,13 @@ export const ENGINES = {
   pickup: voice({ idle: 640, cylinders: 8, gearing: .78, body: 1.8, rasp: 1.1, harmonics: [1, .7, .22, .3, .12, .1, .05] }),
   van: voice({ idle: 680, redline: 3500, gearing: .8, body: 1.5, rasp: 1.2, intake: .3 }),
   sports: voice({ idle: 980, redline: 6500, cylinders: 6, gearing: 1.55, body: .85, rasp: 1, intake: 1.4, harmonics: [1, .6, .38, .26, .18, .12, .075, .04] }),
-  formula: voice({ idle: 1800, redline: 12500, cylinders: 8, gearing: 3.1, body: .5, rasp: .9, intake: 1.8, harmonics: [1, .48, .24, .13, .06, .03] }),
+  // `open` marks a car with no cabin, so first person hears it unfiltered.
+  formula: voice({ idle: 1800, redline: 12500, cylinders: 8, gearing: 3.1, body: .5, rasp: .9, intake: 1.8, harmonics: [1, .48, .24, .13, .06, .03], open: true }),
+  buggy: voice({ idle: 900, redline: 5200, gearing: 1.25, body: .7, rasp: 1.3, intake: 1.1, harmonics: [1, .45, .5, .2, .18, .08], open: true }),
+  monster: voice({ idle: 700, redline: 4800, cylinders: 8, gearing: .95, body: 1.9, rasp: 1.35, intake: 1.2, harmonics: [1, .72, .25, .32, .14, .1, .05] }),
+  hotrod: voice({ idle: 760, redline: 6200, cylinders: 8, gearing: 1.25, body: 1.6, rasp: 1.4, intake: 1.7, harmonics: [1, .75, .3, .34, .16, .12, .07, .04], open: true }),
+  rig: voice({ idle: 600, redline: 2300, cylinders: 6, gearing: .42, body: 2, rasp: .9, intake: .25, harmonics: [1, .8, .35, .3, .1, .05] }),
+  micro: voice({ idle: 1100, redline: 6000, gearing: 1.7, body: .45, rasp: 1.1, intake: .7, harmonics: [1, .3, .5, .12, .2, .05] }),
 };
 export const engineFor = (car, journey = 'coast') => ENGINES[car === 'auto' ? journey : car] ?? ENGINES.coast;
 

@@ -27,7 +27,7 @@ function pen({ drop = 0, scale = SCALE, ground = GROUND } = {}) {
 
 export function carArt(id) {
   const entry = carEntry(id);
-  const parts = entry.kind === 'formula' ? formulaParts(entry) : roadCarParts(entry);
+  const parts = entry.kind === 'formula' ? formulaParts(entry) : entry.kind === 'special' ? SPECIAL_ART[entry.shape.name](entry.shape) : roadCarParts(entry);
   return `<svg class="chooser-art car-art" viewBox="0 0 280 142" aria-hidden="true">${parts.join('')}</svg>`;
 }
 
@@ -101,6 +101,108 @@ function formulaParts(entry) {
     wheel(-wheelZ), wheel(wheelZ),
   ];
 }
+
+// The specials are drawn one by one from their models' own measurements, each
+// at the scale that frames it: the rig is half as long again as the microcar is
+// tall. A raked cabin is a painted frame with a smaller glass house inside it.
+const LAMP = '#ffeec2', TAIL = '#c4483a', ENGINE = '#59625f', SEAT = '#3a4441', SHOCK = '#d9a441', AMBER = '#e0a23a', CANVAS = '#e9e2cb', LEATHER = '#8a5a3a';
+const cabin = ({ shape2d }, front, rear, bottom, top, rake = .24, inset = .08) => [
+  shape2d([[front, bottom], [front + rake, top], [rear - rake / 2, top], [rear, bottom]], PAINT),
+  shape2d([[front + inset * 1.6, bottom + inset], [front + rake + inset, top - inset], [rear - rake / 2 - inset, top - inset], [rear - inset, bottom + inset]], GLASS),
+];
+const tyres = ({ disc }, { front, rear }) => [front, rear].map(({ radius, z }) => disc(z, radius, radius, TIRE) + disc(z, radius, radius * .46, HUB));
+
+const SPECIAL_ART = {
+  buggy(shape) {
+    const draw = pen({ scale: 54, ground: 124 }), { slab, shape2d, shadow } = draw;
+    return [
+      shadow(1.9),
+      // Cage first, so the tub and the engine sit in front of its feet.
+      slab(.64, .72, .83, 1.79, CARBON, 1),
+      shape2d([[-.94, .9], [-.86, .9], [-.62, 1.79], [-.7, 1.79]], CARBON),
+      shape2d([[.64, 1.79], [.72, 1.79], [1.4, 1], [1.3, 1]], CARBON),
+      slab(-.7, .72, 1.72, 1.79, CARBON, 1),
+      slab(-.6, .6, 1.79, 1.86, PAINT, 2),
+      slab(-.73, -.64, 1.85, 1.98, LAMP, 1),
+      slab(.43, .57, .88, 1.44, SEAT, 3), slab(-.05, .45, .81, .95, SEAT, 2),
+      slab(1.07, 1.69, .74, 1.16, ENGINE, 3), slab(1.55, 1.65, 1.05, 1.6, TRIM, 1),
+      slab(-1, 1.2, .49, .83, PAINT, 4), slab(-.93, -.63, .8, 1.03, PAINT, 2),
+      shape2d([[-.93, .49], [-.93, .83], [-1.68, .68], [-1.68, .54]], PAINT),
+      slab(-1.04, -.93, .88, 1.08, LAMP, 2), slab(.7, .78, 1.07, 1.23, TAIL, 1),
+      ...tyres(draw, shape.wheels),
+    ];
+  },
+  monster(shape) {
+    const draw = pen({ scale: 36, ground: 126 }), { slab, shape2d, shadow } = draw;
+    const shocks = z => [-1, 1].map(lean => shape2d([[z + lean * .36, .85], [z + lean * .27, .85], [z + lean * .02, 1.5], [z + lean * .11, 1.5]], SHOCK));
+    return [
+      shadow(2.6),
+      slab(-2.05, 2.05, .98, 1.22, CARBON, 2),
+      ...shocks(-1.55), ...shocks(1.55),
+      slab(.7, .8, 2.11, 3, CARBON, 1), slab(.64, .86, 2.99, 3.17, LAMP, 2),
+      slab(-2.25, 2.25, 1.45, 2.11, PAINT, 5),
+      ...cabin(draw, -1.03, .52, 2.11, 2.81),
+      slab(-.84, .46, 2.79, 2.91, PAINT, 2),
+      slab(.53, 2.25, 2.11, 2.43, PAINT, 2),
+      slab(-2.41, -2.19, 1.28, 1.52, TRIM, 2), slab(2.19, 2.41, 1.28, 1.52, TRIM, 2),
+      slab(-2.28, -2.1, 1.74, 1.98, LAMP, 2), slab(2.1, 2.28, 1.65, 1.95, TAIL, 2),
+      ...tyres(draw, shape.wheels),
+    ];
+  },
+  hotrod(shape) {
+    const draw = pen({ scale: 52, ground: 116 }), { slab, shape2d, disc, shadow } = draw;
+    return [
+      shadow(2.3),
+      slab(-1.95, 1.95, .45, .59, CARBON, 1),
+      shape2d([[1.125, .6], [1.125, 1.2], [1.975, 1.015], [1.975, .685]], PAINT),
+      slab(-.2, 1.15, .6, 1.2, PAINT, 3),
+      ...cabin(draw, -.05, .95, 1.2, 1.56, .16, .06),
+      slab(.07, .93, 1.55, 1.65, PAINT, 2),
+      slab(-1.79, -.17, .6, 1.12, PAINT, 3),
+      slab(-1.3, -.7, 1.11, 1.37, TRIM, 2), slab(-1.28, -.85, 1.37, 1.53, CARBON, 2),
+      // Header stubs down the bonnet side, into the pipe along the sill.
+      ...[0, 1, 2, 3].map(i => disc(-1.45 + i * .28, .84, .06, TRIM)),
+      slab(-1.35, .65, .55, .69, TRIM, 3),
+      slab(-1.93, -1.78, .55, 1.21, TRIM, 2),
+      slab(-1.87, -1.69, .87, 1.09, LAMP, 4), slab(1.94, 2.02, .81, .95, TAIL, 1),
+      ...tyres(draw, shape.wheels),
+    ];
+  },
+  rig(shape) {
+    const draw = pen({ scale: 35, ground: 128 }), { slab, shape2d, shadow } = draw;
+    return [
+      shadow(3.2),
+      slab(-2.9, 3, .6, .9, CARBON, 2),
+      slab(1.55, 2.65, .9, 1.04, CARBON, 1), slab(2.49, 2.55, .45, .95, CARBON, 1),
+      slab(.5, 1.8, 1.03, 2.875, PAINT, 3),
+      shape2d([[.5, 2.86], [.5, 2.97], [1.8, 3.37], [1.8, 2.86]], PAINT),
+      slab(-1.1, .5, 1.03, 1.98, PAINT, 3),
+      ...cabin(draw, -1.05, .45, 1.975, 2.725),
+      slab(-.86, .38, 2.72, 2.84, PAINT, 2), slab(-.84, -.72, 2.84, 2.91, AMBER, 1),
+      slab(-2.95, -1.05, 1.03, 1.98, PAINT, 4),
+      slab(.29, .47, 1.1, 3.4, TRIM, 2),
+      slab(-3.03, -2.93, 1.08, 1.92, TRIM, 1), slab(-3.1, -2.85, .55, .85, TRIM, 2),
+      slab(-.35, .95, .52, 1.12, TRIM, 8),
+      slab(-2.64, -2.5, 1.04, 1.28, LAMP, 2), slab(2.96, 3.06, .7, .86, TAIL, 1),
+      ...tyres(draw, shape.wheels),
+    ];
+  },
+  micro(shape) {
+    const draw = pen({ scale: 58, ground: 126 }), { slab, shape2d, shadow } = draw;
+    return [
+      shadow(1.35),
+      shape2d([[-.8, .94], [-.5, 1.54], [.55, 1.54], [.7, .94]], GLASS),
+      slab(.06, .14, .94, 1.54, PAINT, 1),
+      slab(-.46, .52, 1.52, 1.6, CANVAS, 2),
+      slab(-.3, .5, 1.6, 1.65, CARBON, 1), slab(-.25, .45, 1.65, 1.87, LEATHER, 2),
+      slab(-.13, -.08, 1.65, 1.87, CARBON, 0), slab(.27, .32, 1.65, 1.87, CARBON, 0),
+      shape2d([[-1.15, .43], [-1.15, .85], [-.5, .94], [.5, .94], [1.15, .88], [1.15, .4], [.5, .34], [-.5, .34]], PAINT),
+      slab(-1.21, -1.11, .38, .46, TRIM, 1), slab(1.11, 1.21, .38, .46, TRIM, 1),
+      slab(-1.2, -1.1, .64, .84, LAMP, 3), slab(1.1, 1.2, .68, .8, TAIL, 1),
+      ...tyres(draw, shape.wheels),
+    ];
+  },
+};
 
 function accessories(entry, draw) {
   const { slab, shape2d, disc, px, py, size, l, cz, cabinLength, roofY, radius } = draw;

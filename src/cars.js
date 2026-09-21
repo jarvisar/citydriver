@@ -1,5 +1,6 @@
 import { TRAFFIC_MODELS, SPORTS_MODEL } from './traffic-models.js';
 import { FORMULA_SHAPE } from './formula-model.js';
+import { SPECIAL_SHAPES } from './special-models.js';
 
 // The player's original car. Its collision box is the footprint the game has
 // always used; the extra fields only describe it for the chooser's artwork.
@@ -13,10 +14,11 @@ const shape = name => TRAFFIC_MODELS.find(spec => spec.name === name);
 // The default car dresses for the scenery; every other car brings its own paint.
 export const ROUTE_PAINT = { coast: '#d96143', desert: '#78977b', snow: '#9fc4d5', jungle: '#e0b44a', plains: '#4f8f8b', city: '#7a3b47' };
 
-// Almost every car is the same kind of relaxed tourer. Stats stay within about
+// The road fleet is the same kind of relaxed tourer. Stats stay within about
 // a tenth of the coastal wagon so a choice changes character, not the game. The
-// two chooser-only cars are the exceptions: the coupe reaches noticeably
-// further, and the formula racer is quicker again by the same margin over it.
+// chooser-only cars are the exceptions: the coupe reaches noticeably further,
+// the formula racer is quicker again by the same margin over it, and each of
+// the specials trades one thing away to be the best in the garage at another.
 //
 //   topSpeed            metres per second, the speed the throttle tops out at
 //   offRoad             the same off the tarmac: two thirds or so of topSpeed,
@@ -79,8 +81,33 @@ export const CARS = {
     name: 'Cape GT', kind: 'built', paint: '#b8232f', shape: SPORTS_MODEL,
     stats: { topSpeed: 33, acceleration: 13.5, braking: 23, grip: 1.14, offRoad: 20.1 },
   },
+  // Light, short and on knobbly tyres: it barely notices the tarmac ending.
+  buggy: {
+    name: 'Sandpiper Buggy', kind: 'special', paint: '#e2a23b', shape: SPECIAL_SHAPES.buggy,
+    stats: { topSpeed: 25.5, acceleration: 14.5, braking: 19, grip: 1.12, offRoad: 23.5 },
+  },
+  // Goes anywhere at the same unhurried pace, and leans on its tyres to stop or turn.
+  monster: {
+    name: 'Boulder King', kind: 'special', paint: '#3f7fb5', shape: SPECIAL_SHAPES.monster,
+    stats: { topSpeed: 23.5, acceleration: 10.4, braking: 16.5, grip: .8, offRoad: 21.5 },
+  },
+  // All engine: quicker in a straight line than the coupe, and nowhere else.
+  hotrod: {
+    name: 'Salt Flat Special', kind: 'special', paint: '#1f2326', shape: SPECIAL_SHAPES.hotrod,
+    stats: { topSpeed: 37, acceleration: 17.5, braking: 17, grip: .86, offRoad: 20.5 },
+  },
+  // Eight tonnes of tractor unit. It gets there, and it needs the room to stop.
+  rig: {
+    name: 'Long Hauler', kind: 'special', paint: '#a3312c', shape: SPECIAL_SHAPES.rig,
+    stats: { topSpeed: 27, acceleration: 8.6, braking: 15.5, grip: .78, offRoad: 16.2 },
+  },
+  // Out of breath by 48 mph, but it changes lanes like a thought.
+  micro: {
+    name: 'Pocket Bubble', kind: 'special', paint: '#8fcfc0', shape: SPECIAL_SHAPES.micro,
+    stats: { topSpeed: 21.5, acceleration: 12.6, braking: 22, grip: 1.26, offRoad: 13.2 },
+  },
   formula: {
-    name: 'Apex Formula', kind: 'formula', badge: 'Track', paint: '#d8452f', shape: FORMULA_SHAPE,
+    name: 'Apex Formula', kind: 'formula', paint: '#d8452f', shape: FORMULA_SHAPE,
     // 100 mph, with enough power to overcome air drag at that speed.
     stats: { topSpeed: 50, acceleration: 40, braking: 30, grip: 1.32, offRoad: 20 },
   },
@@ -112,13 +139,15 @@ export function carStats(id) {
   };
 }
 
-// Chooser meters. The ranges sit just outside the road fleet so the slowest car
-// still shows a little bar and only the coupe nearly fills one. The formula
-// racer is off that scale by design and pegs all three, which is the point.
+// Chooser meters. The ranges sit just outside everything with number plates, so
+// the slowest car still shows a little bar and each special nearly fills the one
+// it was built for. The formula racer is off that scale by design and pegs the
+// first three, which is the point; what its slicks cost shows on the fourth.
 const METERS = [
-  { label: 'Top speed', key: 'topSpeed', low: 24, high: 33.5 },
-  { label: 'Acceleration', key: 'acceleration', low: 9, high: 13.8 },
-  { label: 'Handling', key: 'grip', low: .85, high: 1.17 },
+  { label: 'Top speed', key: 'topSpeed', low: 20, high: 38 },
+  { label: 'Acceleration', key: 'acceleration', low: 7.5, high: 18.5 },
+  { label: 'Handling', key: 'grip', low: .72, high: 1.3 },
+  { label: 'Off road', key: 'offRoad', low: 12, high: 24.5 },
 ];
 export function carMeters(id) {
   const stats = carEntry(id).stats;

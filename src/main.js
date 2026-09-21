@@ -183,10 +183,9 @@ async function boot() {
           `<span class="car-meter"><span>${label}</span><span class="car-meter-track"><span style="width:${level}%"></span></span></span>`).join('');
         // The portrait is drawn in whatever the garage is wearing, so the grid
         // doubles as the preview: one colour repaints the whole fleet at once.
-        const badge = entry.badge ? `<span class="car-badge">${entry.badge}</span>` : '';
         return `<button type="button" class="chooser-card car-card" data-car="${id}" aria-label="${entry.name}" aria-current="false" style="--car-paint:${cardPaint(id)}">`
           + carArt(id)
-          + `<span class="chooser-card-copy"><span class="chooser-card-title">${entry.name}${badge}</span>`
+          + `<span class="chooser-card-copy"><span class="chooser-card-title">${entry.name}</span>`
           + `<span class="car-meters">${meters}</span>${current}</span></button>`;
       }).join('');
       for (const button of carDialog.querySelectorAll('[data-car]')) button.addEventListener('click', () => chooseCar(button.dataset.car));
