@@ -1,8 +1,8 @@
 {
   "id": "./",
-  "name": "Citydriver — An endless city",
+  "name": "Citydriver",
   "short_name": "Citydriver",
-  "description": "An endless procedural city driving game.",
+  "description": "Arcade taxi driving.",
   "lang": "en-US",
   "start_url": "./",
   "scope": "./",
@@ -15,7 +15,7 @@
       "sizes": "1280x800",
       "type": "image/jpeg",
       "form_factor": "wide",
-      "label": "Citydriver: an endless city on desktop"
+      "label": "Citydriver on desktop"
     },
     {
       "src": "screenshots/mobile.jpg",

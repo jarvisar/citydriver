@@ -332,6 +332,7 @@ export class DrivingController {
     const { frame: roadFrame, position: positionAt } = this.route;
     const stats = this.stats;
     const touch = input.touchDrive;
+    const arcade = Boolean(this.arcade), boosting = arcade && input.boost;
     const forward = clamp(Number(input.forward) || 0, 0, 1); const brake = clamp(Number(input.brake) || 0, 0, 1);
     this.steer = THREE.MathUtils.damp(this.steer, touch ? 0 : (Number(input.right) || 0) - (Number(input.left) || 0), 7, dt);
     // How far off the tarmac the car is: 0 on the road, 1 out on open ground,
@@ -354,25 +355,29 @@ export class DrivingController {
     // of it keeps the car recoverable, and the alignment assist still works out
     // here, so a straightened wheel still points the car back at the road.
     const grip = stats.grip * (1 - .25 * looseness);
+    const drifting = arcade && input.handbrake && Math.abs(this.steer) > .2 && this.speed > 8 && !brake;
+    this.drifting = Boolean(drifting);
     let acceleration = 0;
     if (forward) acceleration += forward * (this.speed < -.3 ? stats.launch : stats.acceleration);
     if (brake) acceleration -= brake * (this.speed > .3 ? stats.braking : stats.creep);
-    if (input.handbrake) acceleration -= Math.sign(this.speed) * stats.handbrake;
+    if (input.handbrake) acceleration -= Math.sign(this.speed) * stats.handbrake * (drifting ? .14 : 1);
     const drag = DRAG.rolling + DRAG.air * this.speed * this.speed + surface;
     if (Math.abs(this.speed) > .015) acceleration -= Math.sign(this.speed) * drag;
     if (touch) {
       this.speed = Math.abs(this.speed);
-      const targetSpeed = touch.amount * (stats.topSpeed + (stats.offRoad - stats.topSpeed) * looseness);
+      const targetSpeed = input.handbrake ? 0 : touch.amount * (stats.topSpeed + (stats.offRoad - stats.topSpeed) * looseness);
       acceleration = dt ? clamp((targetSpeed - this.speed) / dt, -stats.touchBraking, stats.acceleration) : 0;
       if (touch.amount) this.heading = touch.heading;
     }
+    if (boosting) acceleration += stats.acceleration * .9;
     const oldSpeed = this.speed;
-    this.speed = clamp(this.speed + acceleration * dt, touch ? 0 : -stats.reverseSpeed, stats.topSpeed);
+    const boostCoast = arcade ? Math.max(0, this.speed - stats.topSpeed - stats.braking * .4 * dt) : 0;
+    this.speed = clamp(this.speed + acceleration * dt, touch ? 0 : -stats.reverseSpeed, stats.topSpeed + (boosting ? 10 : boostCoast));
     if (!forward && !brake && oldSpeed * this.speed < 0) this.speed = 0;
     if (input.handbrake && oldSpeed * this.speed < 0) this.speed = 0;
     const frame = roadFrame(this.s);
     const assist = this.route.laneAssist !== false && (!this.freeDriving || looseness === 0);
-    if (!touch) this.heading += this.steer * this.speed / 3.3 * (.52 * grip / (1 + Math.abs(this.speed) * .105)) * dt;
+    if (!touch) this.heading += this.steer * this.speed / 3.3 * (.52 * grip / (1 + Math.abs(this.speed) * .105)) * (drifting ? 1.7 : 1) * dt;
     let difference = Math.atan2(Math.sin(this.heading - frame.angle), Math.cos(this.heading - frame.angle));
     // Free driving keeps the chosen heading off-road; normal driving assists bends.
     if (!touch && assist && Math.abs(this.steer) < .08 && Math.abs(this.speed) > .2 && Math.abs(difference) < 1.15) {
@@ -381,8 +386,12 @@ export class DrivingController {
       difference = this.heading - frame.angle;
     }
     const step = this.speed * dt, fromS = this.s, fromU = this.u;
-    this.s += touch?.amount ? touch.along * step : Math.cos(difference) * step / frame.scale;
-    this.u += touch?.amount ? touch.across * step : Math.sin(difference) * step;
+    if (!dt || !Number.isFinite(this.slideHeading) || !arcade) this.slideHeading = this.heading;
+    const slip = Math.atan2(Math.sin(this.slideHeading - this.heading), Math.cos(this.slideHeading - this.heading));
+    this.slideHeading = this.heading + slip * Math.exp(-dt * (drifting ? 2.2 : 12));
+    const travelAngle = arcade ? this.slideHeading - frame.angle : difference;
+    this.s += touch?.amount ? touch.along * step : Math.cos(travelAngle) * step / frame.scale;
+    this.u += touch?.amount ? touch.across * step : Math.sin(travelAngle) * step;
     this.carryKnock(dt);
     if (!touch && assist && Math.abs(difference) < 1.15) this.heading += (roadFrame(this.s).angle - frame.angle) * (1 - Math.abs(this.steer)) * .92;
     this.distance += Math.abs(step);

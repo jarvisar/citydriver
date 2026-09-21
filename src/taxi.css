@@ -1,0 +1,69 @@
+[hidden]#taxi-hud, [hidden]#taxi-nav, [hidden]#taxi-task, [hidden]#taxi-results, [hidden]#taxi-buttons { display: none; }
+.taxi-hud { position: absolute; top: var(--ui-top); left: var(--ui-left); display: flex; align-items: stretch; gap: 4px; color: #fff; font-variant-numeric: tabular-nums; pointer-events: none; }
+.taxi-clock-box { display: grid; align-content: center; justify-items: center; width: 96px; padding: 8px; background: #ffd238; color: #172229; border-radius: 8px 0 0 8px; }
+.taxi-clock-box > span { font-size: 10px; font-weight: 900; letter-spacing: 1px; }
+#taxi-clock { font-size: 58px; font-weight: 950; line-height: 1; letter-spacing: -4px; }
+#taxi-clock[data-urgent=true] { color: #b82f25; }
+.taxi-score { display: grid; align-content: center; gap: 3px; padding: 10px 18px; border-radius: 0 8px 8px 0; background: #172229ed; }
+#taxi-cash { font-size: 36px; font-weight: 850; letter-spacing: -1px; line-height: 1; }
+#taxi-fares { font-size: 11px; color: #d7dfd9; }
+.taxi-nav { position: absolute; top: 85px; left: 50%; transform: translateX(-50%); display: grid; justify-items: center; gap: 4px; pointer-events: none; }
+#taxi-arrow { width: 62px; height: 62px; color: #ffd238; filter: drop-shadow(0 3px 0 #172229) drop-shadow(0 2px 8px #17222970); }
+#taxi-nav-distance { padding: 4px 8px; border-radius: 4px; color: white; background: #172229d9; font-size: 12px; font-weight: 750; }
+.taxi-task { position: absolute; left: 50%; bottom: 26px; transform: translateX(-50%); width: 360px; max-width: 90%; background: #172229ed; color: #fff6d9; border: 1px solid #ffd23870; border-radius: 10px; padding: 13px 16px 11px; pointer-events: none; }
+#taxi-task-title { font-size: 20px; font-weight: 850; line-height: 1.1; }
+#taxi-task-detail { display: block; margin-top: 5px; font-size: 11px; color: #d9e1d9; }
+.taxi-stop-track { height: 3px; background: #ffffff18; margin: 10px 0; border-radius: 2px; overflow: hidden; }
+#taxi-stop-progress { display: block; height: 100%; background: #a4f264; width: 0; }
+.taxi-dash { display: flex; align-items: center; gap: 12px; font-size: 9px; font-weight: 650; }
+#taxi-speed { font-size: 20px; margin-right: 3px; font-variant-numeric: tabular-nums; }
+#taxi-boost { flex: 1; height: 6px; border-radius: 3px; background: #ffffff26; overflow: hidden; }
+#taxi-boost-fill { display: block; height: 100%; background: #ffd238; }
+#taxi-combo { color: #a4f264; font-size: 11px; white-space: nowrap; }
+.taxi-results { position: absolute; inset: 0; z-index: 7; display: grid; place-items: center; background: #101c28d9; backdrop-filter: blur(10px); color: #f9f5e5; }
+.taxi-result-card { width: 340px; max-width: 90%; padding: 30px; border: 1px solid #ffd23866; border-radius: 14px; background: #17262f; text-align: center; }
+.taxi-result-card h2 { font-size: 15px; letter-spacing: 2px; margin: 0 0 16px; color: #ffd238; }
+#taxi-result-cash { display: block; font-size: 62px; line-height: 1.1; font-weight: 900; letter-spacing: -3px; }
+.taxi-result-card p { margin: 10px 0; font-size: 13px; }
+.taxi-result-card button { display: block; width: 100%; padding: 14px; margin-top: 20px; border: 0; border-radius: 6px; background: #ffd238; color: #172229; font-weight: 800; }
+.taxi-result-card button + button { margin-top: 8px; color: #e9eee3; background: #ffffff14; }
+#taxi-buttons { position: absolute; left: var(--ui-left); bottom: var(--ui-bottom); display: flex; gap: 8px; }
+#taxi-buttons button { min-width: 68px; min-height: 54px; border: 1px solid #ffffff50; border-radius: 8px; color: #172229; background: #ffd238e8; font-weight: 800; font-size: 11px; touch-action: none; }
+#taxi-buttons button + button { color: #fff; background: #172229df; }
+#taxi-buttons kbd { display: block; width: auto; height: auto; padding: 2px 4px; font-size: 9px; line-height: 1.2; margin: 0 5px 4px; }
+body[data-mode=taxi] #toast { top: calc(var(--ui-top) + 176px); }
+body[data-mode=taxi] .city-hud, body[data-mode=taxi] .notebook-panel, body[data-mode=taxi] .controls, body[data-mode=taxi] #stick-help { display: none; }
+body[data-mode=taxi] .topbar { justify-content: flex-end; }
+body[data-mode=taxi] #city-stamps, body[data-mode=taxi] .city-guide-stop { display: none; }
+body[data-mode=taxi] .city-guide { width: 202px; }
+body[data-mode=taxi] #next-city-stop { font-size: 11px; }
+body[data-mode=taxi] #welcome .start-button:first-child { background: #ffd238; color: #172229; }
+body[data-controller=true] #taxi-buttons { display: none; }
+#app:has(#welcome:not(.hidden), #pause-overlay:not([hidden]), dialog[open], #journey-transition.active, #taxi-results:not([hidden])) :is(.taxi-hud, .taxi-nav, .taxi-task, #taxi-buttons) { visibility: hidden; pointer-events: none; }
+#app:has(#taxi-results:not([hidden])) :is(.topbar, .bottom-bar, .touch-controls, .city-guide, #toast) { visibility: hidden; pointer-events: none; }
+@media (max-width: 760px) {
+  .taxi-clock-box { width: 65px; padding: 6px; }
+  #taxi-clock { font-size: 42px; letter-spacing: -2px; }
+  .taxi-clock-box > span { font-size: 8px; }
+  .taxi-score { padding: 8px 10px; }
+  #taxi-cash { font-size: 24px; }
+  #taxi-fares { font-size: 9px; }
+  .taxi-nav { top: calc(var(--ui-top) + 87px); left: 50%; }
+  #taxi-arrow { width: 48px; height: 48px; }
+  .taxi-task { left: var(--ui-left); bottom: calc(var(--ui-bottom) + 173px); transform: none; width: calc(100% - 166px - var(--ui-left) - var(--ui-right)); max-width: 225px; padding: 10px; }
+  #taxi-task-title { font-size: 16px; }
+  #taxi-task-detail { font-size: 10px; line-height: 1.5; }
+  .taxi-dash { flex-wrap: wrap; gap: 6px; }
+  #taxi-speed { font-size: 17px; }
+  #taxi-combo { width: 100%; }
+  body[data-mode=taxi] .city-guide { top: auto; bottom: calc(var(--ui-bottom) + 173px); width: 146px; }
+  #taxi-buttons { left: var(--ui-left); bottom: calc(var(--ui-bottom) + 70px); }
+  #taxi-buttons button { min-width: 62px; }
+  #taxi-buttons kbd { display: none; }
+}
+@media (max-height: 560px) and (orientation: landscape) {
+  .taxi-task { bottom: var(--ui-bottom); width: 230px; left: 50%; transform: translateX(-50%); padding: 9px; }
+  #taxi-task-title { font-size: 15px; }
+  .taxi-nav { top: 75px; }
+  body[data-mode=taxi] .city-guide { display: none; }
+}

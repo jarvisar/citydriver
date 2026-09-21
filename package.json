@@ -10,6 +10,7 @@
     "preview": "vite preview --host",
     "test": "node --import ./tests/world-seed.js --test tests/*.test.js",
     "test:browser": "node scripts/citydriver-test.mjs",
+    "test:taxi": "node scripts/taxi-test.mjs",
     "test:city": "node scripts/citydriver-test.mjs",
     "electron:web": "vite build --outDir dist-electron",
     "electron:dev": "node scripts/electron-launch.mjs",
@@ -36,5 +37,5 @@
     "electron-builder": "^26.15.3",
     "vite": "^8.3.0"
   },
-  "description": "An endless procedural city driving game."
+  "description": "Arcade taxi driving."
 }

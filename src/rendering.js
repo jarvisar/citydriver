@@ -204,5 +204,5 @@ export function createRendering(canvas, graphics = new Graphics()) {
   let desktopView;
   function enterVR() { desktopView = view; setView(views.findIndex(view => view.thirdPerson)); }
   function exitVR() { if (desktopView !== undefined) setView(desktopView); desktopView = undefined; }
-  return { renderer, scene, graphics, ambientOcclusion, vrCamera, render, enterVR, exitVR, toggleAO() { return graphics.toggleAmbientOcclusion(); }, get camera() { return activeCamera(); }, update, resize, recordFrame, setJourney, setWeather, get viewLabel() { return views[view].label; }, toggleView() { return setView((view + 1) % views.length); }, snap() { initialized = false; thirdPerson.snap(); firstPerson.snap(); } };
+  return { renderer, scene, graphics, ambientOcclusion, vrCamera, render, enterVR, exitVR, setView, toggleAO() { return graphics.toggleAmbientOcclusion(); }, get camera() { return activeCamera(); }, update, resize, recordFrame, setJourney, setWeather, get viewLabel() { return views[view].label; }, toggleView() { return setView((view + 1) % views.length); }, snap() { initialized = false; thirdPerson.snap(); firstPerson.snap(); } };
 }

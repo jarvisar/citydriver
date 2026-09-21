@@ -16,7 +16,7 @@ try {
   assert.match(await page.title(), /^Citydriver\b/);
   assert.equal(await page.locator('#change-journey').isVisible(), false);
   await page.screenshot({ path: '.artifacts/citydriver/welcome.png' });
-  await page.click('#start');
+  await page.click('#free-drive');
   await page.waitForFunction(() => getComputedStyle(document.querySelector('#welcome')).visibility === 'hidden');
   await page.keyboard.down('KeyW');
   await page.waitForFunction(() => window.__citydriver.vehicle.speed > 5);
@@ -119,7 +119,7 @@ try {
   await mobile.goto(`${url}/?seed=4817`, { waitUntil: 'networkidle' });
   await mobile.waitForFunction(() => window.__citydriver && document.querySelector('#loading').classList.contains('loaded'));
   await mobile.screenshot({ path: '.artifacts/citydriver/mobile-welcome.png' });
-  await mobile.tap('#start');
+  await mobile.tap('#free-drive');
   await mobile.waitForFunction(() => getComputedStyle(document.querySelector('#welcome')).visibility === 'hidden');
   assert.equal(await mobile.locator('#city-guide').isVisible(), true);
   await mobile.tap('#city-map-toggle');

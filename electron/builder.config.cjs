@@ -97,7 +97,7 @@ module.exports = {
     executableName,
     syncDesktopName: true,
     category: 'Game',
-    synopsis: 'An endless city driving game',
+    synopsis: 'Arcade taxi driving',
     description: manifest.description,
     desktop: { entry: { Name: productName, Keywords: 'driving;city;procedural;game;', StartupWMClass: executableName } },
   },

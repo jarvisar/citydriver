@@ -45,7 +45,7 @@ test('every car builds a solid, steerable model', () => {
 // two racers by being quicker at everything, the specials by being lopsided.
 const RACERS = ['sports', 'formula'];
 const SPECIALS = ['buggy', 'monster', 'hotrod', 'rig', 'micro'];
-const CHOOSER_ONLY = [...RACERS, ...SPECIALS];
+const CHOOSER_ONLY = [...RACERS, ...SPECIALS, 'taxi'];
 
 test('every car can reverse from rest and after braking off road', () => {
   for (const id of CAR_IDS) for (const fps of [30, 60, 144]) for (const startingSpeed of [0, 12]) {
@@ -99,7 +99,7 @@ test('each special is the best in the garage at one thing and pays for it', () =
   const worst = (key, ids = road) => Math.min(...ids.map(id => carStats(id)[key]));
   const { buggy, monster, hotrod, rig, micro } = Object.fromEntries(SPECIALS.map(id => [id, carStats(id)]));
   // The buggy is the quickest thing across open ground, racers included.
-  assert.ok(buggy.offRoad > best('offRoad', CAR_IDS.filter(id => id !== 'buggy')));
+  assert.ok(buggy.offRoad > best('offRoad', CAR_IDS.filter(id => !['buggy', 'taxi'].includes(id))));
   assert.ok(buggy.acceleration > best('acceleration') && buggy.topSpeed < worst('topSpeed'));
   // The monster truck gives up the least when the road ends, and is clumsy on it.
   assert.ok(monster.offRoad > best('offRoad', [...road, ...RACERS]) && monster.topSpeed - monster.offRoad <= 2);
@@ -273,10 +273,10 @@ test('the racers and specials stay in the chooser, and traffic keeps its own fiv
   assert.ok(carMeters('formula').slice(0, 3).every(({ level }) => level === 100));
   assert.ok(looseMeter.label === 'Off road' && looseMeter.level < 80);
   for (const [index, meter] of carMeters('sports').entries()) {
-    const road = CAR_IDS.filter(id => !['formula', ...SPECIALS].includes(id));
+    const road = CAR_IDS.filter(id => !['formula', 'taxi', ...SPECIALS].includes(id));
     assert.ok(road.every(id => carMeters(id)[index].level <= meter.level), `${meter.label} should top out at the coupe`);
   }
-  for (const id of CAR_IDS.filter(id => id !== 'formula')) for (const { label, level } of carMeters(id)) {
+  for (const id of CAR_IDS.filter(id => !['formula', 'taxi'].includes(id))) for (const { label, level } of carMeters(id)) {
     assert.ok(level > 6 && level < 100, `${id} is off the ${label} scale`);
   }
   assert.ok(carMeters('buggy')[3].level > 90 && carMeters('hotrod')[0].level > 90 && carMeters('micro')[2].level > 90);

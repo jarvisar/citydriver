@@ -1,11 +1,11 @@
 import { randomAt } from './route.js';
 
 export const CITY_PLACES = Object.freeze({
-  clock: { name: 'Founders Square', short: 'Clocktower', color: '#eac482', symbol: 'I', description: 'A copper clocktower above a sunken fountain court.' },
-  market: { name: 'Lantern Market', short: 'Market hall', color: '#ee9a78', symbol: 'II', description: 'Striped stalls, warm lights, and a red-roofed market hall.' },
-  garden: { name: 'Palm House', short: 'Botanical garden', color: '#a7cfaa', symbol: 'III', description: 'A glass conservatory tucked into a formal garden.' },
-  depot: { name: 'Heritage Yard', short: 'Tram depot', color: '#8fbfce', symbol: 'IV', description: 'Retired red trams and the brick sheds of the old city line.' },
-  art: { name: 'Prism Court', short: 'Sculpture garden', color: '#c6ade0', symbol: 'V', description: 'Bold sculptures, reflecting pools, and a little open-air gallery.' },
+  clock: { name: 'Clocktower', short: 'Clocktower', color: '#eac482', symbol: 'I', description: 'Clocktower and fountains.' },
+  market: { name: 'Market', short: 'Market hall', color: '#ee9a78', symbol: 'II', description: 'Market hall and stalls.' },
+  garden: { name: 'Gardens', short: 'Botanical garden', color: '#a7cfaa', symbol: 'III', description: 'Glasshouse and gardens.' },
+  depot: { name: 'Tram Depot', short: 'Tram depot', color: '#8fbfce', symbol: 'IV', description: 'Trams and workshops.' },
+  art: { name: 'Sculpture Park', short: 'Sculpture garden', color: '#c6ade0', symbol: 'V', description: 'Sculptures and pools.' },
 });
 export const PLACE_TYPES = Object.keys(CITY_PLACES);
 const mod = (n, d) => ((n % d) + d) % d;

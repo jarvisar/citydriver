@@ -19,7 +19,7 @@ function preset(label, values) {
 
 // lightLevel is vehicle/street lamp strength: off in daylight, full at night.
 export const WEATHER_PRESETS = {
-  clear: preset('Clear skies', { rain: 0, wetness: 0, lightLevel: 0,
+  clear: preset('Day', { rain: 0, wetness: 0, lightLevel: 0,
     background: '#b6d5e8', fogColor: '#c9dbe2', skyColor: '#c9e2f2', groundColor: '#717977', sunColor: '#fff0d5',
     skyIntensity: 1.6, sunIntensity: 2.8, exposure: .77, fogNear: 390, fogFar: 780, drivingFogNear: 190, drivingFogFar: 420, sunX: -150, sunY: 230, sunZ: 110 }),
   overcast: preset('Overcast', { rain: 0, wetness: .08, lightLevel: .24,
@@ -31,10 +31,10 @@ export const WEATHER_PRESETS = {
   storm: preset('Thunderstorm', { rain: 1, wetness: 1, lightLevel: .8,
     background: '#606e81', fogColor: '#7b899b', skyColor: '#a5bcd6', groundColor: '#465465', sunColor: '#b5c8e1',
     skyIntensity: 1.4, sunIntensity: .55, exposure: .59, fogNear: 185, fogFar: 495, drivingFogNear: 75, drivingFogFar: 260, sunX: -150, sunY: 210, sunZ: 110 }),
-  sunset: preset('Golden hour', { rain: 0, wetness: .12, lightLevel: .65,
+  sunset: preset('Sunset', { rain: 0, wetness: .12, lightLevel: .65,
     background: '#dfa99b', fogColor: '#dcb19e', skyColor: '#e0c2bc', groundColor: '#70647b', sunColor: '#ffbd77',
     skyIntensity: 1.05, sunIntensity: 3.25, exposure: .74, fogNear: 340, fogFar: 740, drivingFogNear: 170, drivingFogFar: 395, sunX: -210, sunY: 105, sunZ: 140 }),
-  night: preset('Blue hour', { rain: 0, wetness: 0, lightLevel: 1,
+  night: preset('Night', { rain: 0, wetness: 0, lightLevel: 1,
     background: '#202d49', fogColor: '#34405a', skyColor: '#97b3dc', groundColor: '#3c425b', sunColor: '#c3d7f4',
     skyIntensity: .88, sunIntensity: .75, exposure: .68, fogNear: 240, fogFar: 615, drivingFogNear: 100, drivingFogFar: 335, sunX: 130, sunY: 220, sunZ: -130 }),
 };

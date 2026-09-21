@@ -32,6 +32,10 @@ export const ROUTE_PAINT = { coast: '#d96143', desert: '#78977b', snow: '#9fc4d5
 const BASE = { topSpeed: 28, acceleration: 11.3, braking: 20, grip: 1, offRoad: 18.5 };
 
 export const CARS = {
+  taxi: {
+    name: 'Taxi', kind: 'built', taxi: true, paint: '#f5c42e', shape: { ...shape('sedan'), name: 'taxi' },
+    stats: { topSpeed: 42, acceleration: 22, braking: 32, grip: 1.5, offRoad: 28 },
+  },
   auto: {
     name: 'Default',
     // No portrait and no meters in the chooser: this card is whichever car the road brings.
@@ -41,23 +45,23 @@ export const CARS = {
     name: 'Surf Wagon', kind: 'classic', trim: 'coast', paint: '#d96143', shape: CLASSIC_SHAPE, stats: BASE,
   },
   desert: {
-    name: 'Canyon Runner', kind: 'classic', trim: 'desert', paint: '#78977b', shape: CLASSIC_SHAPE,
+    name: 'Off-road Wagon', kind: 'classic', trim: 'desert', paint: '#78977b', shape: CLASSIC_SHAPE,
     stats: { topSpeed: 27.2, acceleration: 11, braking: 19.4, grip: .97, offRoad: 19 },
   },
   snow: {
-    name: 'Alpine Tourer', kind: 'classic', trim: 'snow', paint: '#9fc4d5', shape: CLASSIC_SHAPE,
+    name: 'Winter Wagon', kind: 'classic', trim: 'snow', paint: '#9fc4d5', shape: CLASSIC_SHAPE,
     stats: { topSpeed: 27.4, acceleration: 10.9, braking: 21, grip: 1.06, offRoad: 18.4 },
   },
   jungle: {
-    name: 'Jungle Expedition', kind: 'classic', trim: 'jungle', paint: '#e0b44a', shape: CLASSIC_SHAPE,
+    name: 'Utility Wagon', kind: 'classic', trim: 'jungle', paint: '#e0b44a', shape: CLASSIC_SHAPE,
     stats: { topSpeed: 26.6, acceleration: 11.5, braking: 19.2, grip: .96, offRoad: 18.6 },
   },
   plains: {
-    name: 'Prairie Cruiser', kind: 'classic', trim: 'plains', paint: '#4f8f8b', shape: CLASSIC_SHAPE,
+    name: 'Country Wagon', kind: 'classic', trim: 'plains', paint: '#4f8f8b', shape: CLASSIC_SHAPE,
     stats: { topSpeed: 27.8, acceleration: 11.2, braking: 19.8, grip: .99, offRoad: 18.8 },
   },
   city: {
-    name: 'Rain Commuter', kind: 'classic', trim: 'city', paint: '#7a3b47', shape: CLASSIC_SHAPE,
+    name: 'City Wagon', kind: 'classic', trim: 'city', paint: '#7a3b47', shape: CLASSIC_SHAPE,
     stats: { topSpeed: 26.4, acceleration: 11.8, braking: 20.4, grip: 1.02, offRoad: 17.6 },
   },
   hatchback: {
@@ -81,36 +85,36 @@ export const CARS = {
     stats: { topSpeed: 27, acceleration: 9.9, braking: 18.8, grip: .9, offRoad: 16.7 },
   },
   sports: {
-    name: 'Cape GT', kind: 'built', paint: '#b8232f', shape: SPORTS_MODEL,
+    name: 'GT', kind: 'built', paint: '#b8232f', shape: SPORTS_MODEL,
     stats: { topSpeed: 33, acceleration: 13.5, braking: 23, grip: 1.14, offRoad: 20.1 },
   },
   // Light, short and on knobbly tyres: it barely notices the tarmac ending.
   buggy: {
-    name: 'Sandpiper Buggy', mass: .7, kind: 'special', paint: '#e2a23b', shape: SPECIAL_SHAPES.buggy,
+    name: 'Buggy', mass: .7, kind: 'special', paint: '#e2a23b', shape: SPECIAL_SHAPES.buggy,
     stats: { topSpeed: 25.5, acceleration: 14.5, braking: 19, grip: 1.12, offRoad: 23.5 },
   },
   // Goes anywhere at the same unhurried pace, and leans on its tyres to stop or turn.
   monster: {
-    name: 'Boulder King', mass: 4.5, kind: 'special', paint: '#3f7fb5', shape: SPECIAL_SHAPES.monster,
+    name: 'Monster Truck', mass: 4.5, kind: 'special', paint: '#3f7fb5', shape: SPECIAL_SHAPES.monster,
     stats: { topSpeed: 23.5, acceleration: 10.4, braking: 16.5, grip: .8, offRoad: 21.5 },
   },
   // All engine: quicker in a straight line than the coupe, and nowhere else.
   hotrod: {
-    name: 'Salt Flat Special', kind: 'special', paint: '#1f2326', shape: SPECIAL_SHAPES.hotrod,
+    name: 'Hot Rod', kind: 'special', paint: '#1f2326', shape: SPECIAL_SHAPES.hotrod,
     stats: { topSpeed: 37, acceleration: 17.5, braking: 17, grip: .86, offRoad: 20.5 },
   },
   // Eight tonnes of tractor unit. It gets there, and it needs the room to stop.
   rig: {
-    name: 'Long Hauler', mass: 8, kind: 'special', paint: '#a3312c', shape: SPECIAL_SHAPES.rig,
+    name: 'Truck', mass: 8, kind: 'special', paint: '#a3312c', shape: SPECIAL_SHAPES.rig,
     stats: { topSpeed: 27, acceleration: 8.6, braking: 15.5, grip: .78, offRoad: 16.2 },
   },
   // Out of breath by 48 mph, but it changes lanes like a thought.
   micro: {
-    name: 'Pocket Bubble', kind: 'special', paint: '#8fcfc0', shape: SPECIAL_SHAPES.micro,
+    name: 'Micro', kind: 'special', paint: '#8fcfc0', shape: SPECIAL_SHAPES.micro,
     stats: { topSpeed: 21.5, acceleration: 12.6, braking: 22, grip: 1.26, offRoad: 13.2 },
   },
   formula: {
-    name: 'Apex Formula', mass: .8, kind: 'formula', paint: '#d8452f', shape: FORMULA_SHAPE,
+    name: 'Formula', mass: .8, kind: 'formula', paint: '#d8452f', shape: FORMULA_SHAPE,
     // 112 mph, with enough power to overcome air drag at that speed.
     stats: { topSpeed: 50, acceleration: 40, braking: 30, grip: 1.32, offRoad: 20 },
   },

@@ -7,3 +7,4 @@ dist/
 *.log
 dist-electron/
 release/
+/coastline_copy_reference

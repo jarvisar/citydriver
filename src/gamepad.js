@@ -51,6 +51,8 @@ export class GamepadInput {
       brake: Math.max(deadzone(buttonValue(pad, 6), .08), buttonValue(pad, 1)),
       left: Math.max(-steer, buttonValue(pad, 14), 0),
       right: Math.max(steer, buttonValue(pad, 15), 0),
+      boost: buttonValue(pad, 5),
+      handbrake: buttonValue(pad, 13),
     };
     const active = Object.values(state).some(Boolean) || buttons.some(Boolean);
     if (blocked || this.requireNeutral) {

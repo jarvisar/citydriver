@@ -1,6 +1,7 @@
 import { CITY_BLOCK, cityBlock } from './world/city-grid.js';
 import { CITY_PLACES, PLACE_TYPES } from './world/city-places.js';
 import { CityExploration, placeRoute, routeDistance } from './city-exploration.js';
+import { taxiRoute } from './taxi-run.js';
 
 const $ = id => document.getElementById(id);
 export class CityGuide {
@@ -20,17 +21,18 @@ export class CityGuide {
     this.refreshNotebook();
   }
   next(type = null) {
+    if (this.taxi?.running) { this.taxi.next(); this.updateTaxi(); return; }
     const { s, u } = this.position(), place = this.exploration.next(s, u, type);
-    if (place) this.notify(`Next stop · ${place.name}`);
-    else this.notify('No matching landmark nearby · Try another neighbourhood');
+    if (place) this.notify(place.name);
+    else this.notify('No stop nearby');
     this.update(false);
   }
   refreshNotebook() {
     const found = this.exploration.found;
     $('city-stamps').textContent = `${found.size} / ${PLACE_TYPES.length}`;
     $('city-notebook-progress').textContent = found.size === PLACE_TYPES.length
-      ? 'City explorer · All five stamps collected. Keep finding your own way.'
-      : `${found.size} of ${PLACE_TYPES.length} places discovered. Drive past each landmark to collect its stamp.`;
+      ? '5 / 5 visited'
+      : `${found.size} / ${PLACE_TYPES.length} visited`;
     for (const button of document.querySelectorAll('[data-place-type]')) {
       const collected = found.has(button.dataset.placeType);
       button.dataset.found = String(collected);
@@ -39,18 +41,26 @@ export class CityGuide {
     }
   }
   update(active) {
+    if (this.taxi?.running) { this.updateTaxi(); return; }
+    $('next-city-stop').disabled = false; $('next-city-stop').textContent = 'Next stop';
     const vehicle = this.position(), e = this.exploration;
     const found = e.update(vehicle.s, vehicle.u, active);
     if (found.length) {
-      this.notify(e.found.size === PLACE_TYPES.length ? 'City explorer · All five landmarks discovered!' : `Discovered ${found[0].name} · ${e.found.size} / ${PLACE_TYPES.length} stamps`);
+      this.notify(e.found.size === PLACE_TYPES.length ? 'All landmarks visited' : `${found[0].name} · ${e.found.size} / ${PLACE_TYPES.length}`);
       this.refreshNotebook();
     }
     const target = e.target, route = placeRoute(vehicle.s, vehicle.u, target), distance = routeDistance(route);
-    $('city-stop-name').textContent = target?.name ?? 'Explore the city';
-    $('city-stop-distance').textContent = e.justArrived?.id === target?.id ? 'You made it · Stamp collected' : `${distance < 1000 ? `${Math.round(distance / 10) * 10} m` : `${(distance / 1000).toFixed(1)} km`} along the streets`;
+    $('city-stop-name').textContent = target?.name ?? 'Destination';
+    $('city-stop-distance').textContent = e.justArrived?.id === target?.id ? 'Visited' : `${distance < 1000 ? `${Math.round(distance / 10) * 10} m` : `${(distance / 1000).toFixed(1)} km`}`;
     if (this.expanded) this.draw(vehicle, route);
   }
-  draw(vehicle, route) {
+  updateTaxi() {
+    const run = this.taxi, vehicle = this.position(), target = run.target;
+    $('next-city-stop').disabled = run.status !== 'pickup';
+    $('next-city-stop').textContent = run.status === 'pickup' ? `Next passenger · $${target.fare}` : `Fare $${run.fare.fare + run.tips}`;
+    if (this.expanded) this.draw(vehicle, taxiRoute(vehicle, target), run.status === 'pickup' ? run.customers : [{ ...target, color: '#ffd238' }], target);
+  }
+  draw(vehicle, route, places = this.exploration.places, target = this.exploration.target) {
     const ctx = this.ctx, width = 208, height = 144, scale = .36;
     const ratio = Math.min(window.devicePixelRatio || 1, 2);
     if (this.canvas.width !== width * ratio || this.canvas.height !== height * ratio) { this.canvas.width = width * ratio; this.canvas.height = height * ratio; }
@@ -68,14 +78,13 @@ export class CityGuide {
     }
     ctx.lineJoin = 'round'; ctx.lineCap = 'round'; ctx.lineWidth = 2; ctx.strokeStyle = '#efca8b';
     ctx.beginPath(); route.forEach((p, i) => { const [x, y] = point(p); if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y); }); ctx.stroke();
-    for (const place of this.exploration.places) {
-      const [x, y] = point(place), selected = place.id === this.exploration.target?.id;
+    for (const place of places) {
+      const [x, y] = point(place), selected = place.id === target?.id;
       if (x < 5 || y < 5 || x > width - 5 || y > height - 5) continue;
       ctx.beginPath(); ctx.arc(x, y, selected ? 6 : 3.5, 0, Math.PI * 2);
       ctx.fillStyle = selected ? '#f5d69c' : place.color; ctx.fill();
       if (selected) { ctx.strokeStyle = '#fff4dc'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(x, y, 9, 0, Math.PI * 2); ctx.stroke(); }
     }
-    const target = this.exploration.target;
     if (target) {
       const [x, y] = point(target), dx = x - width / 2, dy = y - height / 2;
       const factor = Math.min(1, (width / 2 - 12) / Math.max(Math.abs(dx), .001), (height / 2 - 12) / Math.max(Math.abs(dy), .001));

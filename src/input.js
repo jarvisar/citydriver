@@ -9,7 +9,14 @@ export class Input {
     this.xr = new XRInput(onAction); this.xrActive = false;
     this.konami = new KonamiCode();
     this.touchStick = new TouchStick(document.querySelector('#touch-stick'), () => onAction('drive'));
-    this.codes = { forward: ['KeyW', 'ArrowUp', 'Numpad8'], brake: ['KeyS', 'ArrowDown', 'Numpad2'], left: ['KeyA', 'ArrowLeft', 'Numpad4'], right: ['KeyD', 'ArrowRight', 'Numpad6'], handbrake: ['Space'] };
+    this.codes = { forward: ['KeyW', 'ArrowUp', 'Numpad8'], brake: ['KeyS', 'ArrowDown', 'Numpad2'], left: ['KeyA', 'ArrowLeft', 'Numpad4'], right: ['KeyD', 'ArrowRight', 'Numpad6'], handbrake: ['Space'], boost: ['ShiftLeft', 'ShiftRight'] };
+    this.touchButtons = {};
+    for (const action of ['boost', 'handbrake']) {
+      const button = document.querySelector(`[data-drive-button="${action}"]`);
+      if (!button) continue;
+      button.addEventListener('pointerdown', event => { event.preventDefault(); button.setPointerCapture(event.pointerId); this.touchButtons[action] = true; });
+      for (const event of ['pointerup', 'pointercancel', 'lostpointercapture']) button.addEventListener(event, () => { this.touchButtons[action] = false; });
+    }
     // The driving simulation reads this up to six times per displayed frame, so
     // it fills one reused record rather than building a fresh object each step.
     this.actions = Object.keys(this.codes);
@@ -66,14 +73,14 @@ export class Input {
     const state = this.driving;
     let held = false;
     for (const action of this.actions) {
-      const value = this.xrActive ? this.xr.state[action] || false : this.codes[action].some(code => this.keys.has(code)) || this.gamepad.state[action] || false;
+      const value = this.xrActive ? this.xr.state[action] || false : this.codes[action].some(code => this.keys.has(code)) || this.gamepad.state[action] || this.touchButtons[action] || false;
       state[action] = value;
-      if (value) held = true;
+      if (value && action !== 'boost' && action !== 'handbrake') held = true;
     }
     state.touchStick = null; state.touchDrive = null;
     if (held || this.gamepad.connected || this.xrActive) this.touchStick.clear();
     else if (this.touchStick.engaged) state.touchStick = this.touchStick.vector;
     return state;
   }
-  clear(options) { this.keys.clear(); this.touchStick.clear(); this.gamepad.clear(options); this.xr.clear(); this.konami.reset(); }
+  clear(options) { this.keys.clear(); this.touchButtons = {}; this.touchStick.clear(); this.gamepad.clear(options); this.xr.clear(); this.konami.reset(); }
 }
