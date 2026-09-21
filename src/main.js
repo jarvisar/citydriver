@@ -98,7 +98,7 @@ async function boot() {
     try { const saved = localStorage.getItem(journeyStorageKey); if (saved && Object.hasOwn(JOURNEYS, saved)) journey = saved; } catch { /* Storage is optional. */ }
     let world = new JOURNEYS[journey].World(scene);
     const weather = new CityWeather(scene);
-    try { weather.setMode(localStorage.getItem('citydriver-weather') ?? 'auto', { immediate: true }); } catch { /* Storage is optional. */ }
+    try { weather.setMode(localStorage.getItem('citydriver-weather') ?? 'sunset', { immediate: true }); } catch { /* Storage is optional. */ }
     let changingJourney = true, journeyWasPaused = false;
     const savedJourneys = Object.fromEntries(Object.entries(JOURNEYS).map(([id, data]) => [id, journeyStart(Number(data.routeNumber))]));
     const vehicle = new DrivingController(JOURNEYS[journey].route, savedJourneys[journey], DEFAULT_CAR); const audio = new DriveAudio();
@@ -736,7 +736,11 @@ async function boot() {
       // or showing a notification. Starting hands control straight to input.
       if (!started || autodrive.enabled) state = autodrive.update(vehicle, traffic, started ? vehicle.stats.topSpeed : MENU_CRUISE_SPEED, dt);
       if (state.touchStick) {
-        if (rendering.camera.isPerspectiveCamera) Object.assign(state, thirdPersonDrivingInput(state.touchStick));
+        if (rendering.camera.isPerspectiveCamera) {
+          const touch = thirdPersonDrivingInput(state.touchStick);
+          touch.handbrake ||= state.handbrake;
+          state = { ...state, ...touch };
+        }
         else state.touchDrive = touchDrivingInput(state.touchStick, rendering.camera, vehicle.route, vehicle.s, vehicle.u, world.origin);
       }
       if (paused || changingJourney) return;

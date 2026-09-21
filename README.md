@@ -15,6 +15,8 @@ Start a **Taxi run** with 90 seconds. Stop inside a pickup ring to board a passe
 
 **Free drive** has no timer and includes the garage, weather settings, and landmark map.
 
+Blocks mix shops, brick buildings, balcony apartments, stepped towers, and warehouses, with varied rooflines and planted courtyards. Golden hour is the default; your selected weather is saved.
+
 ## Controls
 
 | Action | Keyboard | Controller |

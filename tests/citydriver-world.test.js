@@ -55,7 +55,7 @@ test('streamed blocks are bounded, move in both axes, and retain collision coord
       assert.equal(world.chunks.size, 25);
       assert.equal(scene.children.length, 26);
       assert.equal(world.chunks.size + world.distantChunks.size, (2 * DISTANT_CITY_RADIUS + 1) ** 2);
-      assert.ok(world.distantGroup.children.length <= 8, 'the entire distant city shares a handful of draw calls');
+      assert.ok(world.distantGroup.children.length <= 9, 'the distant city, including both tree silhouettes, shares nine draw calls');
       assert.equal([...world.collisionChunks(s, u)].length, 9);
       const cell = cityCell(s, u);
       assert.ok(world.chunks.has(cell.key));
@@ -75,7 +75,7 @@ test('streamed blocks are bounded, move in both axes, and retain collision coord
           assert.ok(!cityStreetAt(-collider.z, collider.x).onRoad, 'street furniture leaves the travel lanes clear');
         }
         for (const building of chunk.features.buildings) {
-          assert.equal(building.facadeSides, 4); assert.ok(building.windows >= 40);
+          assert.equal(building.facadeSides, 4); assert.ok(building.windows >= 8, 'even the smallest shop has windows on every side');
           assert.ok(chunk.features.colliders.some(solid => solid.x === building.x && solid.z === -building.s));
         }
       }

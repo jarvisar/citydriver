@@ -81,10 +81,21 @@ try {
   await mobile.waitForFunction(() => window.__citydriver.taxi.boostActive && window.__citydriver.vehicle.speed > 0);
   await touch.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] });
   assert.equal(await mobile.evaluate(() => Boolean(window.__citydriver.input.state.boost)), false);
+  const drift = await mobile.locator('[data-drive-button=handbrake]').boundingBox();
+  fingers[0] = { x: drift.x + drift.width / 2, y: drift.y + drift.height / 2, id: 1 };
+  fingers[1] = { x: stick.x + stick.width / 2, y: stick.y + stick.height / 2, id: 2 };
+  await mobile.evaluate(() => { const a = window.__citydriver; a.traffic.setEnabled(false, a.vehicle); });
+  await touch.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: fingers });
+  fingers[1].x += 30; fingers[1].y -= 45;
+  await touch.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: fingers });
+  await mobile.evaluate(() => { window.__citydriver.vehicle.speed = 22; });
+  await mobile.waitForFunction(() => window.__citydriver.vehicle.drifting);
+  await touch.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] });
+  assert.equal(await mobile.evaluate(() => Boolean(window.__citydriver.input.state.handbrake)), false);
   await mobile.screenshot({ path: '.artifacts/taxi/mobile.png' });
   await mobile.tap('#pause'); const mobileTime = await mobile.evaluate(() => window.__citydriver.taxi.timeLeft);
   await mobile.waitForTimeout(200); assert.equal(await mobile.evaluate(() => window.__citydriver.taxi.timeLeft), mobileTime);
   assert.deepEqual(errors, []);
   await writeFile('.artifacts/taxi/report.json', JSON.stringify({ passed: true, cash, errors }, null, 2));
-  console.log('Taxi checks passed: pickup, drop-off, failure, boost, pause, restart, saved best, free drive, desktop and touch.');
+  console.log('Taxi checks passed: pickup, drop-off, failure, boost, touch drift, pause, restart, saved best, free drive, desktop and touch.');
 } finally { await browser.close(); }

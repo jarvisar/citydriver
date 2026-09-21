@@ -146,7 +146,7 @@ export function createRendering(canvas, graphics = new Graphics()) {
   // The launcher still calls this when starting or resetting the city.
   function setJourney() {
     weatherFog = null;
-    setWeather(sampleCityWeather(0, 'clear'), 0);
+    setWeather(sampleCityWeather(0, 'sunset'), 0);
     resize();
   }
   setJourney();

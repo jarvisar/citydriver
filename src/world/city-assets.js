@@ -154,11 +154,13 @@ function litterBin() {
 // narrower, upright crown that fits between the shopfronts and the kerb.
 function streetTree(variant) {
   const trunk = new Parts(), crown = new Parts();
-  trunk.beam([0, -.04, 0], [.035, .64, 0], .038, '#ffffff', 5);
-  for (const side of [-1, 1]) trunk.beam([.02, .34, 0], [side * .18, .64, .06], .022, '#ffffff', 5);
-  for (const [x, y, z, radius, stretch] of [[0, .74, 0, .29, 1.12], [-.17, .59, .025, .21, 1], [.16, .6, -.03, .22, .94]]) {
-    const g = new THREE.IcosahedronGeometry(radius, x === 0 ? 1 : 0);
-    g.scale(1, stretch + variant * .12, .88); g.rotateY(variant * .8 + y);
+  trunk.beam([0, -.04, 0], [.025, .66, 0], .048, '#ffffff', 5);
+  for (const side of [-1, 1]) trunk.beam([.02, .32, 0], [side * .22, .61, .06], .028, '#ffffff', 5);
+  const clusters = variant ? [[0, .79, 0, .3, 1.55], [-.12, .54, .025, .23, 1.1]]
+    : [[0, .77, 0, .37, 1.05], [-.22, .62, .025, .27, 1], [.22, .62, -.07, .27, .95]];
+  for (const [x, y, z, radius, stretch] of clusters) {
+    const g = new THREE.IcosahedronGeometry(radius, 0);
+    g.scale(1, stretch, .92); g.rotateY(variant * .8 + y);
     crown.add(g, [x, y, z], x === 0 ? '#ffffff' : '#e2e8da');
   }
   const bark = trunk.finish(), leaves = crown.finish(), positions = leaves.attributes.position;

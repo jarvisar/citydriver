@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import { cityAssets, cityTrees } from './city-assets.js';
 import { seededRandom } from './route.js';
 import { residentWindow } from './resident.js';
-import { buildLandmark, pitchedRoof } from './city-landmarks.js';
+import { buildLandmark } from './city-landmarks.js';
+import { buildCityBuildings, SHOP_NAMES, shopSignMaterial } from './city-buildings.js';
 import { CITY_PLACES } from './city-places.js';
 import { cityWalker, cityBoat, walkerPose } from './city-life.js';
 import { CITY_BLOCK, DISTANT_CITY_RADIUS, ROAD_HALF_WIDTH, ROAD_LEVEL, PAVEMENT_LEVEL, WATER_LEVEL, RIVER_MARGIN, cityCell, cityBlock } from './city-grid.js';
@@ -12,16 +13,7 @@ const boxGeometry = new THREE.BoxGeometry(1, 1, 1);
 const windowGeometry = new THREE.PlaneGeometry(1, 1);
 const transform = new THREE.Object3D();
 const tint = new THREE.Color();
-const AWNINGS = ['#b06b4d', '#3f7774', '#41607c', '#b69857', '#727456'];
-const GREENS = ['#6f8754', '#7f9564', '#597849', '#8a995f'];
-const DISTRICT_STYLE = {
-  'Old town': { walls: ['#bc8f79', '#d6b18b', '#ac7667', '#c4a185'], floors: [3, 3], width: [23, 6], depth: [29, 5] },
-  'Garden quarter': { walls: ['#c6c4a0', '#b6c5b1', '#d6c3a7', '#9dac97'], floors: [2, 3], width: [24, 4], depth: [25, 5] },
-  Midtown: { walls: ['#718d9c', '#91a8ae', '#607c8c', '#b5bdb8'], floors: [8, 8], width: [28, 8], depth: [28, 8] },
-  'Warehouse district': { walls: ['#a8755d', '#926758', '#b78d6f', '#8e8980'], floors: [2, 2], width: [33, 4], depth: [34, 3] },
-  'Market district': { walls: ['#c5a280', '#bf8870', '#b5b49b', '#d2b797'], floors: [3, 4], width: [28, 7], depth: [28, 7] },
-  'Civic quarter': { walls: ['#c0bca8', '#c8c5b5', '#a6b1ae', '#b4ab99'], floors: [4, 4], width: [30, 6], depth: [30, 6] },
-};
+const GREENS = ['#63924d', '#80a85c', '#4f8054', '#93ab65'];
 const pick = (items, random) => items[Math.floor(random() * items.length)];
 
 function renderBatches(group, batches, distant = false) {
@@ -52,6 +44,7 @@ function resources() {
     bark: standard({ color: '#625548', vertexColors: true }),
     leaves: standard({ color: '#ffffff', vertexColors: true }),
   };
+  for (const name of SHOP_NAMES) result[`shop-${name}`] = shopSignMaterial(name);
   for (const [type, place] of Object.entries(CITY_PLACES)) {
     let map = null;
     if (globalThis.document) {
@@ -105,10 +98,11 @@ export class CitydriverChunk {
     this.item(name, cityAssets[name], this.materials.props, [x, y, -s], [1, 1, 1], '#ffffff', yaw);
   }
   tree(x, s, scale = 7) {
-    const variant = cityTrees[0], p = [x, PAVEMENT_LEVEL, -s], size = [scale, scale, scale];
+    const index = this.random() < .28 ? 1 : 0, variant = cityTrees[index], p = [x, PAVEMENT_LEVEL, -s];
+    const width = scale * (.82 + this.random() * .24), size = [width, scale, width];
     if (this.distant) this.box(x, PAVEMENT_LEVEL + scale * .24, s, .2, scale * .48, .2, '#625548');
-    else this.item('tree-trunks', variant.bark, this.materials.bark, p, size);
-    this.item('tree-crowns', variant.leaves, this.materials.leaves, p, size, pick(GREENS, this.random));
+    else this.item(`tree-trunks-${index}`, variant.bark, this.materials.bark, p, size);
+    this.item(`tree-crowns-${index}`, variant.leaves, this.materials.leaves, p, size, pick(GREENS, this.random));
     this.post(x, s, .28);
   }
   buildGround() {
@@ -148,101 +142,7 @@ export class CitydriverChunk {
       this.box(p, 24.019, 108, .25, .02, 6.5, '#d7d8c9');
     }
   }
-  buildBuildings() {
-    const random = this.random, district = this.plan.district, style = DISTRICT_STYLE[district];
-    for (const x of [34, 78]) for (const s of [34, 78]) {
-      const width = style.width[0] + random() * style.width[1], depth = style.depth[0] + random() * style.depth[1];
-      const floors = style.floors[0] + Math.floor(random() * style.floors[1]);
-      const wall = pick(style.walls, random);
-      this.buildBuilding(x, s, width, depth, floors, wall, pick(AWNINGS, random));
-      const roof = PAVEMENT_LEVEL + 4.2 + floors * 3.2;
-      if (district === 'Old town') {
-        pitchedRoof(this, x, s, width + 1, depth + 1.5, roof + width * .085 + 1, '#995e4c', wall);
-        this.box(x, roof + width * .18 + 1, s, .4, .4, depth + 1.8, '#c49a76');
-      } else if (district === 'Midtown') {
-        this.box(x, roof + 4.3, s, width * .65, 8, depth * .65, '#658994', 'glass');
-        this.box(x, roof + 8.5, s, width * .7, .5, depth * .7, '#c5d1c9');
-        this.box(x + 3, roof + 13, s, .25, 9, .25, '#a2b8b6');
-        for (const sign of [-1, 1]) {
-          this.box(x + sign * (width / 2 + .2), PAVEMENT_LEVEL + (roof - PAVEMENT_LEVEL) / 2, s, .4, roof - PAVEMENT_LEVEL, 1, '#a9c1bf');
-          this.box(x, PAVEMENT_LEVEL + (roof - PAVEMENT_LEVEL) / 2, s + sign * (depth / 2 + .2), 1, roof - PAVEMENT_LEVEL, .4, '#a9c1bf');
-        }
-      } else if (district === 'Garden quarter') {
-        this.box(x, roof + .65, s, width - 3, .3, depth - 3, '#719271');
-        for (const sign of [-1, 1]) {
-          this.box(x + sign * (width / 2 + 2), PAVEMENT_LEVEL + .65, s, 1.7, 1.3, depth + 3, '#6e895d');
-          this.solid(x + sign * (width / 2 + 2), s, 1.7, depth + 3);
-        }
-      } else if (district === 'Warehouse district') {
-        for (const offset of [-10, 0, 10]) this.box(x + offset, roof + 1.2, s, 6, 1.5, depth - 3, '#7d9c9e', 'glass');
-        for (const sign of [-1, 1]) this.box(x, PAVEMENT_LEVEL + 2, s + sign * (depth / 2 + .2), 9, 3.6, .2, '#697d7c');
-      }
-    }
-    // The service courtyard joins the pavements on all four sides.
-    this.box(56, PAVEMENT_LEVEL + .008, 56, 10, .016, 82, '#929893');
-    this.box(56, PAVEMENT_LEVEL + .009, 56, 82, .016, 10, '#929893');
-    for (const [x, s] of [[56, 22], [56, 90], [22, 56], [90, 56]]) this.tree(x, s, 5.5 + random());
-    if (district === 'Garden quarter') for (const [x, s] of [[15, 56], [97, 56], [56, 15], [56, 97]]) this.tree(x, s, 8);
-  }
-  buildBuilding(x, s, width, depth, floors, wall, accent) {
-    const random = this.random, base = PAVEMENT_LEVEL, height = 4.2 + floors * 3.2, roof = base + height;
-    this.box(x, base + height / 2, s, width, height, depth, wall);
-    this.box(x, base + 1.75, s, width + .12, 3.5, depth + .12, '#777c7a');
-    this.box(x, roof + .2, s, width + .65, .4, depth + .65, '#d0c6b5');
-    this.box(x, roof + .43, s, width - 1, .1, depth - 1, '#606b6e');
-    this.solid(x, s, width, depth);
-    this.features.buildings.push({ x: this.east + x, s: this.start + s, width, depth, height, facadeSides: 4, windows: 0 });
-    const metadata = this.features.buildings[this.features.buildings.length - 1];
-    // Every facade receives the same architectural treatment: shop glazing,
-    // awnings, pilasters, window bays, cornices and a roof parapet.
-    for (let side = 0; side < 4; side++) {
-      const eastWest = side < 2, sign = side % 2 ? 1 : -1, span = eastWest ? depth : width;
-      const wallOffset = (eastWest ? width : depth) / 2;
-      const along = (offset, y, outward, w, h, d, color, kind = 'solid') => {
-        if (this.distant) {
-          if (kind === 'solid') {
-            // Keep the broad shop fascia and roofline; subpixel window frames
-            // and individual sills can disappear without changing the facade.
-            if (w > span * .8) {
-              if (eastWest) this.box(x + sign * (wallOffset + outward), y, s + offset, d, h, w, color);
-              else this.box(x + offset, y, s + sign * (wallOffset + outward), w, h, d, color);
-            }
-            return;
-          }
-          const p = eastWest ? [x + sign * (wallOffset + outward), y, -s - offset] : [x + offset, y, -s - sign * (wallOffset + outward)];
-          const yaw = eastWest ? sign * Math.PI / 2 : sign > 0 ? Math.PI : 0;
-          this.item(`distant-${kind}`, windowGeometry, this.materials[kind], p, [w, h, 1], color, yaw);
-          return;
-        }
-        if (eastWest) this.box(x + sign * (wallOffset + outward), y, s + offset, d, h, w, color, kind);
-        else this.box(x + offset, y, s + sign * (wallOffset + outward), w, h, d, color, kind);
-      };
-      const bays = Math.max(4, Math.floor(span / 4.8)), spacing = (span - 3) / bays;
-      along(0, base + 3.9, .15, span + .3, .32, .36, '#c1b6a4');
-      along(0, roof + .8, .03, span + .25, .7, .28, '#c1b6a4');
-      for (const offset of [-span / 2 + .45, span / 2 - .45]) along(offset, base + height / 2, .08, .7, height, .22, '#c5bcae');
-      for (let bay = 0; bay < bays; bay++) {
-        const offset = (bay - (bays - 1) / 2) * spacing;
-        along(offset, base + 1.8, .11, spacing - .65, 2.65, .09, '#3e5963', 'glass');
-        along(offset, base + 3.35, .72, spacing - .45, .2, 1.4, accent);
-        along(offset, base + 3.08, 1.3, spacing - .45, .35, .1, accent);
-        for (let floor = 0; floor < floors; floor++) {
-          const y = base + 5.7 + floor * 3.2, lit = random() < .17;
-          along(offset, y, .09, 1.85, 2.15, .12, '#c7c5b7');
-          along(offset, y + .02, .17, 1.53, 1.89, .08, lit ? '#d3bc86' : '#465f6b', lit ? 'lit' : 'glass');
-          along(offset, y - 1.11, .27, 2.08, .15, .5, '#b9b5a6');
-          metadata.windows++;
-        }
-      }
-    }
-    // Roofs remain interesting when the camera turns or rises above a block.
-    this.box(x + width * .19, roof + 1.35, s - depth * .17, 4.3, 1.8, 3.8, '#9babae');
-    this.box(x + width * .19, roof + 2.3, s - depth * .17, 4.5, .12, 4, '#566268');
-    for (let i = 0; i < 3; i++) this.box(x + width * .19 - 1.3 + i * 1.3, roof + 2.38, s - depth * .17, .5, .06, 3.4, '#74898f');
-    this.box(x - width * .24, roof + 1.7, s + depth * .22, 1.4, 2.6, 1.3, '#927a67');
-    if (random() < .42) this.prop('tank', x - width * .2, s - depth * .15, 0, roof + .45);
-    else this.box(x - width * .15, roof + .6, s - depth * .15, 6, .2, 5, '#4e6b79');
-  }
+  buildBuildings() { buildCityBuildings(this); }
   buildPark() {
     const park = this.plan.kind === 'park';
     if (park) for (const x of [34, 78]) for (const s of [34, 78]) this.box(x, 24.135, s, 34, .03, 34, '#769461');
@@ -300,6 +200,11 @@ export class CitydriverChunk {
     this.features.bridges.push({ s: this.start, u: this.east + 56, minU: this.east + 28, maxU: this.east + 84, halfWidth: ROAD_HALF_WIDTH, height: ROAD_LEVEL });
   }
   buildFurniture() {
+    const streetTree = (x, s) => {
+      this.box(x, PAVEMENT_LEVEL + .055, s, 2.2, .11, 2.2, '#c0bba5');
+      this.box(x, PAVEMENT_LEVEL + .12, s, 1.7, .03, 1.7, '#778568');
+      this.tree(x, s, 8 + this.random() * 2);
+    };
     for (const s of [27, 83]) {
       this.prop('lamp', 10.6, s); this.post(10.6, s, .25);
       this.prop('lamp', 101.4, s, Math.PI); this.post(101.4, s, .25);
@@ -307,8 +212,9 @@ export class CitydriverChunk {
     if (this.plan.kind !== 'river') for (const x of [27, 83]) {
       this.prop('lamp', x, 10.6, -Math.PI / 2); this.post(x, 10.6, .25);
       this.prop('lamp', x, 101.4, Math.PI / 2); this.post(x, 101.4, .25);
-      this.tree(x + 12, 11.6, 6); this.tree(x - 12, 100.4, 6);
+      streetTree(x + 12, 11.6); streetTree(x - 12, 100.4);
     }
+    if (this.plan.kind !== 'river') for (const s of [38, 70]) { streetTree(11.6, s); streetTree(100.4, s + 7); }
     for (const [x, s] of [[10, 10], [102, 102]]) { this.prop('signal', x, s); this.post(x, s, .14); }
     this.prop('bin', 11.8, 43); this.post(11.8, 43, .36);
   }
