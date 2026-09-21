@@ -45,3 +45,54 @@
 @media (max-height: 560px) {
   #welcome .menu-tagline { margin-top: 10px; font-size: 11px; }
 }
+
+.city-guide {
+  position: absolute; right: var(--ui-right); bottom: var(--ui-bottom); width: 232px;
+  padding: 11px; border: 1px solid #eceddb30; border-radius: 16px;
+  background: #20353ef0; color: #f6efd9; box-shadow: 0 8px 32px #15282d24;
+  backdrop-filter: blur(16px); font-variant-numeric: tabular-nums;
+}
+.city-guide-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 9px; }
+.city-guide-header > span { font-size: 8px; letter-spacing: 1.1px; color: #c0d0c8; }
+.city-guide-header b { margin-left: 5px; color: #f1cc8e; font-weight: 600; letter-spacing: 0; }
+.city-guide button { color: inherit; border: 0; background: transparent; }
+.city-guide button:focus-visible { outline-color: #f1cc8e; }
+#city-map-toggle { padding: 7px 0 7px 7px; font-size: 9px; color: #d2ddd2; }
+#city-map { display: block; width: 100%; height: auto; border-radius: 7px; border: 1px solid #b6c7b918; }
+#city-map[hidden] { display: none; }
+.city-guide-stop { display: grid; gap: 5px; padding: 13px 1px 11px; }
+.city-guide-eyebrow { color: #b7c9bd; font-size: 8px; letter-spacing: 1.25px; }
+#city-stop-name { font-family: Georgia, serif; font-size: 21px; font-weight: 400; letter-spacing: -.3px; }
+#city-stop-distance { font-size: 10px; color: #c4d2c8; }
+#next-city-stop { min-height: 35px; width: 100%; display: flex; align-items: center; justify-content: space-between; border-top: 1px solid #d2e0cc26; padding: 10px 1px 0; font-size: 11px; color: #f1cc8e; }
+#next-city-stop:hover { color: #fff5da; }
+#next-city-stop span { font-size: 18px; }
+#app:has(#welcome:not(.hidden), #pause-overlay:not([hidden]), dialog[open], #journey-transition.active) .city-guide { visibility: hidden; pointer-events: none; }
+#city-notebook-progress { font-size: 12px; line-height: 1.6; margin: 0 0 12px; }
+.notebook-panel { padding: 14px; border: 1px solid var(--ui-line); border-radius: 12px; background: color-mix(in srgb, var(--cream) 90%, transparent); }
+.notebook-place { display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 0; text-align: left; border: 0; border-bottom: 1px solid var(--ui-line); background: transparent; }
+.notebook-place > span:nth-child(2) { flex: 1; }
+.notebook-place strong { display: block; font-size: 12px; font-weight: 600; }
+.notebook-place small { display: block; margin-top: 3px; font-size: 10px; opacity: .72; }
+.notebook-stamp { display: grid; place-items: center; width: 34px; height: 34px; border: 1px dashed #7c8d8370; border-radius: 50%; font: 12px Georgia, serif; }
+.notebook-place[data-found=true] .notebook-stamp { background: var(--place-color); border-style: solid; }
+.notebook-check { color: #597c66; font-size: 16px; }
+@media (max-width: 760px) {
+  .city-guide { width: 166px; padding: 8px; border-radius: 12px; top: calc(var(--ui-top) + 64px); bottom: auto; }
+  .city-guide-header { gap: 2px; margin-bottom: 5px; }
+  .city-guide-header > span { font-size: 7px; letter-spacing: .7px; }
+  .city-guide-header b { margin-left: 3px; }
+  #city-map-toggle { font-size: 8px; min-height: 28px; padding: 4px 0 4px 4px; }
+  .city-guide-stop { gap: 4px; padding: 10px 0 8px; }
+  .city-guide-eyebrow { font-size: 7px; letter-spacing: .65px; }
+  #city-stop-name { font-size: 17px; }
+  #city-stop-distance { font-size: 9px; }
+  #next-city-stop { min-height: 34px; font-size: 10px; }
+}
+@media (max-height: 560px) and (orientation: landscape) {
+  .city-guide { top: auto; bottom: var(--ui-bottom); width: 168px; }
+  #city-map { max-height: 84px; object-fit: cover; }
+  .city-guide-stop { padding: 7px 0; }
+  .city-guide-eyebrow { display: none; }
+  #city-stop-name { font-size: 16px; }
+}

@@ -4,7 +4,7 @@ Every street leads somewhere.
 
 Citydriver is a free-driving game built with Three.js. It turns the original sixth city scene into a world of its own: a procedural city that extends north, south, east, and west. Turn at intersections, cross river bridges, and explore at your own pace.
 
-This is the first playable foundation, version 0.1.0. The city has connected streets, buildings detailed on every side, a choice of weather and lighting, and the existing garage, camera views, audio, keyboard, touch, and controller support. Traffic runs along both street axes, follows other vehicles, and waits at timed intersections. The initial world uses a rectangular street grid; missions and more district variety remain future work.
+The city has connected streets, buildings detailed on every side, a choice of weather and lighting, and a garage, camera views, audio, keyboard, touch, and controller support. Traffic runs along both street axes, follows other vehicles, and waits at timed intersections. Neighbourhoods have their own architecture: pitched roofs in Old town, rooftop gardens in the Garden quarter, stepped Midtown towers, and low industrial warehouses. Residents walk the pavements and narrowboats bob beside canal moorings.
 
 ## Run locally
 
@@ -45,6 +45,20 @@ On touchscreens, drag the virtual joystick to drive and release to stop. The pau
 Autodrive cruises along the nearest street in your current cardinal direction, obeying traffic and signals. Turn it off to choose a turn at an intersection.
 
 The compass and neighbourhood readout help you keep your bearings. Roads continue in both axes, including connected bridge crossings. Your chosen car is saved locally; garage paint applies across the fleet for the current visit.
+
+## Explore the city
+
+Every three-by-three neighbourhood contains a landmark, with five kinds to discover:
+
+- **Founders Square:** a copper clocktower and fountain court.
+- **Lantern Market:** a market hall, striped stalls, and strings of lanterns.
+- **Palm House:** a glass conservatory with formal gardens.
+- **Heritage Yard:** brick tram sheds, tracks, and retired red trams.
+- **Prism Court:** outdoor sculptures, reflecting pools, and an art wall.
+
+The **Field Guide** in the corner shows a north-up map and a suggested street route. Gold marks your route; coloured dots mark landmarks. Drive along a landmark's boundary street to collect its stamp. Find all five at your own pace; stamps are saved locally across visits, including when you reset to a fresh area. Routes are suggestions for manual driving; autodrive still follows the current street.
+
+Choose **Find another stop** to cycle nearby destinations, or select a landmark in the pause menu's City field guide. **Hide map** folds the map away while keeping the destination visible. Discovery progress only advances during a drive, not in the welcome screen or menus.
 
 ## Checks
 

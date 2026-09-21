@@ -72,20 +72,71 @@ try {
   assert.equal(await page.evaluate(() => window.__citydriver.vehicle.distance), 0);
   assert.equal(await page.evaluate(() => window.__citydriver.journey), 'city');
 
+  // Complete the field guide by driving the real controller past each kind of
+  // landmark. A reload must retain stamps, while destination selection stays
+  // usable from the pause menu and from the driving HUD.
+  await page.evaluate(() => window.__citydriver.action('pause'));
+  const discoveries = await page.evaluate(async () => {
+    const a = window.__citydriver, v = a.vehicle, guide = a.cityGuide;
+    const { nearbyPlaces } = await import('/src/city-exploration.js');
+    const { PLACE_TYPES } = await import('/src/world/city-places.js');
+    const { collideScenery } = await import('/src/collision.js');
+    const places = nearbyPlaces(0, 0, 20);
+    guide.exploration.found.clear();
+    for (const type of PLACE_TYPES) {
+      const place = places.find(p => p.type === type);
+      v.s = place.s - 59; v.u = place.u - 70; v.heading = Math.PI / 2; v.speed = 0;
+      v.knock.x = v.knock.z = v.knock.spin = 0; v.update(0, {}); a.world.update(v.s, v.u);
+      guide.exploration.target = place;
+      for (let tick = 0; tick < 300; tick++) {
+        v.update(1 / 60, { forward: true }); collideScenery(v, a.world.chunks, 1 / 60); a.world.update(v.s, v.u);
+        guide.update(true);
+      }
+    }
+    v.render(1, a.world.origin); a.rendering.snap(); a.rendering.update(v.car, 1, a.world.origin);
+    return [...guide.exploration.found].sort();
+  });
+  assert.deepEqual(discoveries, ['art', 'clock', 'depot', 'garden', 'market']);
+  assert.equal(await page.locator('.notebook-place[data-found=true]').count(), 5);
+  await page.locator('[data-place-type=garden]').click();
+  assert.equal(await page.evaluate(() => window.__citydriver.cityGuide.exploration.target.type), 'garden');
+  await page.screenshot({ path: '.artifacts/citydriver/notebook.png' });
+  await page.click('#resume');
+  await page.click('#city-map-toggle');
+  assert.equal(await page.locator('#city-map').isVisible(), false);
+  await page.click('#city-map-toggle');
+  const previousTarget = await page.evaluate(() => window.__citydriver.cityGuide.exploration.target.id);
+  await page.click('#next-city-stop');
+  assert.notEqual(await page.evaluate(() => window.__citydriver.cityGuide.exploration.target.id), previousTarget);
+  await page.screenshot({ path: '.artifacts/citydriver/field-guide.png' });
+  await page.reload({ waitUntil: 'networkidle' });
+  await page.waitForFunction(() => window.__citydriver && document.querySelector('#loading').classList.contains('loaded'));
+  assert.equal(await page.evaluate(() => window.__citydriver.cityGuide.exploration.found.size), 5);
+  assert.equal(await page.locator('#city-guide').isVisible(), false);
+
   const mobile = await browser.newPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 1 });
   mobile.on('pageerror', e => errors.push(e.message));
   await mobile.goto(`${url}/?seed=4817`, { waitUntil: 'networkidle' });
   await mobile.waitForFunction(() => window.__citydriver && document.querySelector('#loading').classList.contains('loaded'));
   await mobile.screenshot({ path: '.artifacts/citydriver/mobile-welcome.png' });
   await mobile.tap('#start');
+  await mobile.waitForFunction(() => getComputedStyle(document.querySelector('#welcome')).visibility === 'hidden');
+  assert.equal(await mobile.locator('#city-guide').isVisible(), true);
+  await mobile.tap('#city-map-toggle');
+  assert.equal(await mobile.locator('#city-map').isVisible(), false);
+  await mobile.tap('#city-map-toggle');
+  await mobile.tap('#next-city-stop');
+  const guideBounds = await mobile.locator('#city-guide').boundingBox(), stickBounds = await mobile.locator('#touch-stick').boundingBox();
+  assert.ok(guideBounds.y + guideBounds.height < stickBounds.y, 'the field guide leaves the touch joystick clear');
+  await mobile.screenshot({ path: '.artifacts/citydriver/mobile-field-guide.png' });
   await mobile.tap('#pause');
   await mobile.selectOption('#city-weather', 'night');
   assert.equal(await mobile.evaluate(() => window.__citydriver.weather.state.id), 'night');
   assert.ok(await mobile.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
   await mobile.screenshot({ path: '.artifacts/citydriver/mobile-pause.png' });
   assert.deepEqual(errors, []);
-  await writeFile('.artifacts/citydriver/report.json', JSON.stringify({ passed: true, errors, driving: records }, null, 2));
-  console.log(`Citydriver browser checks passed: ${records.length} directional/bridge drives, weather, reset, desktop and mobile.`);
+  await writeFile('.artifacts/citydriver/report.json', JSON.stringify({ passed: true, errors, driving: records, discoveries }, null, 2));
+  console.log(`Citydriver browser checks passed: ${records.length} directional/bridge drives, five landmark discoveries, saved stamps, navigation, weather, reset, desktop and mobile.`);
 } catch (error) {
   console.error('Browser errors:', errors);
   throw error;

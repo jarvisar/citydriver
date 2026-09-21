@@ -48,6 +48,12 @@
         </div>
       </header>
       <div id="fps-counter" hidden>FPS: …</div>
+      <aside id="city-guide" class="city-guide" aria-label="City field guide">
+        <div class="city-guide-header"><span>FIELD GUIDE <b id="city-stamps">0 / 5</b></span><button type="button" id="city-map-toggle" aria-expanded="true" aria-controls="city-map">Hide map</button></div>
+        <canvas id="city-map" width="208" height="144" role="img" aria-label="Local street map. North is up; the white arrow is your car, gold marks your route, and colored dots mark landmarks."></canvas>
+        <div class="city-guide-stop"><span class="city-guide-eyebrow">TAKE THE SCENIC ROUTE</span><strong id="city-stop-name">Find a new favourite</strong><span id="city-stop-distance">Follow the streets. Discover the city.</span></div>
+        <button type="button" id="next-city-stop">Find another stop <span aria-hidden="true">↗</span></button>
+      </aside>
       <p id="vr-error" role="status" hidden></p>
       <section id="welcome" class="welcome" aria-labelledby="menu-title">
         <div class="brand menu-brand">
@@ -79,6 +85,12 @@
               <h3 id="weather-heading">The city</h3>
               <label class="weather-setting" for="city-weather"><span>Weather &amp; light</span><select id="city-weather"><option value="auto">Changing skies</option><option value="clear">Clear day</option><option value="overcast">Overcast</option><option value="rain">Rain</option><option value="storm">Storm</option><option value="sunset">Golden hour</option><option value="night">Night</option></select></label>
               <p class="weather-note">Choose a mood, or let the skies change as you explore.</p>
+            </section>
+            <section class="pause-panel notebook-panel" aria-labelledby="notebook-heading">
+              <h3 id="notebook-heading">City field guide</h3>
+              <p id="city-notebook-progress">Drive past the five landmarks to collect their stamps.</p>
+              <div id="city-notebook" aria-label="Landmark destinations"></div>
+              <p class="weather-note">Choose a place to mark a route on your map. Take your time—there’s no timer.</p>
             </section>
             <section class="pause-panel" aria-labelledby="sound-heading">
               <h3 id="sound-heading">Sound</h3>

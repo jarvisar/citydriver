@@ -1,4 +1,5 @@
 import { randomAt } from './route.js';
+import { landmarkForBlock } from './city-places.js';
 
 // s points north; u points east. Streets meet at every integer grid line,
 // including negative coordinates. Rendering, traffic and physics share this map.
@@ -54,9 +55,10 @@ export function cityDistrict(s, u) {
 export function cityBlock(ix, iz) {
   const seed = Math.floor(randomAt(ix, iz + 7102) * 0xffffffff);
   const chance = randomAt(ix, iz + 7103);
-  const kind = positiveModulo(ix, RIVER_PERIOD) === RIVER_COLUMN ? 'river'
+  const landmark = landmarkForBlock(ix, iz);
+  const kind = positiveModulo(ix, RIVER_PERIOD) === RIVER_COLUMN ? 'river' : landmark ? 'landmark'
     : chance < .13 ? 'park' : chance < .2 ? 'plaza' : 'blocks';
-  return { ix, iz, key: `${ix},${iz}`, seed, kind, district: cityDistrict((iz + .5) * CITY_BLOCK, (ix + .5) * CITY_BLOCK) };
+  return { ix, iz, key: `${ix},${iz}`, seed, kind, landmark, district: cityDistrict((iz + .5) * CITY_BLOCK, (ix + .5) * CITY_BLOCK) };
 }
 
 export function cityHeight(s, u) {
