@@ -1,4 +1,4 @@
-// electron-builder configuration.
+﻿// electron-builder configuration.
 // Name, description, and homepage come from the web app's own metadata so the
 // desktop packages follow the web app without a second copy to maintain.
 const { execFileSync } = require('node:child_process');
@@ -49,12 +49,12 @@ async function electronDist({ platformName, arch, version }) {
 module.exports = {
   appId: 'io.github.jarvisar.coastline',
   productName,
-  copyright: `Copyright © ${new Date().getFullYear()} jarvisar`,
+  copyright: `Copyright Â© ${new Date().getFullYear()} jarvisar`,
   extraMetadata: {
     // Written into the packaged package.json only; the repository's stays untouched.
     description: manifest.description,
     author: { name: 'jarvisar' },
-    homepage: 'https://jarvisar.github.io/CarGame/',
+    homepage: 'https://jarvisar.github.io/coastline/',
     // Electron reads desktopName at startup so Linux desktops can match the window to its launcher.
     desktopName: `${executableName}.desktop`,
   },
