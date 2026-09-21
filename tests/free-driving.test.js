@@ -109,11 +109,19 @@ for (const [id, { route }] of Object.entries(JOURNEYS)) {
       assert.ok(side * car.u > 1500);
       assertGrounded(car);
 
-      const before = car.groundedPosition.clone();
-      car.resolveTrafficCollision(side * .5, -.2, 3);
+      // Shoved aside and slowed by 3 m/s, then left to slide until the knock wears off.
+      const before = car.groundedPosition.clone(), speed = car.speed;
+      car.resolveTrafficCollision(side * .5, -.2, Math.cos(heading) * side * 2 - Math.sin(heading) * 3, Math.sin(heading) * side * 2 + Math.cos(heading) * 3, side * .5);
       assert.ok(car.groundedPosition.distanceTo(before) < 5, 'collision teleported the car');
       assert.ok(side * car.u > 1500);
-      assert.equal(car.speed, 3);
+      assert.ok(Math.abs(car.speed - (speed - 3)) < 1e-9);
+      assert.ok(Math.abs(Math.hypot(car.knock.x, car.knock.z) - 2) < 1e-9);
+      assertGrounded(car);
+      car.speed = 0;
+      for (let i = 0; i < 120; i++) car.update(1 / 60, {});
+      assert.deepEqual(car.knock, { x: 0, z: 0, spin: 0 });
+      assert.ok(car.groundedPosition.distanceTo(before) < 5, 'the knock carried the car away');
+      assert.ok(side * car.u > 1500);
       assertGrounded(car);
     }
     const s = car.s;

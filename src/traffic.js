@@ -1,9 +1,13 @@
 import * as THREE from 'three';
 import { clamp, randomAt } from './world/route.js';
 import { createTrafficModels, TRAFFIC_COLORS, TRAFFIC_MODELS } from './traffic-models.js';
+import { collisionImpulse, contactPoint } from './impact.js';
 
 export const TRAFFIC_CRUISE_SPEED = 16;
 const LANE = 2.4;
+// A struck car is never knocked further from its lane than this, which keeps
+// it on the tarmac and on its own side of the centre line.
+const REACH = 1.2;
 const BEHIND = 380, AHEAD = 620;
 const DENSITY = { coast: 1, snow: .75, desert: .5, jungle: .6, plains: .5, city: 1 };
 // The city runs half as many cars again over the same stretch of road.
@@ -78,13 +82,14 @@ export class Traffic {
     this.lastPlayerS = s; this.models.setLights(LIGHTS[journey] ?? 0);
     const span = 1080 / Math.ceil(fleet / 2);
     for (const car of this.vehicles) {
-      car.generation = 0; car.u = car.direction * LANE;
+      car.generation = 0;
       car.s = s + (-280 + Math.floor(car.index / 2) * span + (car.direction < 0 ? 80 : 0) + this.random(car, 1) * 35) * this.spacing;
       this.respawn(car, car.s);
     }
   }
   respawn(car, s) {
     car.s = s; car.generation++;
+    car.u = car.direction * LANE; car.drift = 0; car.yaw = 0; car.spin = 0;
     car.cruiseSpeed = car.direction > 0 ? TRAFFIC_CRUISE_SPEED : 20; car.speed = car.cruiseSpeed;
     car.paint.color.set(TRAFFIC_COLORS[Math.floor(this.random(car, 2) * TRAFFIC_COLORS.length)]);
     this.pose(car); car.previousPosition.copy(car.position); car.previousQuaternion.copy(car.quaternion);
@@ -105,7 +110,7 @@ export class Traffic {
   pose(car) {
     const route = this.route, frame = route.frame(car.s), p = route.position(car.s, car.u);
     car.position.set(p.x, p.y + .13, p.z);
-    car.heading = frame.angle + (car.direction < 0 ? Math.PI : 0);
+    car.heading = frame.angle + (car.direction < 0 ? Math.PI : 0) + car.yaw;
     const slope = (route.height(car.s + 1.5, car.u) - route.height(car.s - 1.5, car.u)) / (3 * frame.scale);
     const crossSlope = (route.height(car.s, car.u + .7) - route.height(car.s, car.u - .7)) / 1.4;
     car.quaternion.setFromEuler(this.poseRotation.set(Math.atan(slope * car.direction), -car.heading, Math.atan(crossSlope * car.direction)));
@@ -133,26 +138,50 @@ export class Traffic {
       car.targetSpeed = target;
     }
     for (const car of this.vehicles) {
-      car.speed += clamp(car.targetSpeed - car.speed, -14 * dt, 3 * dt);
+      // Braking is for the road ahead. A car shoved past its cruising speed eases back down to it.
+      car.speed += clamp(car.targetSpeed - car.speed, -(car.targetSpeed < car.cruiseSpeed ? 14 : 2) * dt, 3 * dt);
       car.s += car.direction * car.speed * dt / car.routeScale;
+      this.settle(car, dt);
       this.pose(car);
     }
     this.collide(player);
+  }
+  // A struck car has been pushed across its lane and turned. Its driver
+  // steers it back: two damped springs, which a car nothing has hit never runs.
+  settle(car, dt) {
+    const lane = car.direction * LANE;
+    if (!car.drift && !car.spin && !car.yaw && car.u === lane) return;
+    car.drift += (-9 * (car.u - lane) - 4.2 * car.drift) * dt;
+    const offset = clamp(car.u - lane + car.drift * dt, -REACH, REACH);
+    if (Math.abs(offset) === REACH) car.drift = 0;
+    car.u = lane + offset;
+    car.spin += (-25 * car.yaw - 6 * car.spin) * dt;
+    car.yaw = clamp(car.yaw + car.spin * dt, -.6, .6);
+    if (Math.abs(offset) < .005 && Math.abs(car.drift) < .01 && Math.abs(car.yaw) < .002 && Math.abs(car.spin) < .01) { car.u = lane; car.drift = car.yaw = car.spin = 0; }
   }
   collide(player) {
     if (!this.enabled) return;
     for (const car of this.vehicles) {
       if (Math.abs(car.s - player.s) > 9) continue;
-      const p = player.groundedPosition;
-      const contact = trafficContact({ x: p.x, z: p.z, heading: player.heading, halfWidth: player.spec.width / 2, halfLength: player.spec.length / 2 },
-        { x: car.position.x, z: car.position.z, heading: car.heading, halfWidth: car.spec.width / 2, halfLength: car.spec.length / 2 });
+      const p = player.groundedPosition, velocity = player.velocity;
+      const a = { x: p.x, z: p.z, heading: player.heading, halfWidth: player.spec.width / 2, halfLength: player.spec.length / 2, vx: velocity.x, vz: velocity.z };
+      // Traffic runs along the road and drifts across it, whichever way a knock has turned it.
+      const angle = this.route.frame(car.s).angle, alongX = Math.sin(angle) * car.direction, alongZ = -Math.cos(angle) * car.direction, acrossX = Math.cos(angle), acrossZ = Math.sin(angle);
+      const b = { x: car.position.x, z: car.position.z, heading: car.heading, halfWidth: car.spec.width / 2, halfLength: car.spec.length / 2,
+        vx: alongX * car.speed + acrossX * car.drift, vz: alongZ * car.speed + acrossZ * car.drift };
+      const contact = trafficContact(a, b);
       if (!contact) continue;
-      const vx = Math.sin(player.heading) * player.speed - Math.sin(car.heading) * car.speed;
-      const vz = -Math.cos(player.heading) * player.speed + Math.cos(car.heading) * car.speed;
-      const closing = vx * contact.x + vz * contact.z < 0;
-      // Arcade response: separate the bodies and scrub speed on impact.
-      player.resolveTrafficCollision(contact.x * (contact.depth + .025), contact.z * (contact.depth + .025), closing ? player.speed * .22 : player.speed);
-      if (closing) car.speed *= .22;
+      // The player is moved clear, and the two share the blow by weight. The
+      // car on its rails takes its share as speed along the road, a drift
+      // across it and a turn, the last two of which settle() steers out. It can
+      // be stopped but not driven backwards, so nothing bulldozes it up the
+      // road into the car behind.
+      const blow = collisionImpulse(a, b, contact, contactPoint(a, b));
+      player.resolveTrafficCollision(contact.x * (contact.depth + .025), contact.z * (contact.depth + .025), blow?.a.x, blow?.a.z, blow?.a.spin);
+      if (!blow) continue;
+      car.speed = Math.max(0, car.speed + blow.b.x * alongX + blow.b.z * alongZ);
+      car.drift += blow.b.x * acrossX + blow.b.z * acrossZ;
+      car.spin = clamp(car.spin + blow.b.spin, -3, 3);
     }
   }
   render(alpha, origin = 0) {

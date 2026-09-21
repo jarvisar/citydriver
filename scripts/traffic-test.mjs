@@ -49,7 +49,7 @@ try {
     let hit = false;
     for (let i = 0; i < 90; i++) {
       a.vehicle.update(1 / 60, { forward: true }); a.traffic.update(1 / 60, a.vehicle);
-      if (a.vehicle.speed < 10) hit = true;
+      if (a.vehicle.speed < 16 && other.speed > 10) hit = true; // slowed, with the stopped car shoved on
       a.world.update(a.vehicle.s); a.vehicle.render(.5, a.world.origin); a.traffic.render(.5, a.world.origin);
     }
     const result = { hit, behind: a.vehicle.s < other.s, origin: a.world.origin, playerZ: a.vehicle.car.position.z, trafficZ: other.car.position.z + a.traffic.group.position.z };

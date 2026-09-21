@@ -12,6 +12,39 @@ try {
   await page.goto(`${process.env.TEST_URL ?? 'http://127.0.0.1:5173'}/?seed=42`, { waitUntil: 'networkidle' });
   await page.waitForFunction(() => window.__coastline?.traffic && document.querySelector('#loading').classList.contains('loaded'));
   await page.click('#start');
+  // Traffic gives way. Run into the back of a car and it is shoved on; lean on
+  // the side of one and it is pushed across its lane, turned, and recovers.
+  const watch = scenario => page.evaluate(({ scenario }) => {
+    const a = window.__coastline, v = a.vehicle, car = a.traffic.vehicles.find(car => car.direction > 0);
+    v.reset(); a.traffic.clearNear(v);
+    a.traffic.respawn(car, v.s + (scenario === 'rear' ? 14 : 1.5));
+    if (scenario === 'side') { v.u = -.1; v.heading = v.route.frame(v.s).angle + .1; }
+    v.speed = 26; v.update(0, {});
+    const seen = window.traffic = { scenario, contacts: 0, fastest: 0, pushed: 0, turned: 0, slowest: 26, car };
+    const resolve = v.resolveTrafficCollision.bind(v);
+    v.resolveTrafficCollision = (...args) => { seen.contacts++; resolve(...args); };
+    seen.timer = setInterval(() => {
+      seen.fastest = Math.max(seen.fastest, car.speed); seen.pushed = Math.max(seen.pushed, Math.abs(car.u - 2.4));
+      seen.turned = Math.max(seen.turned, Math.abs(car.yaw)); seen.slowest = Math.min(seen.slowest, v.speed);
+    }, 8);
+  }, { scenario });
+  const seen = () => page.evaluate(() => {
+    const { timer, car, ...seen } = window.traffic; clearInterval(timer);
+    delete window.__coastline.vehicle.resolveTrafficCollision;
+    return { ...seen, speed: window.__coastline.vehicle.speed, lane: car.u, yaw: car.yaw, finite: [car.speed, car.u, car.yaw, car.s].every(Number.isFinite) };
+  });
+  await page.keyboard.down('KeyW');
+  await watch('rear'); await page.waitForTimeout(2500);
+  const rear = await seen();
+  assert.ok(rear.contacts > 0 && rear.fastest > 19 && rear.slowest > 12 && rear.finite, `running into the back of a car: ${JSON.stringify(rear)}`);
+  await watch('side'); await page.waitForTimeout(350);
+  await page.screenshot({ path: '.artifacts/collision-traffic.png' });
+  await page.waitForTimeout(4000);
+  const side = await seen();
+  await page.keyboard.up('KeyW');
+  assert.ok(side.contacts > 0 && side.pushed > .05 && side.turned > .01 && side.slowest > 20 && side.finite, `leaning on the side of a car: ${JSON.stringify(side)}`);
+  assert.ok(side.lane === 2.4 && side.yaw === 0, `the car should be back in its lane: ${JSON.stringify(side)}`);
+  records.push(rear, side);
   // Drive the real loop across the road at the first row of buildings.
   const start = await page.evaluate(async () => {
     const a = window.__coastline, v = a.vehicle;

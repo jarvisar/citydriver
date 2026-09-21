@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import { Traffic, trafficContact } from '../src/traffic.js';
+import { Traffic, TRAFFIC_CRUISE_SPEED, trafficContact } from '../src/traffic.js';
+import { collisionImpulse, contactPoint } from '../src/impact.js';
 import { TRAFFIC_MODELS } from '../src/traffic-models.js';
 import { DrivingController } from '../src/vehicle.js';
 import { coastalDrivingRoute } from '../src/world/route.js';
@@ -82,7 +83,42 @@ test('opposite lanes pass without collision and rotated footprints collide accur
   assert.equal(trafficContact({ ...a, x: a.x + contact.x * (contact.depth + .01), z: a.z + contact.z * (contact.depth + .01) }, sideways), null);
 });
 
-test('rear, head-on, reverse, and side impacts separate cars and scrub speed', () => {
+test('a blow lands where the cars overlap and conserves momentum and spin', () => {
+  const car = { x: 0, z: 0, heading: 0, halfWidth: 1, halfLength: 2, vx: 0, vz: -20 };
+  // Square behind a slower car: the point is the nose, and nothing turns.
+  const ahead = { ...car, z: -3.9, vz: -10 };
+  let point = contactPoint(car, ahead);
+  assert.ok(Math.abs(point.x) < 1e-9 && Math.abs(point.z + 1.95) < 1e-9);
+  let blow = collisionImpulse(car, ahead, trafficContact(car, ahead), point);
+  assert.ok(Math.abs(blow.a.spin) < 1e-12 && Math.abs(blow.b.spin) < 1e-12);
+  // Equal cars part at a fifth of the speed they met at.
+  assert.ok(Math.abs((-10 + blow.b.z) - (-20 + blow.a.z) + .2 * 10) < 1e-9);
+  // Offset to the right: the point is the middle of the overlap. The car behind
+  // is held back by its right corner and the one ahead is pushed on by its left,
+  // so both swing their noses to the right.
+  const offset = { ...ahead, x: 1.2 };
+  point = contactPoint(car, offset);
+  assert.ok(Math.abs(point.x - .6) < 1e-9 && Math.abs(point.z + 1.95) < 1e-9);
+  blow = collisionImpulse(car, offset, trafficContact(car, offset), point);
+  assert.ok(blow.a.spin > 0 && blow.b.spin > 0);
+  assert.ok(blow.a.z > 0 && blow.a.z < 6, 'an offset hit moves the pair less than a square one');
+  // A heavy car into the side of a light one, off-centre.
+  const van = { x: -3.2, z: .4, heading: Math.PI / 2, halfWidth: 1.05, halfLength: 2.4, vx: 15, vz: 0 }, hatch = { ...car, halfWidth: .9, halfLength: 1.7, vz: -16 };
+  const normal = trafficContact(van, hatch);
+  point = contactPoint(van, hatch);
+  assert.ok(Math.abs(point.x + .8) < 1e-9 && Math.abs(point.z - .4) < 1e-9);
+  blow = collisionImpulse(van, hatch, normal, point);
+  const mass = body => 4 * body.halfWidth * body.halfLength, inertia = body => mass(body) * (body.halfWidth ** 2 + body.halfLength ** 2) / 3;
+  assert.ok(Math.abs(mass(van) * blow.a.x + mass(hatch) * blow.b.x) < 1e-9 && Math.abs(mass(van) * blow.a.z + mass(hatch) * blow.b.z) < 1e-9);
+  const turning = (body, change) => inertia(body) * change.spin + mass(body) * (body.x * change.z - body.z * change.x);
+  assert.ok(Math.abs(turning(van, blow.a) + turning(hatch, blow.b)) < 1e-9, 'angular momentum about the origin');
+  assert.ok(Math.hypot(blow.b.x, blow.b.z) > Math.hypot(blow.a.x, blow.a.z) * 1.5, 'the light car moves more');
+  assert.ok(blow.b.spin < 0, 'struck behind its middle from the left, the hatchback swings its nose left');
+  // Already coming apart: no blow at all.
+  assert.equal(collisionImpulse({ ...car, vz: -5 }, ahead, trafficContact(car, ahead), contactPoint(car, ahead)), null);
+});
+
+test('rear, head-on, reverse, and side impacts separate the cars and share the blow', () => {
   for (const scenario of ['rear', 'head-on', 'reverse', 'side']) {
     const { player, traffic } = setup();
     const car = traffic.vehicles[0];
@@ -91,10 +127,29 @@ test('rear, head-on, reverse, and side impacts separate cars and scrub speed', (
     player.speed = scenario === 'reverse' ? -7 : 28;
     if (scenario === 'side') { player.u = .9; player.heading = Math.PI / 2; }
     player.update(0, {}); traffic.pose(car);
-    const speed = Math.abs(player.speed), distance = player.distance;
+    const speed = player.speed, distance = player.distance, impacts = player.audioTelemetry.impactSerial;
+    const weight = body => body.spec.width * body.spec.length, momentum = () => weight(player) * player.velocity.z - weight(car) * car.direction * car.speed;
+    const before = momentum();
     assert.ok(trafficContact(playerFootprint(player), footprint(car)), scenario);
     traffic.collide(player);
-    assert.ok(Math.abs(player.speed) < speed * .3, scenario);
+    if (scenario === 'rear') {
+      // The car ahead is shoved on and the player drops to just under its new speed.
+      assert.ok(car.speed > 20 && player.speed < 24 && player.speed > 16, `${player.speed} ${car.speed}`);
+      assert.ok(Math.abs(car.speed - player.speed - .2 * 12) < 1e-9);
+      assert.ok(Math.abs(momentum() - before) < 1e-9);
+    } else if (scenario === 'head-on') {
+      // Both are stopped, or nearly. The car is never driven backwards, and the player never sent on through it.
+      assert.ok(player.speed >= 0 && player.speed < 8 && car.speed === 0 && player.velocity.z > -8, `${player.speed} ${car.speed}`);
+    } else if (scenario === 'reverse') {
+      // Backing into a moving car stops the player, who is knocked on ahead of it, never sent forward in gear.
+      assert.equal(player.speed, 0);
+      assert.ok(player.velocity.z < -3 && car.speed < 4, `${player.velocity.z} ${car.speed}`);
+    } else {
+      // Into the side of a passing car: it is pushed across its lane and keeps its speed along the road.
+      assert.ok(player.speed < 16 && player.speed > 8 && car.drift > 10, `${player.speed} ${car.drift}`);
+      assert.ok(Math.abs(car.speed - TRAFFIC_CRUISE_SPEED) < 1e-9);
+    }
+    assert.ok(Math.abs(player.speed) <= Math.abs(speed) && player.audioTelemetry.impactSerial === impacts + 1, scenario);
     assert.equal(trafficContact(playerFootprint(player), footprint(car)), null, scenario);
     assert.equal(player.distance, distance);
     assert.equal(player.audioTelemetry.speed, player.speed);
@@ -104,6 +159,30 @@ test('rear, head-on, reverse, and side impacts separate cars and scrub speed', (
   }
 });
 
+test('a sideswipe costs little speed, turns the player away, and the other car recovers its lane', () => {
+  const { player, traffic } = setup();
+  const car = traffic.vehicles[0]; car.s = player.s + 1.5; traffic.pose(car);
+  // Drawing level with a car in the next lane over, and drifting right into its side.
+  player.u = 0; player.heading = .1; player.speed = 24; player.update(0, {});
+  let pushed = 0, turned = 0, contacts = 0;
+  const resolve = player.resolveTrafficCollision.bind(player);
+  player.resolveTrafficCollision = (...args) => { contacts++; resolve(...args); };
+  for (let i = 0; i < 60 * 6; i++) {
+    player.update(1 / 60, { forward: true }); traffic.update(1 / 60, player);
+    pushed = Math.max(pushed, car.u - 2.4); turned = Math.max(turned, Math.abs(car.yaw));
+    assert.ok(Math.abs(car.u - 2.4) <= 1.2 + 1e-9 && player.u >= -4.65 && player.u <= 4.65);
+    if (i === 30) {
+      assert.ok(contacts > 0, 'the cars never met');
+      assert.ok(player.speed > 24 * .85, `a glancing blow took the speed down to ${player.speed}`);
+      assert.ok(player.heading < .06, `the player was not turned away, heading ${player.heading}`);
+    }
+  }
+  assert.ok(pushed > .05 && turned > .01, `the struck car never moved: ${pushed} m, ${turned} rad`);
+  assert.equal(car.u, 2.4); assert.equal(car.yaw, 0); assert.equal(car.drift, 0); assert.equal(car.spin, 0);
+  assert.deepEqual(player.knock, { x: 0, z: 0, spin: 0 });
+  traffic.dispose();
+});
+
 test('full-speed simulation catches an impact between fixed steps', () => {
   const { player, traffic } = setup();
   const car = traffic.vehicles[0]; car.s = player.s + 12; car.speed = 0; car.cruiseSpeed = 0; traffic.pose(car);
@@ -111,10 +190,35 @@ test('full-speed simulation catches an impact between fixed steps', () => {
   let hit = false;
   for (let i = 0; i < 60; i++) {
     player.update(1 / 60, { forward: true }); traffic.update(1 / 60, player);
-    if (player.speed < 10) hit = true;
+    if (player.speed < 16 && car.speed > 10) hit = true;
     assert.ok(player.s < car.s, 'player tunneled through the stopped car');
   }
   assert.ok(hit);
+  traffic.dispose();
+});
+
+test('a car hit from behind is pushed on rather than stopped, and a shoved car eases back to its cruise', () => {
+  const { player, traffic } = setup();
+  const car = traffic.vehicles[0]; car.s = player.s - 3.3; traffic.pose(car);
+  player.speed = 4; player.update(0, {});
+  traffic.collide(player);
+  assert.ok(player.speed > 8 && car.speed < TRAFFIC_CRUISE_SPEED && car.speed > 4, `${player.speed} ${car.speed}`);
+  car.s = player.s + 300; car.speed = 24; player.u = 8;
+  for (let i = 0; i < 60; i++) traffic.update(1 / 60, player);
+  assert.ok(car.speed > 21 && car.speed < 23, `a shoved car should coast down, not brake: ${car.speed}`);
+  traffic.dispose();
+});
+
+test('an oncoming car can be stopped but not bulldozed back up the road', () => {
+  const { player, traffic } = setup();
+  const car = traffic.vehicles.find(car => car.direction < 0);
+  traffic.respawn(car, player.s + 30); player.u = -2.4; player.speed = 20; player.update(0, {});
+  for (let i = 0; i < 60 * 6; i++) {
+    const s = car.s;
+    player.update(1 / 60, { forward: true }); traffic.update(1 / 60, player);
+    assert.ok(car.speed >= 0 && car.s <= s && player.s < car.s, 'the oncoming car was driven backwards');
+  }
+  assert.ok(player.speed < 2, `held against the car, the player is still doing ${player.speed}`);
   traffic.dispose();
 });
 
