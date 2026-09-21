@@ -6,10 +6,6 @@ import { trafficContact } from '../src/traffic.js';
 import { DrivingController } from '../src/vehicle.js';
 import { CHUNK_LENGTH } from '../src/world/route.js';
 import { solidBox, solidPost, solidSpan, solidModel } from '../src/world/colliders.js';
-import { PlainsChunk } from '../src/world/plains.js';
-import { plainsDrivingRoute } from '../src/world/plains-route.js';
-import { plainsDiscoveries } from '../src/world/plains-discoveries.js';
-import { buildChunk } from '../src/world/chunk-builders.js';
 
 // A flat, straight road: x is u and z is -s, as in the traffic tests.
 const straightRoute = {
@@ -111,104 +107,6 @@ test('a model stands on the outline of its lowest quarter, turned and scaled wit
   assert.ok(Math.abs(box.x - 10) < 1e-6 && Math.abs(box.z - (300 - 256 - 10)) < 1e-6);
   assert.ok(Math.abs(box.halfWidth - 2) < 1e-6 && Math.abs(box.halfLength - 4) < 1e-6 && Math.abs(box.heading + Math.PI / 2) < 1e-9);
   assert.ok(Math.abs(post.x - 15) < 1e-6 && Math.abs(post.reach - 2) < 1e-6 && post.heading === undefined);
-});
-
-test('every tree and farm building a plains chunk draws is also solid, and crosses from the worker', () => {
-  const site = plainsDiscoveries(-100000, 100000).find(site => site.kind === 'farmstead');
-  const index = Math.floor(site.s / CHUNK_LENGTH), chunk = new PlainsChunk(index), matrix = new THREE.Matrix4(), p = new THREE.Vector3();
-  const colliders = chunk.features.colliders;
-  let drawn = 0;
-  chunk.group.traverse(mesh => {
-    if (!['plains-trunks', 'plains-barns', 'plains-silos', 'plains-farmhouses', 'plains-farm-sheds', 'hay-bales'].includes(mesh.name)) return;
-    for (let i = 0; i < mesh.count; i++) {
-      mesh.getMatrixAt(i, matrix); p.setFromMatrixPosition(matrix); drawn++;
-      // Within the footprint's own offset from the model's origin.
-      assert.ok(colliders.some(solid => Math.hypot(solid.x - p.x, solid.z - (p.z - chunk.start)) < 2.5), `${mesh.name} ${i} can be driven through`);
-    }
-  });
-  assert.ok(drawn > 20 && colliders.length >= drawn);
-  assert.deepEqual(buildChunk('plains', index).data.features.colliders, colliders);
-  chunk.dispose();
-});
-
-test('a farmstead barn stops a free-roaming car driven straight at it', () => {
-  const site = plainsDiscoveries(-100000, 100000).find(site => site.kind === 'farmstead');
-  const index = Math.floor(site.s / CHUNK_LENGTH), chunk = new PlainsChunk(index);
-  const chunks = new Map([[index, { features: chunk.features }]]);
-  const barn = chunk.features.colliders.filter(solid => solid.heading !== undefined).sort((a, b) => b.reach - a.reach)[0];
-  // Find the barn in road coordinates, then start on the road across from it.
-  let best = null;
-  for (let s = site.s - 45; s < site.s + 45; s += .5) for (let u = site.u - 30; u < site.u + 30; u += .5) {
-    const at = plainsDrivingRoute.position(s, u, 0), d = Math.hypot(at.x - barn.x, at.z - barn.z);
-    if (!best || d < best.d) best = { s, u, d };
-  }
-  const car = new DrivingController(plainsDrivingRoute, { s: best.s });
-  car.toggleFreeDriving();
-  car.u = 0; car.heading = plainsDrivingRoute.frame(car.s).angle + site.side * Math.PI / 2; car.update(0, {});
-  const deepest = drive(car, chunks, 12);
-  assert.ok(deepest < 1, `the car sank ${deepest} m into the yard's buildings`);
-  assert.ok(site.side * car.u < site.side * best.u, `the car drove through the barn to u=${car.u}`);
-  const p = plainsDrivingRoute.position(car.s, car.u);
-  assert.ok(Math.hypot(car.car.position.x - p.x, car.car.position.y - p.y - .13, car.car.position.z - p.z) < 1e-8, 'the car stays on the ground');
-  car.disposeModel(); chunk.dispose();
-});
-
-test('tree trunks, fence rails, poles and street furniture are solid wherever they are drawn', async () => {
-  const { CoastalChunk } = await import('../src/world/environment.js'), { JungleChunk } = await import('../src/world/jungle.js'), { CityChunk } = await import('../src/world/city.js');
-  const drawn = { coast: ['coastal-firs', 'headland-cypresses', 'monterey-pines'], jungle: ['jungle-trunks', 'palm-trunks', 'emergent-trunks'], plains: ['plains-trunks', 'fence-rails', 'utility-poles', 'cattle'],
-    city: ['street-lamps', 'traffic-signals', 'benches', 'bus-shelters', 'riverside-kiosks', 'litter-bins'] };
-  const matrix = new THREE.Matrix4(), p = new THREE.Vector3();
-  for (const [journey, Chunk] of Object.entries({ coast: CoastalChunk, jungle: JungleChunk, plains: PlainsChunk, city: CityChunk })) {
-    const chunk = new Chunk(3), colliders = chunk.features.colliders;
-    let count = 0;
-    chunk.group.traverse(mesh => {
-      if (!drawn[journey].includes(mesh.name)) return;
-      for (let i = 0; i < mesh.count; i++, count++) {
-        mesh.getMatrixAt(i, matrix); p.setFromMatrixPosition(matrix);
-        // Field gates are the way into a fenced field, so their lighter bars stay open to the car.
-        if (mesh.name === 'fence-rails' && matrix.elements[0] ** 2 + matrix.elements[1] ** 2 + matrix.elements[2] ** 2 < .1 ** 2) continue;
-        assert.ok(colliders.some(solid => Math.hypot(solid.x - p.x, solid.z - (p.z - chunk.start)) < .6), `${journey}: ${mesh.name} ${i} can be driven through`);
-      }
-    });
-    assert.ok(count > 10, `${journey} drew only ${count}`);
-    chunk.dispose();
-  }
-});
-
-test('every parked car a city chunk draws is a solid box of its own size and turn', async () => {
-  const { CityChunk } = await import('../src/world/city.js'), { TRAFFIC_MODELS } = await import('../src/traffic-models.js');
-  const matrix = new THREE.Matrix4(), p = new THREE.Vector3(), forward = new THREE.Vector3();
-  let count = 0;
-  for (let index = 0; index < 12; index++) {
-    const chunk = new CityChunk(index), colliders = chunk.features.colliders;
-    chunk.group.traverse(mesh => {
-      if (mesh.name !== 'parked-cars') return;
-      for (let i = 0; i < mesh.count; i++, count++) {
-        mesh.getMatrixAt(i, matrix); p.setFromMatrixPosition(matrix); forward.set(0, 0, -1).transformDirection(matrix);
-        const box = colliders.find(solid => solid.heading !== undefined && Math.hypot(solid.x - p.x, solid.z - (p.z - chunk.start)) < 1e-3);
-        assert.ok(box, `chunk ${index}: parked car ${i} can be driven through`);
-        assert.ok(TRAFFIC_MODELS.some(spec => Math.abs(spec.width / 2 - box.halfWidth) < 1e-9 && Math.abs(spec.length / 2 - box.halfLength) < 1e-9));
-        // The box lies along the car: its long axis is the way the body points.
-        assert.ok(Math.abs(Math.abs(forward.x * Math.sin(box.heading) - forward.z * Math.cos(box.heading)) - 1) < 1e-6, 'the box is turned differently from the car');
-      }
-    });
-    chunk.dispose();
-  }
-  assert.ok(count > 10, `only ${count} parked cars were drawn`);
-});
-
-test('the alpine road lamps stand on solid posts', async () => {
-  const { SnowChunk } = await import('../src/world/snow.js'), { lampAt, LAMP_SPACING } = await import('../src/world/snow-route.js');
-  const chunk = new SnowChunk(3);
-  let count = 0;
-  for (let i = Math.floor((chunk.start - 40) / LAMP_SPACING); i * LAMP_SPACING < chunk.start + CHUNK_LENGTH + 40; i++) {
-    const lamp = lampAt(i);
-    if (lamp.hidden || lamp.s < chunk.start || lamp.s >= chunk.start + CHUNK_LENGTH) continue;
-    count++;
-    assert.ok(chunk.features.colliders.some(solid => solid.heading === undefined && solid.reach < .2 && Math.hypot(solid.x - lamp.x, solid.z - lamp.z) < 1e-6), `lamp ${i} can be driven through`);
-  }
-  assert.ok(count > 1);
-  chunk.dispose();
 });
 
 test('a free-roaming car keeps its whole length back from a drop, not just its middle', () => {

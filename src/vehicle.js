@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { clamp, coastalDrivingRoute } from './world/route.js';
+import { clamp } from './world/route.js';
+import { citydriverRoute } from './world/city-grid.js';
 import { stableShadowDepth } from './world/shadow-depth.js';
 import { CARS, DEFAULT_CAR, DRAG, ROUTE_PAINT, carEntry, carStats } from './cars.js';
 import { createShapeCar } from './car-models.js';
@@ -151,7 +152,7 @@ export const impassable = ground => ground.blocked;
 const SLIDE_GRIP = 5, SPIN_GRIP = 8;
 
 export class DrivingController {
-  constructor(route = coastalDrivingRoute, state = {}, carId = DEFAULT_CAR, paint = null) {
+  constructor(route = citydriverRoute, state = {}, carId = DEFAULT_CAR, paint = null) {
     this.route = route;
     this.freeDriving = false;
     this.rainbow = false; this.rainbowHue = 0; this.rainbowColor = new THREE.Color();
@@ -339,7 +340,7 @@ export class DrivingController {
     // surface everywhere -- what it resists, how it steers and how it sounds --
     // so what the player hears matches what the car is doing. The ramp closes
     // by 5.9 m because the alpine road's own shoulder is only 6.3 m wide.
-    const looseness = clamp((Math.abs(this.u) - 4.8) / 1.1, 0, 1);
+    const looseness = this.route.looseness?.(this.s, this.u) ?? clamp((Math.abs(this.u) - 4.8) / 1.1, 0, 1);
     // Loose ground takes the speed rather than the game capping it: resistance
     // that full throttle balances at the off-road figure, plus a little more
     // the further above it the car arrives, so leaving the road at speed bleeds
@@ -370,7 +371,7 @@ export class DrivingController {
     if (!forward && !brake && oldSpeed * this.speed < 0) this.speed = 0;
     if (input.handbrake && oldSpeed * this.speed < 0) this.speed = 0;
     const frame = roadFrame(this.s);
-    const assist = !this.freeDriving || looseness === 0;
+    const assist = this.route.laneAssist !== false && (!this.freeDriving || looseness === 0);
     if (!touch) this.heading += this.steer * this.speed / 3.3 * (.52 * grip / (1 + Math.abs(this.speed) * .105)) * dt;
     let difference = Math.atan2(Math.sin(this.heading - frame.angle), Math.cos(this.heading - frame.angle));
     // Free driving keeps the chosen heading off-road; normal driving assists bends.

@@ -18,11 +18,8 @@
 // the four levels were the same picture at the same price. A fraction removes
 // pixels on every display.
 //
-// `chunks` is how much of the route stays built. The far chunk in each
-// direction is off-screen at every camera height — hiding them was measured
-// pixel-for-pixel identical on all four routes in the widest view, worth eight
-// to eleven per cent of the frame's draw calls — so the cheaper levels drop
-// them, and High keeps them as headroom for reversing.
+// High keeps a wider square of detailed city blocks. Other levels use fewer
+// furnished blocks, with a cheap distant skyline covering the same camera views.
 export const QUALITY_LEVELS = [
   { id: 'high', label: 'High', summary: 'Native resolution · sharp shadows', density: 1, shadowMap: 2048, chunks: { behind: 3, ahead: 5 }, antialias: true, aoQuality: 'high' },
   { id: 'balanced', label: 'Balanced', summary: '85% resolution · medium shadows', density: .85, shadowMap: 1536, chunks: { behind: 2, ahead: 4 }, antialias: true, aoQuality: 'high' },
@@ -51,7 +48,7 @@ const SLOW_WINDOWS = 2, FAST_WINDOWS = 4;
 // enough to conclude that cheaper graphics cannot help this device.
 const WORTHWHILE = 1.04, GIVE_UP_AFTER = 2;
 
-const STORAGE_KEY = 'coastline.graphics';
+const STORAGE_KEY = 'citydriver.graphics';
 
 function readStored(storage) {
   try { return JSON.parse(storage?.getItem(STORAGE_KEY) ?? 'null') ?? {}; }

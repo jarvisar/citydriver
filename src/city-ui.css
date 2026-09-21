@@ -1,0 +1,47 @@
+/* Navigation stays quiet enough to leave the streets in view. */
+#change-journey, #next-journey { display: none !important; }
+.city-hud {
+  display: flex; align-items: center; gap: 13px; padding: 10px 16px 10px 10px;
+  background: #20323dde; color: #f5f4e9; border: 1px solid #ffffff26;
+  border-radius: 18px; box-shadow: 0 6px 24px #13252c1a; backdrop-filter: blur(16px);
+  font-variant-numeric: tabular-nums;
+}
+.city-heading {
+  display: grid; place-items: center; min-width: 36px; height: 36px;
+  border: 1px solid #f3d89966; border-radius: 50%; color: #f3d899;
+  font-size: 13px; font-weight: 650; letter-spacing: .5px;
+}
+.city-hud-copy { display: grid; gap: 4px; }
+#city-location { font-size: 9px; font-weight: 650; letter-spacing: 1.7px; text-transform: uppercase; }
+#weather-label { font-size: 11px; color: #e5eceab3; letter-spacing: .15px; }
+#app:has(#welcome:not(.hidden)) .city-hud,
+#app:has(#pause-overlay:not([hidden])) .city-hud { visibility: hidden; }
+#welcome .menu-tagline { margin: 20px 0 0; max-width: none; font-size: 13px; letter-spacing: .3px; color: #fffdf3db; }
+#welcome .wordmark { letter-spacing: -.065em; }
+.weather-setting {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  min-height: 52px; padding: 9px 12px; border: 1px solid var(--ui-line);
+  border-radius: 12px; background: color-mix(in srgb, var(--cream) 88%, transparent);
+  font-size: 13px;
+}
+.weather-setting select {
+  max-width: 58%; min-height: 36px; padding: 6px 26px 6px 9px;
+  font: inherit; color: var(--ink); border: 1px solid var(--ui-line); border-radius: 7px;
+  background: var(--cream); cursor: pointer;
+}
+.weather-setting select:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
+.weather-note { margin: 7px 2px 0; font-size: 11px; line-height: 1.5; opacity: .8; }
+@media (max-width: 760px) {
+  .city-hud { gap: 8px; padding: 7px 11px 7px 7px; border-radius: 15px; }
+  .city-heading { min-width: 30px; height: 30px; font-size: 11px; }
+  #city-location { font-size: 8px; letter-spacing: 1px; }
+  #weather-label { font-size: 10px; }
+  #welcome .menu-tagline { margin-top: 16px; font-size: 12px; }
+}
+@media (max-width: 390px) {
+  .city-hud { gap: 6px; padding-right: 8px; }
+  #city-location { max-width: 92px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}
+@media (max-height: 560px) {
+  #welcome .menu-tagline { margin-top: 10px; font-size: 11px; }
+}

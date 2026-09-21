@@ -1,26 +1,9 @@
-# Discovery frequency
+# City generation
 
-To change how often a landmark appears, edit its value in the route's `*_DISCOVERY_MILES` table and reload:
+Citydriver has one procedural city that expands in both horizontal world axes. Streets form a connected grid, with continuous crossings over river channels. The same road surface and bridge elevations are used by the car and the scenery.
 
-| Route | File |
-| --- | --- |
-| Pacific Coast | [coastal-discoveries.js](../src/world/coastal-discoveries.js) |
-| Red Rock Desert | [desert-discoveries.js](../src/world/desert-discoveries.js) |
-| Midnight Alpine | [snow-discoveries.js](../src/world/snow-discoveries.js) |
-| Emerald Jungle | [jungle-discoveries.js](../src/world/jungle-discoveries.js) |
-| Golden Plains | [plains-discoveries.js](../src/world/plains-discoveries.js) |
-| Rainy Downtown | [city-discoveries.js](../src/world/city-discoveries.js) |
+A seed determines the layout, buildings, and neighbourhood details. Nearby cells stream in as the car explores, and distant cells are released to keep the resident world bounded. Buildings need finished facades on all four sides because every street can be approached from either direction.
 
-`'cable-car': 5` means roughly one cable car encounter every five miles. Lower values make it more frequent; higher values make it rarer. Use `Infinity` to disable a type. Zero and negative values are invalid.
+Weather and lighting are separate from the city layout. Changing the weather must preserve the player's position and the generated neighbourhood. Reset moves the player to a fresh district within the same seeded city.
 
-Defaults add up to about one discovery every 2.5 miles per route. Changing one value doesn't rebalance the others. Terrain and the world seed affect placement, so gaps vary. The scheduler enforces minimum spacing even with very frequent settings. Changes can move other discoveries in the same route.
-
-Birds, Alpine lakeside cabins, and ordinary road bridges use separate schedules. A discovery's smaller objects, such as a dock's boat or a farm's tractor, follow the parent discovery.
-
-Check the resulting frequencies from the repo root:
-
-```sh
-node scripts/discovery-frequency.mjs
-```
-
-The report compares target and measured averages over 2,000 route miles. Pass a number to change the sample length, such as `node scripts/discovery-frequency.mjs 500`. Set `TEST_WORLD_SEED` to check another world. The automated frequency test covers five seeds.
+Traffic travels both street axes and respects timed crossings. Future work can add more district types, activities, and traffic that chooses turns at intersections. New scenery should preserve driveable road connections and avoid placing props in lanes or bridge approaches.

@@ -1,6 +1,6 @@
 {
-  "name": "coastline",
-  "version": "1.0.19",
+  "name": "citydriver",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
   "main": "electron/main.js",
@@ -9,24 +9,8 @@
     "build": "vite build",
     "preview": "vite preview --host",
     "test": "node --import ./tests/world-seed.js --test tests/*.test.js",
-    "test:browser": "node scripts/browser-test.mjs",
-    "test:ao": "node scripts/ambient-occlusion-test.mjs",
-    "test:traffic": "node scripts/traffic-test.mjs",
-    "test:collision": "node scripts/collision-test.mjs",
-    "test:audio": "node scripts/audio-test.mjs",
-    "review:audio": "node scripts/audio-review.mjs",
-    "test:mobile": "node scripts/mobile-test.mjs",
-    "test:graphics": "node scripts/graphics-test.mjs",
-    "test:responsive": "node scripts/responsive-test.mjs",
-    "test:controller": "node scripts/controller-test.mjs",
-    "test:vr": "node scripts/vr-test.mjs",
-    "test:scenery": "node scripts/scenery-test.mjs",
-    "test:journeys": "node scripts/journey-test.mjs",
-    "test:snow": "node scripts/snow-test.mjs",
-    "test:jungle": "node scripts/jungle-test.mjs",
-    "test:city": "node scripts/city-test.mjs",
-    "test:generation": "node scripts/generation-test.mjs",
-    "test:worker": "node scripts/worker-test.mjs",
+    "test:browser": "node scripts/citydriver-test.mjs",
+    "test:city": "node scripts/citydriver-test.mjs",
     "electron:web": "vite build --outDir dist-electron",
     "electron:dev": "node scripts/electron-launch.mjs",
     "electron:start": "npm run electron:web && node scripts/electron-launch.mjs --built",
@@ -36,10 +20,12 @@
     "electron:build:win": "npm run electron:web && electron-builder --config electron/builder.config.cjs --publish never --win --x64",
     "electron:build:linux": "npm run electron:web && electron-builder --config electron/builder.config.cjs --publish never --linux --x64",
     "electron:build:mac": "npm run electron:web && electron-builder --config electron/builder.config.cjs --publish never --mac",
-    "test:electron": "node scripts/electron-test.mjs"
+    "test:electron": "node scripts/electron-test.mjs",
+    "pwa:icons": "node scripts/pwa-icons.mjs",
+    "pwa:screenshots": "node scripts/pwa-screenshots.mjs",
+    "test:pwa": "node scripts/pwa-test.mjs"
   },
   "dependencies": {
-    "electron-updater": "^6.8.9",
     "n8ao": "2.0.1",
     "postprocessing": "^6.39.5",
     "three": "^0.186.0"
@@ -49,5 +35,6 @@
     "electron": "^44.3.0",
     "electron-builder": "^26.15.3",
     "vite": "^8.3.0"
-  }
+  },
+  "description": "An endless procedural city driving game."
 }

@@ -1,57 +1,17 @@
-name: Desktop app
+name: Build Citydriver desktop
 
-# Keeps the Electron wrapper honest as the web app changes:
-# - every push and pull request runs the desktop smoke test on the current web build;
-# - a version tag (v1.2.3) or a manual run builds installers for Windows, Linux, and macOS,
-#   smoke-tests each unpacked build, and attaches the installers to a GitHub release.
+# Manual artifact builds only. No release or updater destination is configured.
 on:
-  push:
-    branches: [main]
-    tags: ['v*']
-  pull_request:
   workflow_dispatch:
 
 permissions:
-  contents: write
-
-concurrency:
-  group: desktop-${{ github.ref }}
-  cancel-in-progress: true
+  contents: read
 
 env:
-  # Electron under a virtual display has no GPU; SwiftShader keeps WebGL 2 available.
-  COASTLINE_SOFTWARE_GL: '1'
-  # Never try to code-sign: the packages are intentionally unsigned.
   CSC_IDENTITY_AUTO_DISCOVERY: 'false'
 
 jobs:
-  smoke:
-    name: Smoke test (Linux)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 24
-          cache: npm
-      - run: npm ci
-      - name: Allow Electron's sandbox on Ubuntu 24.04 runners
-        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
-      - name: Desktop smoke test
-        run: xvfb-run -a npm run test:electron -- --build
-      - uses: actions/upload-artifact@v6
-        if: always()
-        with:
-          name: desktop-smoke
-          path: |
-            .artifacts/electron/*.png
-            .artifacts/electron/report.json
-          if-no-files-found: ignore
-
   build:
-    name: Build ${{ matrix.name }}
-    needs: smoke
-    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
     strategy:
       fail-fast: false
       matrix:
@@ -59,15 +19,12 @@ jobs:
           - name: Windows
             os: windows-latest
             script: electron:build:win
-            unpacked: release/win-unpacked
           - name: Linux
             os: ubuntu-latest
             script: electron:build:linux
-            unpacked: release/linux-unpacked
           - name: macOS
             os: macos-latest
             script: electron:build:mac
-            unpacked: release/mac-arm64
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
@@ -76,68 +33,13 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - name: Build packages
-        run: npm run ${{ matrix.script }}
-      - name: Smoke test the unpacked build (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
-          xvfb-run -a npm run test:electron -- --packaged
-      - name: Smoke test the unpacked build
-        if: runner.os == 'Windows'
-        run: npm run test:electron -- --packaged
-      # GPU-less macOS runners have not loaded the WebGL scene reliably, and no macOS
-      # hardware is available to verify. Keep the check for its report and screenshots
-      # (uploaded below) without blocking the release on it.
-      - name: Smoke test the unpacked build (macOS, informational)
-        if: runner.os == 'macOS'
-        continue-on-error: true
-        run: npm run test:electron -- --packaged
-      - name: List packages
-        shell: bash
-        run: ls -la release
+      - run: npm run ${{ matrix.script }}
       - uses: actions/upload-artifact@v6
         with:
-          name: desktop-${{ matrix.name }}
+          name: citydriver-desktop-${{ matrix.name }}
           path: |
             release/*.exe
             release/*.AppImage
             release/*.dmg
             release/*.zip
-            release/latest*.yml
-            release/*.exe.blockmap
           if-no-files-found: error
-      - uses: actions/upload-artifact@v6
-        if: always()
-        with:
-          name: desktop-smoke-${{ matrix.name }}
-          path: |
-            .artifacts/electron/*.png
-            .artifacts/electron/report.json
-          if-no-files-found: ignore
-
-  release:
-    name: GitHub release
-    needs: build
-    if: startsWith(github.ref, 'refs/tags/v')
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/download-artifact@v7
-        with:
-          pattern: desktop-*
-          path: packages
-          merge-multiple: true
-      # latest*.yml and the blockmap are what installed apps read to update themselves.
-      - name: Remove smoke-test files from the release set
-        run: find packages -type f ! \( -name '*.exe' -o -name '*.AppImage' -o -name '*.dmg' -o -name '*.zip' -o -name 'latest*.yml' -o -name '*.blockmap' \) -delete && ls -la packages
-      - uses: softprops/action-gh-release@v2
-        with:
-          files: packages/*
-          generate_release_notes: true
-          fail_on_unmatched_files: true
-          body: |
-            Desktop builds of Coastline. The Windows installer and the AppImage update themselves; the portable exe and macOS app tell you when a new version is out. The `.yml` and `.blockmap` files are for the updater. All packages are unsigned:
-
-            - **Windows:** run the `-setup.exe` installer or the `-portable.exe`. SmartScreen may show "Windows protected your PC"; choose *More info* → *Run anyway*.
-            - **Linux / Steam Deck:** download the `.AppImage`, mark it executable, and run it. On a Steam Deck, add it as a non-Steam game to launch from Game Mode with the controller. See ELECTRON.md for details.
-            - **macOS:** open the `.dmg` for your chip (arm64 for Apple silicon, x64 for Intel). Gatekeeper blocks unsigned apps on first launch: right-click the app and choose *Open*, or run `xattr -cr /Applications/Coastline.app`.

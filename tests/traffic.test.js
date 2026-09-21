@@ -5,9 +5,7 @@ import { Traffic, TRAFFIC_CRUISE_SPEED, trafficContact } from '../src/traffic.js
 import { collisionImpulse, contactPoint } from '../src/impact.js';
 import { TRAFFIC_MODELS } from '../src/traffic-models.js';
 import { DrivingController } from '../src/vehicle.js';
-import { coastalDrivingRoute } from '../src/world/route.js';
-import { desertDrivingRoute } from '../src/world/desert-route.js';
-import { snowDrivingRoute } from '../src/world/snow-route.js';
+import { citydriverRoute } from '../src/world/city-grid.js';
 
 const straightRoute = {
   frame: s => ({ x: 0, y: 0, z: -s, nx: 1, nz: 0, angle: 0, scale: 1 }),
@@ -42,7 +40,7 @@ test('disabled traffic hides the fleet and prevents movement and collisions acro
   assert.equal(collisions, 0);
   assert.equal(traffic.group.visible, false);
   assert.deepEqual(traffic.vehicles.map(car => car.s), positions);
-  traffic.reset(snowDrivingRoute, 2000, 'snow');
+  traffic.reset(citydriverRoute, 2000, 'snow');
   traffic.render(1);
   assert.equal(traffic.enabled, false);
   assert.equal(traffic.group.visible, false);
@@ -248,11 +246,11 @@ test('traffic brakes behind a parked player and maintains a gap', () => {
   traffic.dispose();
 });
 
-test('traffic stays on all three roads through long drives, reverse travel, and rebasing', () => {
-  for (const [journey, route] of [['coast', coastalDrivingRoute], ['desert', desertDrivingRoute], ['snow', snowDrivingRoute]]) {
+test('traffic geometry stays stable through long straight drives, reverse travel, and rebasing', () => {
+  for (const [journey, route] of [['city', citydriverRoute]]) {
     const { player, traffic } = setup(route, 1020);
     traffic.reset(route, player.s, journey);
-    assert.equal(traffic.spacing, { coast: 1, snow: 1 / .75, desert: 2 }[journey]);
+    assert.equal(traffic.spacing, 1);
     const geometries = new Set(traffic.vehicles.flatMap(car => car.car.children.map(mesh => mesh.geometry)));
     // Keep the test driver on the shoulder so it can cover distance unimpeded.
     for (let i = 0; i < 60 * 90; i++) {
@@ -298,14 +296,14 @@ test('route changes reuse resources, switch lamps, and disposal releases the fle
   const { scene, traffic } = setup();
   const car = traffic.vehicles[0], mesh = car.car.children[0], geometry = mesh.geometry;
   const headlights = car.car.children[2].material;
-  traffic.reset(snowDrivingRoute, 2000, 'snow'); assert.ok(headlights.emissiveIntensity > 2);
+  traffic.reset(citydriverRoute, 2000, 'snow'); assert.ok(headlights.emissiveIntensity > 2);
   traffic.respawn(car, 2020); traffic.render(.5, 1024);
   const { rig, light } = traffic.headlightRigs[0];
   assert.equal(rig.parent, traffic.group);
   assert.deepEqual(rig.position, car.car.position);
   assert.deepEqual(rig.quaternion.toArray(), car.car.quaternion.toArray());
   assert.ok(light.intensity > 0); assert.equal(light.castShadow, false);
-  traffic.reset(desertDrivingRoute, -4000, 'desert'); assert.ok(headlights.emissiveIntensity < 1);
+  traffic.reset(citydriverRoute, -4000, 'desert'); assert.ok(headlights.emissiveIntensity < 1);
   assert.ok(traffic.headlightRigs.every(({ rig }) => rig.parent === null));
   assert.equal(car.car.children[0].geometry, geometry);
   assert.deepEqual(car.position, car.previousPosition);

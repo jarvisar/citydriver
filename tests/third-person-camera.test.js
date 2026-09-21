@@ -4,9 +4,7 @@ import * as THREE from 'three';
 import { ThirdPersonCamera } from '../src/third-person-camera.js';
 import { touchDrivingInput, thirdPersonDrivingInput } from '../src/touch-stick.js';
 import { DrivingController } from '../src/vehicle.js';
-import { coastalDrivingRoute } from '../src/world/route.js';
-import { desertDrivingRoute } from '../src/world/desert-route.js';
-import { snowDrivingRoute } from '../src/world/snow-route.js';
+import { citydriverRoute } from '../src/world/city-grid.js';
 import { fitSunShadow } from '../src/shadows.js';
 
 test('third-person view stays behind the car, frames it on phones, and survives origin shifts', () => {
@@ -22,9 +20,9 @@ test('third-person view stays behind the car, frames it on phones, and survives 
   }
 });
 
-test('perspective joystick follows all screen directions on every route and after rebasing', () => {
+test('perspective joystick follows all screen directions through the city and after rebasing', () => {
   const directions = [[0, 1], [0, -1], [1, 0], [-1, 0], [1, 1], [-1, 1], [1, -1], [-1, -1]];
-  for (const route of [coastalDrivingRoute, desertDrivingRoute, snowDrivingRoute]) {
+  for (const route of [citydriverRoute]) {
     for (const aspect of [390 / 844, 844 / 390]) for (const s of [24, 148, 420, 20025]) {
       for (const [x, y] of directions) {
         const car = new DrivingController(route, { s });
@@ -70,7 +68,7 @@ test('third-person joystick steers gradually while the camera follows, and relea
 });
 
 test('third-person down brakes before reversing without turning the car around', () => {
-  for (const route of [coastalDrivingRoute, desertDrivingRoute, snowDrivingRoute]) {
+  for (const route of [citydriverRoute]) {
     const car = new DrivingController(route);
     car.speed = 5;
     const heading = car.heading;

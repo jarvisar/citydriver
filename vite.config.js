@@ -1,4 +1,4 @@
 import { defineConfig } from 'vite';
-import { coastlinePwa } from './scripts/pwa-plugin.mjs';
+import { citydriverPwa } from './scripts/pwa-plugin.mjs';
 
-export default defineConfig({ plugins: [coastlinePwa()] });
+export default defineConfig({ plugins: [citydriverPwa()] });

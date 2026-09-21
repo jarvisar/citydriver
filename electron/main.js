@@ -1,4 +1,4 @@
-// Desktop shell for Coastline.
+// Desktop shell for Citydriver.
 //
 // The renderer is the unmodified Vite build (dist-electron/), served through a
 // privileged app:// scheme so absolute asset URLs, the module Web Worker,
@@ -6,7 +6,6 @@
 // A sandboxed preload exposes only native fullscreen controls, Escape input, and
 // the update notice.
 import { app, BrowserWindow, Menu, dialog, ipcMain, net, protocol, shell } from 'electron';
-import electronUpdater from 'electron-updater'; // CommonJS: no named exports
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -15,9 +14,8 @@ import { WindowState } from './window-state.js';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(here, '..');
 const rendererDir = path.join(root, 'dist-electron');
-const APP_HOST = 'coastline';
+const APP_HOST = 'citydriver';
 const APP_ORIGIN = `app://${APP_HOST}`;
-const RELEASES_URL = 'https://github.com/jarvisar/coastline/releases/latest';
 // Web-only helpers (install banner, offline service worker) are served as empty
 // scripts instead of being stripped from the build, so index.html stays untouched.
 const WEB_ONLY_SCRIPTS = new Set(['/pwa-register.js', '/pwa-install.js']);
@@ -32,27 +30,25 @@ const MIME = {
 };
 
 // --- Command line ----------------------------------------------------------
-// Flags may appear anywhere: `electron . --seed=1`, `Coastline.exe --fullscreen`,
+// Flags may appear anywhere: `electron . --seed=1`, `Citydriver.exe --fullscreen`,
 // or Steam launch options. Unknown switches fall through to Chromium.
 const argv = process.argv.slice(1);
 const has = flag => argv.includes(flag);
 const value = flag => argv.find(arg => arg.startsWith(`${flag}=`))?.slice(flag.length + 1);
 const options = {
-  devUrl: value('--dev-url') ?? process.env.COASTLINE_DEV_URL,
+  devUrl: value('--dev-url') ?? process.env.CITYDRIVER_DEV_URL,
   seed: value('--seed'),
-  devtools: has('--devtools') || process.env.COASTLINE_DEVTOOLS === '1',
-  softwareGl: has('--software-gl') || process.env.COASTLINE_SOFTWARE_GL === '1',
-  noUpdate: has('--no-update') || process.env.COASTLINE_NO_UPDATE === '1',
+  devtools: has('--devtools') || process.env.CITYDRIVER_DEVTOOLS === '1',
+  softwareGl: has('--software-gl') || process.env.CITYDRIVER_SOFTWARE_GL === '1',
   fullscreen: has('--fullscreen') ? true : has('--windowed') ? false
-    : process.env.COASTLINE_FULLSCREEN ? process.env.COASTLINE_FULLSCREEN === '1' : true,
+    : process.env.CITYDRIVER_FULLSCREEN ? process.env.CITYDRIVER_FULLSCREEN === '1' : true,
 };
 if (has('--help') || has('-h')) {
   process.stdout.write([
-    'Coastline desktop options:',
+    'Citydriver desktop options:',
     '  --fullscreen | --windowed   Start fullscreen or windowed (default: fullscreen)',
     '  --seed=<number>             Open a specific world, like ?seed= on the web',
     '  --software-gl               Render with SwiftShader instead of the GPU (slow; for testing)',
-    '  --no-update                 Skip the update check at startup',
     '  --devtools                  Open DevTools at startup (F12 toggles them any time)',
     '  --dev-url=<url>             Load a running Vite dev server instead of dist-electron/',
     '',
@@ -71,10 +67,10 @@ function readManifest() {
   return {};
 }
 const manifest = readManifest();
-const productName = manifest.short_name ?? 'Coastline';
-const backgroundColor = manifest.background_color ?? '#d5e7d9';
+const productName = manifest.short_name ?? 'Citydriver';
+const backgroundColor = manifest.background_color ?? '#20323d';
 app.setName(productName);
-if (process.env.COASTLINE_USER_DATA) app.setPath('userData', path.resolve(process.env.COASTLINE_USER_DATA));
+if (process.env.CITYDRIVER_USER_DATA) app.setPath('userData', path.resolve(process.env.CITYDRIVER_USER_DATA));
 
 // --- Chromium switches (must run before `ready`) ----------------------------
 if (options.softwareGl) {
@@ -147,8 +143,8 @@ function createWindow() {
     webPreferences: { contextIsolation: true, sandbox: true, nodeIntegration: false, spellcheck: false, preload: path.join(here, 'preload.cjs') },
   });
   mainWindow = window;
-  window.on('enter-full-screen', () => window.webContents.send('coastline:fullscreen-changed', true));
-  window.on('leave-full-screen', () => window.webContents.send('coastline:fullscreen-changed', false));
+  window.on('enter-full-screen', () => window.webContents.send('citydriver:fullscreen-changed', true));
+  window.on('leave-full-screen', () => window.webContents.send('citydriver:fullscreen-changed', false));
   if (state.maximized && !options.fullscreen) window.maximize();
   state.track(window);
   window.once('ready-to-show', () => {
@@ -171,7 +167,7 @@ function createWindow() {
     const modifier = input.control || input.meta;
     if (input.key === 'Escape') {
       event.preventDefault();
-      if (!input.isAutoRepeat) window.webContents.send('coastline:escape');
+      if (!input.isAutoRepeat) window.webContents.send('citydriver:escape');
     } else if (input.key === 'F11' || (input.alt && input.key === 'Enter')) {
       event.preventDefault(); window.setFullScreen(!window.isFullScreen());
     } else if (input.key === 'F12' || (modifier && input.shift && input.key.toUpperCase() === 'I')) {
@@ -205,26 +201,8 @@ function installMenu() {
   ]));
 }
 
-// --- Updates ----------------------------------------------------------------
-// The Windows install and the Linux AppImage download a newer GitHub release in the
-// background and install it on quit. The portable exe cannot replace itself and the
-// unsigned macOS app cannot be updated in place, so for those the game's menus show a
-// button that opens the download page.
-let availableUpdate;
-function checkForUpdates() {
-  if (!app.isPackaged || options.noUpdate) return;
-  const { autoUpdater } = electronUpdater;
-  const selfUpdating = process.platform === 'linux' || (process.platform === 'win32' && !process.env.PORTABLE_EXECUTABLE_FILE);
-  autoUpdater.autoDownload = selfUpdating;
-  if (!selfUpdating) {
-    autoUpdater.on('update-available', info => {
-      availableUpdate = { version: info.version, url: RELEASES_URL };
-      mainWindow?.webContents.send('coastline:update-available', availableUpdate);
-    });
-  }
-  // Failures (offline, rate limit) are logged by the updater and never block the game.
-  autoUpdater.checkForUpdates().catch(() => {});
-}
+// Desktop updates stay disabled until a Citydriver release destination is configured.
+// This fork never checks or downloads releases from the original game.
 
 // --- Lifecycle --------------------------------------------------------------
 app.whenReady().then(() => {
@@ -235,17 +213,16 @@ app.whenReady().then(() => {
   }
   installProtocols();
   installMenu();
-  for (const [channel, toggle] of [['coastline:fullscreen-get', false], ['coastline:fullscreen-toggle', true]]) {
+  for (const [channel, toggle] of [['citydriver:fullscreen-get', false], ['citydriver:fullscreen-toggle', true]]) {
     ipcMain.handle(channel, event => {
       if (!mainWindow || event.sender !== mainWindow.webContents || event.senderFrame !== mainWindow.webContents.mainFrame) return false;
       if (toggle) mainWindow.setFullScreen(!mainWindow.isFullScreen());
       return mainWindow.isFullScreen();
     });
   }
-  // The page asks once it has loaded, in case the check finished first.
-  ipcMain.handle('coastline:update-get', () => availableUpdate);
+  // There is no update feed for this project.
+  ipcMain.handle('citydriver:update-get', () => undefined);
   createWindow();
-  checkForUpdates();
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 });
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });

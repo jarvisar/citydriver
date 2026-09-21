@@ -1,0 +1,145 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import * as THREE from 'three';
+import {
+  CITY_BLOCK, ROAD_HALF_WIDTH, ROAD_LEVEL, WATER_LEVEL, RIVER_PERIOD,
+  cityCell, cityBlock, cityRiverAt, cityStreetAt, citydriverRoute,
+} from '../src/world/city-grid.js';
+import { CitydriverWorld, DISTANT_CITY_RADIUS } from '../src/world/citydriver-world.js';
+import { residentWindow, setResidentWindow } from '../src/world/resident.js';
+
+test('the city has connected, level streets in all four directions through negative coordinates', () => {
+  assert.deepEqual(cityCell(-1, -1), { ix: -1, iz: -1, key: '-1,-1' });
+  assert.equal(citydriverRoute.laneAssist, false);
+  assert.deepEqual(citydriverRoute.bounds(0), [-Infinity, Infinity]);
+  for (let index = -15; index <= 15; index++) {
+    const line = index * CITY_BLOCK;
+    for (let along = -CITY_BLOCK * 4; along <= CITY_BLOCK * 4; along += 3.5) {
+      for (const lane of [-ROAD_HALF_WIDTH + .1, -3, 0, 3, ROAD_HALF_WIDTH - .1]) {
+        for (const [s, u] of [[along, line + lane], [line + lane, along]]) {
+          assert.equal(cityStreetAt(s, u).onRoad, true);
+          assert.equal(citydriverRoute.height(s, u), ROAD_LEVEL);
+          assert.equal(citydriverRoute.water(s, u), false);
+          assert.equal(citydriverRoute.looseness(s, u), 0);
+          assert.deepEqual(citydriverRoute.position(s, u), { x: u, y: ROAD_LEVEL, z: -s });
+        }
+      }
+    }
+  }
+});
+
+test('every recurring river is crossed by safe east-west bridges', () => {
+  for (let ix = -22; ix <= 24; ix++) {
+    const block = cityBlock(ix, 0), u = (ix + .5) * CITY_BLOCK;
+    assert.deepEqual(cityBlock(ix, -7), cityBlock(ix, -7), 'block generation is repeatable');
+    if (block.kind !== 'river') { assert.equal(cityRiverAt(u), null); continue; }
+    assert.equal(cityBlock(ix + RIVER_PERIOD, -11).kind, 'river');
+    assert.equal(citydriverRoute.height(CITY_BLOCK / 2, u), WATER_LEVEL);
+    assert.equal(citydriverRoute.water(CITY_BLOCK / 2, u), true);
+    for (let row = -4; row <= 4; row++) for (const lane of [-7.9, -3, 0, 3, 7.9]) {
+      const s = row * CITY_BLOCK + lane;
+      assert.equal(cityStreetAt(s, u).bridge, true);
+      assert.equal(citydriverRoute.height(s, u), ROAD_LEVEL);
+      assert.equal(citydriverRoute.water(s, u), false);
+    }
+  }
+});
+
+test('streamed blocks are bounded, move in both axes, and retain collision coordinates across origin shifts', () => {
+  const previous = residentWindow(); setResidentWindow({ behind: 1, ahead: 3 });
+  const scene = new THREE.Scene(), world = new CitydriverWorld(scene);
+  try {
+    const locations = [[24, 2.4], [-210, -150], [2150, 980], [-4200, -3100]];
+    for (const [s, u] of locations) {
+      for (let frame = 0; frame < 8; frame++) world.update(s, u);
+      assert.equal(world.chunks.size, 25);
+      assert.equal(scene.children.length, 26);
+      assert.equal(world.chunks.size + world.distantChunks.size, (2 * DISTANT_CITY_RADIUS + 1) ** 2);
+      assert.ok(world.distantGroup.children.length <= 8, 'the entire distant city shares a handful of draw calls');
+      assert.equal([...world.collisionChunks(s, u)].length, 9);
+      const cell = cityCell(s, u);
+      assert.ok(world.chunks.has(cell.key));
+      for (let ix = cell.ix - DISTANT_CITY_RADIUS; ix <= cell.ix + DISTANT_CITY_RADIUS; ix++) for (let iz = cell.iz - DISTANT_CITY_RADIUS; iz <= cell.iz + DISTANT_CITY_RADIUS; iz++) {
+        const key = `${ix},${iz}`;
+        assert.notEqual(world.chunks.has(key), world.distantChunks.has(key), 'each visible cell has exactly one level of detail');
+      }
+      assert.equal(world.distantGroup.position.z, world.origin);
+      for (const chunk of world.distantChunks.values()) assert.equal(chunk.features.colliders.length, 0);
+      for (const chunk of world.chunks.values()) {
+        assert.ok(Math.abs(chunk.ix - cell.ix) <= 2 && Math.abs(chunk.iz - cell.iz) <= 2);
+        assert.equal(chunk.group.position.x, chunk.ix * CITY_BLOCK);
+        assert.equal(chunk.group.position.z, world.origin - chunk.iz * CITY_BLOCK);
+        for (const collider of chunk.features.colliders) {
+          assert.ok(collider.x >= chunk.east && collider.x <= chunk.east + CITY_BLOCK);
+          assert.ok(-collider.z >= chunk.start && -collider.z <= chunk.start + CITY_BLOCK);
+          assert.ok(!cityStreetAt(-collider.z, collider.x).onRoad, 'street furniture leaves the travel lanes clear');
+        }
+        for (const building of chunk.features.buildings) {
+          assert.equal(building.facadeSides, 4); assert.ok(building.windows >= 40);
+          assert.ok(chunk.features.colliders.some(solid => solid.x === building.x && solid.z === -building.s));
+        }
+      }
+    }
+    world.setWetness(1); assert.ok(world.materials.road.roughness < .3);
+    world.setWetness(0); assert.equal(world.materials.road.roughness, .85);
+  } finally { world.dispose(); setResidentWindow(previous); }
+  assert.equal(scene.children.length, 0);
+  assert.equal(world.chunks.size, 0);
+  assert.equal(world.distantChunks.size, 0);
+});
+
+test('river deck meshes match the physical road height and keep their piers outside the road', () => {
+  const world = new CitydriverWorld(new THREE.Scene());
+  try {
+    world.update(34, 3.5 * CITY_BLOCK);
+    const chunk = world.chunks.get('3,0');
+    assert.equal(chunk.plan.kind, 'river');
+    assert.ok(chunk.features.bridges.length);
+    const road = chunk.group.getObjectByName('citydriver-road'), matrix = new THREE.Matrix4();
+    const position = new THREE.Vector3(), rotation = new THREE.Quaternion(), scale = new THREE.Vector3();
+    for (let i = 0; i < road.count; i++) {
+      road.getMatrixAt(i, matrix); matrix.decompose(position, rotation, scale);
+      assert.ok(Math.abs(position.y + scale.y / 2 - ROAD_LEVEL) < .00001);
+    }
+    for (const collider of chunk.features.colliders) {
+      const s = -collider.z, u = collider.x;
+      assert.equal(cityStreetAt(s, u).onRoad, false);
+      if (cityRiverAt(u)) assert.ok(cityStreetAt(s, u).eastDistance > ROAD_HALF_WIDTH + 1);
+    }
+  } finally { world.dispose(); }
+});
+
+test('rendered upper-storey glazing covers every building facade', () => {
+  const world = new CitydriverWorld(new THREE.Scene());
+  try {
+    world.update(24, 2.4);
+    const chunk = [...world.chunks.values()].find(candidate => candidate.features.buildings.length);
+    assert.ok(chunk);
+    const matrix = new THREE.Matrix4(), position = new THREE.Vector3();
+    const glass = ['citydriver-glass', 'citydriver-lit'].map(name => chunk.group.getObjectByName(name)).filter(Boolean);
+    for (const building of chunk.features.buildings) {
+      const sides = new Set(), x = building.x - chunk.east, s = building.s - chunk.start;
+      for (const mesh of glass) for (let i = 0; i < mesh.count; i++) {
+        mesh.getMatrixAt(i, matrix); position.setFromMatrixPosition(matrix);
+        if (position.y < 28.5 || position.y > ROAD_LEVEL + building.height) continue;
+        const dx = position.x - x, ds = -position.z - s;
+        if (Math.abs(Math.abs(dx) - building.width / 2 - .17) < .002 && Math.abs(ds) < building.depth / 2) sides.add(dx < 0 ? 'west' : 'east');
+        if (Math.abs(Math.abs(ds) - building.depth / 2 - .17) < .002 && Math.abs(dx) < building.width / 2) sides.add(ds < 0 ? 'south' : 'north');
+      }
+      assert.deepEqual([...sides].sort(), ['east', 'north', 'south', 'west']);
+    }
+  } finally { world.dispose(); }
+});
+
+test('approaching the distant city preserves building footprints, heights and window layout', () => {
+  const world = new CitydriverWorld(new THREE.Scene());
+  try {
+    world.update(24, 2.4);
+    const distant = [...world.distantChunks.values()].find(chunk => chunk.features.buildings.length);
+    assert.ok(distant);
+    const expected = structuredClone(distant.features.buildings), key = distant.index;
+    world.update(distant.start + 30, distant.east + 3);
+    assert.ok(!world.distantChunks.has(key));
+    assert.deepEqual(world.chunks.get(key).features.buildings, expected);
+  } finally { world.dispose(); }
+});

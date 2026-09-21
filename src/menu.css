@@ -1,17 +1,13 @@
-/* The title screen sits directly over the living landscape. */
+/* Citydriver's title screen sits directly over the city. */
 :root {
   --menu-ink: #fffdf3;
   --action: #254f44;
   --action-hover: #326454;
   --ui-line: color-mix(in srgb, var(--ink) 18%, transparent);
 }
-body[data-journey=desert] { --action: #654934; --action-hover: #7b5940; }
-body[data-journey=snow] { --action: #243c55; --action-hover: #345370; }
-body[data-journey=jungle] { --action: #294e37; --action-hover: #386446; }
-body[data-journey=plains] { --action: #65502c; --action-hover: #80673a; }
-body[data-journey=city] { --action: #304853; --action-hover: #42616f; }
+body { --action: #263f4b; --action-hover: #3d5f6b; --ink: #253e49; --cream: #f4f4ec; }
 
-.topbar { justify-content: flex-end; }
+.topbar { justify-content: space-between; }
 #welcome {
   top: max(calc(var(--ui-top) + 62px), 13dvh);
   right: var(--ui-right); bottom: max(calc(var(--ui-bottom) + 20px), 21dvh); left: var(--ui-left);

@@ -38,7 +38,7 @@ export const CARS = {
     plain: true, kind: 'classic', trim: null, paint: '#d96143', shape: CLASSIC_SHAPE, stats: BASE,
   },
   coast: {
-    name: 'Coastline Wagon', kind: 'classic', trim: 'coast', paint: '#d96143', shape: CLASSIC_SHAPE, stats: BASE,
+    name: 'Surf Wagon', kind: 'classic', trim: 'coast', paint: '#d96143', shape: CLASSIC_SHAPE, stats: BASE,
   },
   desert: {
     name: 'Canyon Runner', kind: 'classic', trim: 'desert', paint: '#78977b', shape: CLASSIC_SHAPE,

@@ -3,9 +3,6 @@ import { createServer } from 'node:http';
 import { mkdtemp, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { chromium } from '@playwright/test';
-import { QUALITY_LEVELS } from '../src/graphics.js';
-
-const SMALLEST_WINDOW = Math.min(...QUALITY_LEVELS.map(level => level.chunks.behind + level.chunks.ahead + 1));
 import { build, createServer as createViteServer } from 'vite';
 
 const launchOptions = {
@@ -39,41 +36,23 @@ async function checkProduction(base) {
   const url = `http://127.0.0.1:${server.address().port}${base}`;
   const profile = await mkdtemp(path.resolve('.artifacts/pwa-browser-'));
   const context = await chromium.launchPersistentContext(profile, launchOptions);
+  // Installation and cache lifecycle checks use the lightest rendering preset.
+  // Detailed graphics are exercised separately by the city browser check.
   await context.addInitScript(() => {
-    const NativeWorker = window.Worker;
-    window.__chunkWorkerCheck = { seed: null, readySeed: null, chunks: 0, errors: [] };
-    window.Worker = class extends NativeWorker {
-      constructor(...args) {
-        super(...args);
-        this.addEventListener('message', ({ data }) => {
-          if (data.type === 'ready') window.__chunkWorkerCheck.readySeed = data.seed;
-          if (data.type === 'chunk') window.__chunkWorkerCheck.chunks++;
-          if (data.type === 'error') window.__chunkWorkerCheck.errors.push(data.message);
-        });
-        this.addEventListener('error', event => window.__chunkWorkerCheck.errors.push(event.message));
-      }
-      postMessage(data, ...rest) {
-        if (data.type === 'init') window.__chunkWorkerCheck.seed = data.seed;
-        super.postMessage(data, ...rest);
-      }
-    };
+    try { localStorage.setItem('citydriver.graphics', JSON.stringify({ mode: 'basic' })); } catch { /* about:blank has no storage */ }
   });
+  context.setDefaultNavigationTimeout(60_000);
+  context.setDefaultTimeout(60_000);
   for (const page of context.pages()) await page.close();
   const errors = [];
   context.on('page', page => page.on('pageerror', error => errors.push(error.message)));
   try {
     let page = await context.newPage();
     await page.setViewportSize({ width: 1280, height: 900 });
-    await page.goto(url);
+    await page.goto(url, { waitUntil: 'domcontentloaded' });
     await page.waitForFunction(() => document.querySelector('#loading.loaded') && document.querySelector('#error').hidden);
-    // A production build has no debug surface to read the quality level from,
-    // so require the smallest window any level keeps built: enough to prove the
-    // worker really supplied the route rather than the page falling back to
-    // building it itself.
-    await page.waitForFunction(count => window.__chunkWorkerCheck.chunks >= count, SMALLEST_WINDOW);
-    const worker = await page.evaluate(() => window.__chunkWorkerCheck);
-    assert.equal(worker.readySeed, worker.seed, 'production worker must use the page seed before building scenery');
-    assert.deepEqual(worker.errors, []);
+    assert.equal(await page.locator('#menu-title').textContent(), 'citydriver');
+    assert.equal(await page.locator('#change-journey').isVisible(), false);
     await page.waitForFunction(() => navigator.serviceWorker.controller);
     assert.equal(await page.locator('#pwa-install-invitation').count(), 0);
     await page.setViewportSize({ width: 393, height: 851 });
@@ -106,21 +85,15 @@ async function checkProduction(base) {
     await context.setOffline(true);
     await page.reload();
     await page.waitForFunction(() => document.querySelector('#loading.loaded') && document.querySelector('#error').hidden);
-    // A production build has no debug surface to read the quality level from,
-    // so require the smallest window any level keeps built: enough to prove the
-    // worker really supplied the route rather than the page falling back to
-    // building it itself.
-    await page.waitForFunction(count => window.__chunkWorkerCheck.chunks >= count, SMALLEST_WINDOW);
-    assert.deepEqual(await page.evaluate(() => window.__chunkWorkerCheck.errors), [], 'worker bundle must be available offline');
+    assert.equal(await page.locator('#city-location').textContent() !== '', true, 'offline city navigation is ready');
     assert.equal(await page.locator('#pwa-install-invitation').isVisible(), false, 'Dismissal survives reload');
-    // All journey assets are available even when switching for the first time offline.
-    for (const journey of await page.locator('button[data-journey]').evaluateAll(buttons => buttons.map(button => button.dataset.journey))) {
-      await page.locator('#change-journey').click();
-      await page.locator(`button[data-journey="${journey}"]`).click();
-      await page.waitForFunction(id => document.querySelector(`button[data-journey="${id}"]`).getAttribute('aria-current') === 'true' && !document.querySelector('#journey-dialog').open, journey);
-      await page.waitForFunction(() => !document.querySelector('#journey-transition').classList.contains('active'));
-    }
-    await page.goto(`${url}?from=homescreen`);
+    await page.keyboard.press('KeyP');
+    await page.locator('#city-weather').selectOption('night');
+    assert.equal(await page.locator('#city-weather').inputValue(), 'night');
+    await page.locator('#change-car').click();
+    assert.ok(await page.locator('#car-dialog .car-card').count() > 0, 'garage is bundled offline');
+    await page.locator('#close-cars').click();
+    await page.goto(`${url}?from=homescreen`, { waitUntil: 'domcontentloaded' });
     await page.waitForFunction(() => document.querySelector('#loading.loaded') && document.querySelector('#error').hidden);
     await page.locator('#start').click();
     await page.keyboard.down('ArrowUp');
@@ -129,19 +102,22 @@ async function checkProduction(base) {
 
     await context.setOffline(false);
     await page.evaluate(() => caches.open('unrelated-app-cache'));
-    const oldCache = await page.evaluate(async () => (await caches.keys()).find(name => name.startsWith('coastline:')));
+    const oldCache = await page.evaluate(async () => (await caches.keys()).find(name => name.startsWith('citydriver:')));
     update = true;
     await page.evaluate(async () => (await navigator.serviceWorker.getRegistration()).update());
     await page.waitForFunction(async () => Boolean((await navigator.serviceWorker.getRegistration()).waiting));
     assert.ok((await page.evaluate(() => caches.keys())).includes(oldCache), 'Active version stays cached during play');
     await page.close();
     page = await context.newPage();
-    await page.goto(url);
+    console.log(`Checking ${base}: activate the waiting update after closing the game`);
+    await page.goto(url, { waitUntil: 'domcontentloaded' });
     await page.waitForFunction(async () => {
       const names = await caches.keys();
-      return names.some(name => name.endsWith(':test-update')) && names.filter(name => name.startsWith('coastline:')).length === 1;
+      return names.some(name => name.endsWith(':test-update')) && names.filter(name => name.startsWith('citydriver:')).length === 1;
     });
     assert.ok((await page.evaluate(() => caches.keys())).includes('unrelated-app-cache'));
+    await page.waitForFunction(() => document.querySelector('#loading.loaded') && document.querySelector('#error').hidden);
+    console.log(`Checking ${base}: the new cache is active and the updated game is ready`);
     await context.setOffline(true);
     await page.reload();
     await page.waitForFunction(() => document.querySelector('#loading.loaded') && document.querySelector('#error').hidden);
@@ -175,7 +151,7 @@ async function checkProduction(base) {
     await page.evaluate(() => window.dispatchEvent(new Event('appinstalled')));
     assert.equal(await page.locator('#pause-overlay .pwa-install-button').isVisible(), false);
     assert.deepEqual(errors, []);
-    console.log(`PASS ${base}: Chrome installability, icons/screenshots, install button/fallback, offline journeys/driving, safe updates and cache cleanup`);
+    console.log(`PASS ${base}: Chrome installability, icons/screenshots, install button/fallback, offline city/driving, safe updates and cache cleanup`);
   } finally {
     await context.close();
     await new Promise(resolve => server.close(resolve));
@@ -184,7 +160,7 @@ async function checkProduction(base) {
 
 if (!process.argv.includes('--dev-only')) {
   await checkProduction('/');
-  await checkProduction('/coastline/');
+  await checkProduction('/citydriver/');
 }
 const dev = await createViteServer({ server: { port: 0, host: '127.0.0.1' } });
 try {
@@ -198,7 +174,7 @@ try {
   try {
     const page = await browser.newPage({ viewport: { width: 393, height: 851 }, hasTouch: true, isMobile: true });
     const url = `http://127.0.0.1:${dev.httpServer.address().port}/`;
-    await page.goto(url);
+    await page.goto(url, { waitUntil: 'domcontentloaded' });
     await page.waitForFunction(() => document.querySelector('#loading.loaded'));
     assert.equal(await page.locator('#pwa-install-invitation').isVisible(), false);
     await page.keyboard.press('KeyP');

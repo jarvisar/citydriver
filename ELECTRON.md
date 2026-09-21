@@ -1,126 +1,46 @@
-# Desktop app
+# Citydriver desktop
 
-The desktop app packages the web game with Electron. Download builds from [Releases](https://github.com/jarvisar/coastline/releases):
+The Electron shell runs the same Citydriver build as the browser. It serves local assets from `app://citydriver/`, supports native fullscreen, and keeps its own application data.
 
-- **Windows:** installer (`-setup.exe`) or portable executable (`-portable.exe`).
-- **Linux / Steam Deck:** AppImage.
-- **macOS:** DMG or ZIP; `arm64` for Apple silicon, `x64` for Intel.
-
-Packages are unsigned. Windows may require **More info → Run anyway**; macOS may require right-clicking the app and choosing **Open**. On Linux, make the AppImage executable before running it:
-
-```sh
-chmod +x Coastline-*.AppImage
-```
-
-The installed Windows app and the AppImage check for a new release at launch, download it in the background, and install it when you quit. The portable executable and the macOS app can't update themselves; when a new version is out, a **Get version** button on the title screen and pause menu opens the download page.
-
-The app starts fullscreen. F, F11, Alt+Enter, LB / L1, or the pause menu toggle fullscreen. Escape opens or closes menus without leaving fullscreen. F12 opens DevTools.
-
-## Run from source
-
-Requires Node.js 22.12 or newer.
+## Develop
 
 ```sh
 npm install
 npm run electron:dev
 ```
 
-This starts Vite and opens an Electron window with hot reload. Use `npm run electron:start` to build and open the production version, or `npm run electron:dev -- --url=http://127.0.0.1:5173` to use an existing dev server.
-
-## Launch options
-
-Pass these to the executable, through Steam launch options, or after `npm run electron:dev --`.
-
-| Flag | Environment variable | Effect |
-| --- | --- | --- |
-| `--fullscreen` / `--windowed` | `COASTLINE_FULLSCREEN=1` / `0` | Set the starting window mode. Default: fullscreen. |
-| `--seed=<n>` | | Open a specific world. |
-| `--software-gl` | `COASTLINE_SOFTWARE_GL=1` | Use SwiftShader for testing GPU problems. Runs slowly. |
-| `--no-update` | `COASTLINE_NO_UPDATE=1` | Skip the update check at launch. |
-| `--devtools` | `COASTLINE_DEVTOOLS=1` | Open DevTools on launch. |
-| `--dev-url=<url>` | `COASTLINE_DEV_URL` | Load a dev server instead of the built game. |
-| | `COASTLINE_USER_DATA=<dir>` | Use a separate profile directory. |
-| `--help` | | Print the options. |
-
-Profiles are stored in `%APPDATA%\Coastline` on Windows, `~/.config/Coastline` on Linux, and `~/Library/Application Support/Coastline` on macOS. Delete `window-state.json` there to reset window size and position.
-
-## Steam Deck
-
-1. In Desktop Mode, download the AppImage and mark it executable in **Properties → Permissions**.
-2. Open it once to check it runs.
-3. In Steam, choose **Games → Add a Non-Steam Game → Browse**. Select **All Files** and add the AppImage.
-4. Set its controller layout to **Gamepad** or **Gamepad with Joystick Trackpad**.
-5. Launch it from the **Non-Steam** tab in Game Mode. Use the Steam menu's **Exit Game** to quit.
-
-See the [controller mapping](README.md#controls). Steam's **Properties → Launch Options** accepts flags such as `--windowed` or `--seed=4817`.
-
-## Build packages
-
-Build commands rebuild the web game into `dist-electron/` and write packages to `release/`.
-
-| Command | Output |
-| --- | --- |
-| `npm run electron:pack` | Unpacked app for the current OS |
-| `npm run electron:build` | Packages for the current OS |
-| `npm run electron:build:win` | Windows x64 installer and portable executable |
-| `npm run electron:build:linux` | Linux x64 AppImage |
-| `npm run electron:build:mac` | macOS arm64 and x64 DMG and ZIP |
-| `npm run electron:icons` | Regenerate the icon from `public/favicon.svg` |
-
-Use a macOS host for macOS packages. Build the Linux AppImage on Linux or in WSL; Windows can produce an unpacked Linux build, but can't finish the AppImage. For WSL, use a separate checkout and install Node inside WSL:
+To run a production renderer build locally:
 
 ```sh
-git clone https://github.com/jarvisar/coastline.git ~/coastline
-cd ~/coastline
-npm ci
-npm run electron:build:linux
+npm run electron:start
 ```
 
-Package targets and installer options are in [builder.config.cjs](electron/builder.config.cjs).
+Useful launch flags are `--windowed`, `--fullscreen`, `--seed=4817`, `--devtools`, and `--software-gl`. Fullscreen is the default. F, F11, or Alt+Enter changes fullscreen; Escape pauses the game. Use `--dev-url=http://127.0.0.1:5173` to attach directly to a running Vite server.
 
-## Releases
+Environment overrides use the `CITYDRIVER_` prefix: `DEV_URL`, `DEVTOOLS`, `SOFTWARE_GL`, `FULLSCREEN`, and `USER_DATA`.
 
-The [Desktop app workflow](.github/workflows/desktop.yml) tests pushes to `main` and pull requests. A `v*` tag builds packages on Windows, Linux, and macOS and attaches them to a GitHub release. A manual workflow run builds downloadable artifacts without publishing a release.
-
-To bump the patch version and publish:
-
-```sh
-npm version patch
-git push --follow-tags
-```
-
-Each release also carries `latest.yml`, `latest-linux.yml`, `latest-mac.yml`, and a `.blockmap` for the installer. [electron-updater](https://www.electron.build/auto-update) in installed apps reads these to find and download the new version, so don't delete them from a release. A release only reaches users once it is published; drafts and pre-releases are ignored.
-
-The macOS smoke test is informational and doesn't block releases; its CI runner hasn't loaded the WebGL scene reliably.
-
-## Wrapper and tests
-
-[main.js](electron/main.js) serves `dist-electron/` at `app://coastline/`. The renderer is sandboxed, with a [preload bridge](electron/preload.cjs) for fullscreen, Escape, and the update notice. PWA installation and service worker scripts are disabled in Electron. External links open in the system browser. The update check runs only in packaged builds, and the tests turn it off.
-
-Web changes reach the desktop app on the next build. If asset paths or extensions change, check the protocol handler and MIME table. If PWA script names change, update `WEB_ONLY_SCRIPTS`. The manifest supplies app metadata; `package.json` supplies the version. Regenerate the desktop icon after changing the favicon.
-
-Check the current source:
-
-```sh
-npm run test:electron -- --build
-```
-
-Check a packaged app:
+## Build local packages
 
 ```sh
 npm run electron:pack
+npm run electron:build:win
+npm run electron:build:linux
+npm run electron:build:mac
+```
+
+Packages are written to `release/`. Build the target platform on a suitable host. Windows produces an installer and portable executable, Linux an AppImage, and macOS DMG/ZIP packages. These are unsigned local builds. On Linux, make the AppImage executable before launching; it can also be added as a non-Steam game.
+
+The desktop icon comes from `public/favicon.svg`. Regenerate it with `npm run electron:icons` after editing the mark.
+
+## Check the shell
+
+```sh
+npm run test:electron -- --build
 npm run test:electron -- --packaged
 ```
 
-These tests cover loading, the chunk worker, storage, controls, fullscreen, and route switching. Reports and screenshots go to `.artifacts/electron/`. Pass `--windowed` to test that startup option. The tests use the installed Electron package and don't need a separate browser download.
+The smoke check launches Electron, verifies the local renderer, driving, city settings, fullscreen, and isolation from browser-only installation helpers. Reports and screenshots go to `.artifacts/electron/`.
 
-## Troubleshooting
+## Releases
 
-- **Missing web build:** run `npm run electron:web`, or use `npm run electron:dev`.
-- **Black window:** open DevTools with F12 and check for WebGL errors. Try `--software-gl` to check whether the GPU is the cause.
-- **Electron prints a Node version:** unset `ELECTRON_RUN_AS_NODE`, or use the repo's launch scripts, which remove it.
-- **Linux sandbox error:** try `--no-sandbox` if the system blocks user namespaces.
-- **Missing FUSE:** run `./Coastline-*.AppImage --appimage-extract`, then `squashfs-root/coastline`.
-- **macOS still blocks the app:** for the downloaded app in `/Applications`, run `xattr -cr /Applications/Coastline.app`.
-- **Windows packaging fails with `EPERM` during rename:** use the repo's build scripts and config, which stage Electron by copying.
-- **No sound:** sound starts off. Press M or enable it in the pause menu.
+There is no Citydriver release destination configured yet. The shell has no updater and makes no requests to the original game's release feed. The builder uses `publish: null`; npm packaging commands also pass `--publish never`. The desktop GitHub workflow runs manually and uploads build artifacts only.

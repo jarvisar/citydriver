@@ -5,6 +5,8 @@ import { FirstPersonCamera } from './first-person-camera.js';
 import { AmbientOcclusion } from './ambient-occlusion.js';
 import { Graphics, renderScale } from './graphics.js';
 import { XRCameraRig } from './xr-camera.js';
+import { sampleCityWeather } from './world/city-weather.js';
+import { CITY_BLOCK, DISTANT_CITY_RADIUS } from './world/city-grid.js';
 
 // How fast the overhead views close on the car, per second. Ground is what the
 // player reads as responsiveness, so it settles in about an eighth of a second;
@@ -71,23 +73,23 @@ export function createRendering(canvas, graphics = new Graphics()) {
   const views = [{ height: 235, label: 'Scenic view' }, { height: 165, label: 'Medium view' }, { height: 115, label: 'Close view' }, { height: 75, label: 'Extra close view' }, { height: 115, label: 'Third-person view', thirdPerson: true }, { height: 115, label: 'First-person view', firstPerson: true }];
   const activeCamera = () => views[view].firstPerson ? firstPerson.camera : views[view].thirdPerson ? thirdPerson.camera : camera;
   let initialized = false; let view = touchScreen.matches ? 2 : 1; let viewHeight = views[view].height; let previousOrigin = 0;
-  let snowy = false;
-  let journey = 'coast';
-  const fogProfiles = {
-    coast: { color: '#b9def3', near: 600, far: 1150, thirdNear: 170, thirdFar: 300 },
-    desert: { color: '#dab49b', near: 460, far: 860, thirdNear: 210, thirdFar: 350 },
-    snow: { color: '#243949', near: 340, far: 760, thirdNear: 190, thirdFar: 330 },
-    jungle: { color: '#9ab89a', near: 320, far: 780, thirdNear: 110, thirdFar: 250 },
-    plains: { color: '#e9b360', near: 500, far: 1000, thirdNear: 200, thirdFar: 360 },
-    city: { color: new THREE.Color('#aab4bc').multiplyScalar(.9), near: 470, far: 900, thirdNear: 130, thirdFar: 330 },
-  };
+  let weatherFog = null;
+  const weatherSun = new THREE.Vector3();
+  const cityFog = { color: '#c9dbe2', near: 390, far: 780, thirdNear: 190, thirdFar: 420 };
   function updateFog() {
-    const profile = fogProfiles[journey];
+    const profile = weatherFog ?? cityFog;
     // Keep the miniature views' atmosphere; fade distant driving-view scenery.
     // Matching the sky exactly lets fully faded terrain disappear without a seam.
     if (activeCamera().isPerspectiveCamera) {
       scene.fog.color.copy(scene.background);
-      scene.fog.near = profile.thirdNear; scene.fog.far = profile.thirdFar;
+      // Fog depth is measured along the camera, so a wide lens can see much
+      // farther at the corners. Keep its entire far plane inside the distant
+      // city ring, with room for the chase camera behind the car.
+      const loadedDistance = graphics.settings.chunks.ahead >= 5 ? 310 : 205;
+      const lens = activeCamera(), slope = Math.tan(THREE.MathUtils.degToRad(lens.getEffectiveFOV()) / 2);
+      const horizonDistance = (CITY_BLOCK * DISTANT_CITY_RADIUS - 20) / Math.hypot(1, slope, slope * lens.aspect);
+      scene.fog.far = Math.min(profile.thirdFar, loadedDistance, horizonDistance);
+      scene.fog.near = weatherFog ? Math.min(profile.thirdNear, scene.fog.far * .5) : profile.thirdNear;
     } else {
       scene.fog.color.set(profile.color);
       scene.fog.near = profile.near; scene.fog.far = profile.far;
@@ -98,13 +100,13 @@ export function createRendering(canvas, graphics = new Graphics()) {
   function resize() {
     const width = window.innerWidth, height = window.innerHeight;
     const aspect = width / height;
-    // The alpine road sits high above its lake. Portrait needs room for both
-    // elevations; landscape already has that room across the diagonal view.
-    const size = viewHeight * (aspect < 1 ? (snowy ? 1.12 : 1.12) : 1);
+    // Portrait leaves a little more room ahead for the surrounding streets.
+    const size = viewHeight * (aspect < 1 ? 1.12 : 1);
     camera.left = -size * aspect / 2; camera.right = size * aspect / 2; camera.top = size / 2; camera.bottom = -size / 2; camera.updateProjectionMatrix();
     thirdPerson.resize(aspect);
     firstPerson.resize(aspect);
-    if (initialized) fitSunShadow(activeCamera(), sun, journey === 'jungle' ? sun.target.position.y : 0, previousOrigin);
+    updateFog();
+    if (initialized) fitSunShadow(activeCamera(), sun, 0, previousOrigin);
   }
   function update(car, dt, origin) {
     followedCar = car;
@@ -126,76 +128,55 @@ export function createRendering(canvas, graphics = new Graphics()) {
     // Shorten the look-ahead in close view so the car stays onscreen in portrait layouts.
     const framing = Math.min(1, viewHeight / 165);
     target.copy(follow).addScaledVector(lookAhead, framing);
-    if (snowy) { target.y -= 14 * framing; target.z += 18 * framing; }
     if (touchScreen.matches || window.innerWidth < window.innerHeight) {
       // Ease the desktop framing slightly toward center without changing vertical look-ahead.
       const lateralOffset = framingOffset.copy(target).sub(follow).dot(cameraRight);
       target.addScaledVector(cameraRight, -lateralOffset * .30);
     }
-    // Fixed ocean-side azimuth and ~36° elevation preserve the reference's miniature view.
+    // A fixed azimuth and elevation keep the miniature city easy to read.
     camera.position.copy(target).add(cameraOffset); camera.lookAt(target);
     camera.userData.focusDistance = cameraOffset.length();
     if (views[view].thirdPerson) { thirdPerson.update(car, dt); target.copy(car.position); }
     if (views[view].firstPerson) { firstPerson.update(car, dt); target.copy(car.position); }
     sun.position.copy(target).add(sunOffset); sun.target.position.copy(target);
-    fitSunShadow(activeCamera(), sun, journey === 'jungle' ? sun.target.position.y : 0, origin);
+    fitSunShadow(activeCamera(), sun, 0, origin);
   }
   // Zoom only changes the projection; resizing the canvas every zoom frame reallocates its buffers.
   window.addEventListener('resize', () => { graphics.suspend(); resizeCanvas(); resize(); }); resize();
-  function setJourney(id) {
-    journey = fogProfiles[id] ? id : 'coast';
-    snowy = id === 'snow';
+  // The launcher still calls this when starting or resetting the city.
+  function setJourney() {
+    weatherFog = null;
+    setWeather(sampleCityWeather(0, 'clear'), 0);
     resize();
-    if (id === 'snow') {
-      scene.background.set('#111f2b'); updateFog();
-      sky.color.set('#91afca'); sky.groundColor.set('#2b3b4c'); sky.intensity = .72;
-      sun.color.set('#bbd1ea'); sun.intensity = 1.16; sunOffset.set(-170, 190, -80);
-      renderer.toneMappingExposure = .91;
-      return;
-    }
-    if (id === 'jungle') {
-      // Light filtered through a canopy: a weak, green-tinted sun almost
-      // overhead, so the emergent crowns shade the road, and a strong green bounce.
-      scene.background.set('#a9c4a2'); updateFog();
-      sky.color.set('#c4dcb0'); sky.groundColor.set('#2f4d28'); sky.intensity = 1.75;
-      sun.color.set('#eef2c4'); sun.intensity = 1.35; sunOffset.set(-55, 245, 40);
-      renderer.toneMappingExposure = .9;
-      return;
-    }
-    if (id === 'plains') {
-      // Golden hour over open country: the sun sits a little over twenty
-      // degrees up, so every bale, post and tree lays a long shadow across the
-      // fields. A sun that low puts much less light on flat ground than a high
-      // one does, so it burns brighter than the noon journeys' to keep the
-      // crops lit, and the sky fill stays cool: it is the distance between a
-      // warm light and a cool shade that reads as gold, rather than everything
-      // alike behind a yellow filter.
-      scene.background.set('#eeb85e'); updateFog();
-      sky.color.set('#d5dbd0'); sky.groundColor.set('#8b7444'); sky.intensity = 1.12;
-      sun.color.set('#ffc368'); sun.intensity = 3.45; sunOffset.set(-188, 92, 127);
-      renderer.toneMappingExposure = .98;
-      return;
-    }
-    if (id === 'city') {
-      // A daytime storm: a grey sky does most of the lighting, and a weak,
-      // cool sun keeps the facets readable with only faint shadows.
-      scene.background.set('#adb7bf').multiplyScalar(.9); updateFog();
-      sky.color.set('#d8e0e6'); sky.groundColor.set('#5c6369'); sky.intensity = 2;
-      sun.color.set('#e2e9ef'); sun.intensity = 1.3; sunOffset.set(-150, 210, 110);
-      renderer.toneMappingExposure = .52;
-      return;
-    }
-    const desert = id === 'desert';
-    // Clear coastal daylight: blue sky fill and a near-neutral sun keep the
-    // ocean cyan and separate warm rock faces from cool, deeper shadows.
-    scene.background.set(desert ? '#dfb399' : '#b5dff5'); updateFog();
-    sky.color.set(desert ? '#e5d8d0' : '#c4e5ff'); sky.groundColor.set(desert ? '#79635a' : '#365544');
-    sky.intensity = desert ? 1.27 : 1.12;
-    sun.color.set(desert ? '#ffe0bc' : '#fff4df'); sun.intensity = desert ? 2.45 : 2.85;
-    sunOffset.set(...(desert ? [-170, 150, 120] : [-145, 230, 95]));
-    renderer.toneMappingExposure = desert ? .92 : 1.02;
   }
-  setJourney('coast');
+  setJourney();
+  function setWeather(state, dt = 0) {
+    if (!state) return;
+    // Weather already changes gradually with the simulation clock. A short
+    // render fade also keeps camera switches and lighting adjustments soft;
+    // a paused redraw (dt=0) displays the selected conditions immediately.
+    const blend = !weatherFog || dt <= 0 ? 1 : 1 - Math.exp(-Math.min(dt, 1) * 4);
+    weatherFog ??= { color: new THREE.Color(), near: state.fogNear, far: state.fogFar, thirdNear: state.drivingFogNear, thirdFar: state.drivingFogFar };
+    scene.background.lerp(state.background, blend);
+    weatherFog.color.lerp(state.fogColor, blend);
+    weatherFog.near += (state.fogNear - weatherFog.near) * blend;
+    weatherFog.far += (state.fogFar - weatherFog.far) * blend;
+    weatherFog.thirdNear += (state.drivingFogNear - weatherFog.thirdNear) * blend;
+    weatherFog.thirdFar += (state.drivingFogFar - weatherFog.thirdFar) * blend;
+    sky.color.lerp(state.skyColor, blend);
+    sky.groundColor.lerp(state.groundColor, blend);
+    sky.intensity += (state.skyIntensity + state.flash * .8 - sky.intensity) * blend;
+    sun.color.lerp(state.sunColor, blend);
+    sun.intensity += (state.sunIntensity + state.flash * 1.5 - sun.intensity) * blend;
+    weatherSun.set(state.sunX, state.sunY, state.sunZ);
+    sunOffset.lerp(weatherSun, blend);
+    if (dt <= 0 && initialized) {
+      sun.position.copy(target).add(sunOffset); sun.target.position.copy(target);
+      fitSunShadow(activeCamera(), sun, 0, previousOrigin);
+    }
+    renderer.toneMappingExposure += (state.exposure + state.flash * .12 - renderer.toneMappingExposure) * blend;
+    updateFog();
+  }
   function draw(viewCamera, stereo = false) {
     // Hide the player's exterior for the whole first-person draw, including
     // shadows and AO. Restore it for other views and after render failures.
@@ -223,5 +204,5 @@ export function createRendering(canvas, graphics = new Graphics()) {
   let desktopView;
   function enterVR() { desktopView = view; setView(views.findIndex(view => view.thirdPerson)); }
   function exitVR() { if (desktopView !== undefined) setView(desktopView); desktopView = undefined; }
-  return { renderer, scene, graphics, ambientOcclusion, vrCamera, render, enterVR, exitVR, toggleAO() { return graphics.toggleAmbientOcclusion(); }, get camera() { return activeCamera(); }, update, resize, recordFrame, setJourney, get viewLabel() { return views[view].label; }, toggleView() { return setView((view + 1) % views.length); }, snap() { initialized = false; thirdPerson.snap(); firstPerson.snap(); } };
+  return { renderer, scene, graphics, ambientOcclusion, vrCamera, render, enterVR, exitVR, toggleAO() { return graphics.toggleAmbientOcclusion(); }, get camera() { return activeCamera(); }, update, resize, recordFrame, setJourney, setWeather, get viewLabel() { return views[view].label; }, toggleView() { return setView((view + 1) % views.length); }, snap() { initialized = false; thirdPerson.snap(); firstPerson.snap(); } };
 }

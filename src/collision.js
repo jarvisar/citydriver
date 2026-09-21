@@ -27,8 +27,9 @@ export function postContact(car, post) {
 export function collideScenery(player, chunks, dt) {
   const p = player.groundedPosition, halfWidth = player.spec.width / 2, halfLength = player.spec.length / 2;
   const reach = Math.hypot(halfWidth, halfLength), center = Math.floor(player.s / CHUNK_LENGTH);
-  for (let index = center - 1; index <= center + 1; index++) {
-    const colliders = chunks.get(index)?.features?.colliders;
+  const nearby = player.route.grid ? chunks.values() : [chunks.get(center - 1), chunks.get(center), chunks.get(center + 1)];
+  for (const chunk of nearby) {
+    const colliders = chunk?.features?.colliders;
     if (!colliders) continue;
     for (const solid of colliders) {
       if (Math.abs(solid.z - p.z) > reach + solid.reach || Math.abs(solid.x - p.x) > reach + solid.reach) continue;

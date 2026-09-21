@@ -3,9 +3,7 @@ import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { touchDrivingInput } from '../src/touch-stick.js';
 import { DrivingController } from '../src/vehicle.js';
-import { coastalDrivingRoute } from '../src/world/route.js';
-import { desertDrivingRoute } from '../src/world/desert-route.js';
-import { snowDrivingRoute } from '../src/world/snow-route.js';
+import { citydriverRoute } from '../src/world/city-grid.js';
 
 function cameraAt(offset, aspect) {
   const camera = new THREE.OrthographicCamera(-80 * aspect, 80 * aspect, 80, -80, 1, 1200);
@@ -14,8 +12,8 @@ function cameraAt(offset, aspect) {
 }
 const directions = [[0, 1], [0, -1], [1, 0], [-1, 0], [1, 1], [-1, 1], [1, -1], [-1, -1]];
 
-test('touch travel follows screen direction across cameras, slopes and bends', () => {
-  for (const route of [coastalDrivingRoute, desertDrivingRoute, snowDrivingRoute]) {
+test('touch travel follows screen direction across city cameras and distant coordinates', () => {
+  for (const route of [citydriverRoute]) {
     for (const offset of [[-220, 245, 260], [260, 245, 220]]) {
       for (const aspect of [390 / 844, 844 / 390]) {
         const camera = cameraAt(offset, aspect);
@@ -59,7 +57,7 @@ test('touch direction is independent of prior car heading and reverse speed', ()
   }
 });
 
-test('touch keeps roadside limits and the car grounded', () => {
+test('touch keeps the car grounded throughout an unbounded city', () => {
   const camera = cameraAt([-220, 245, 260], 1), car = new DrivingController();
   for (let i = 0; i < 500; i++) {
     car.update(1 / 60, { touchDrive: touchDrivingInput({ x: 1, y: 0 }, camera, car.route, car.s, car.u) });

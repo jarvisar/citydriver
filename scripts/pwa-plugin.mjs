@@ -3,10 +3,10 @@ import { readFile, readdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 // Keep installation support independent of the scene and its HTML.
-export function coastlinePwa() {
+export function citydriverPwa() {
   let config;
   return {
-    name: 'coastline-pwa',
+    name: 'citydriver-pwa',
     configResolved(resolved) { config = resolved; },
     transformIndexHtml() {
       const base = config.base;
@@ -14,7 +14,7 @@ export function coastlinePwa() {
         { tag: 'link', attrs: { rel: 'manifest', href: `${base}manifest.webmanifest` } },
         { tag: 'link', attrs: { rel: 'apple-touch-icon', sizes: '180x180', href: `${base}icons/apple-touch-icon.png` } },
         { tag: 'meta', attrs: { name: 'apple-mobile-web-app-capable', content: 'yes' } },
-        { tag: 'meta', attrs: { name: 'apple-mobile-web-app-title', content: 'Coastline' } },
+        { tag: 'meta', attrs: { name: 'apple-mobile-web-app-title', content: 'Citydriver' } },
         ...(config.command === 'build' ? [{
           tag: 'script', attrs: { src: `${base}pwa-register.js`, defer: true }, injectTo: 'body',
         }] : []),

@@ -1,11 +1,5 @@
 // Resolve once per page load, before any terrain or shared scenery is built.
 // An explicit seed makes a particular drive reproducible for testing or sharing.
-export let workerSeed;
-export function initializeWorkerSeed(seed) {
-  if (!Number.isInteger(seed) || seed < 0 || seed > 0xffffffff || workerSeed !== undefined) throw new Error('Invalid worker seed initialization');
-  workerSeed = seed;
-}
-
 export function resolveWorldSeed(search = '', randomSeed = freshSeed) {
   const value = new URLSearchParams(search).get('seed');
   if (value !== null && /^\d{1,10}$/.test(value)) {

@@ -9,10 +9,10 @@ const browser = await chromium.launch(process.env.CHROME_PATH
   : process.platform === 'win32' ? { executablePath: 'C:/Program Files/Google/Chrome/Application/chrome.exe' } : {});
 try {
   const page = await browser.newPage({ viewport: { width: 393, height: 851 } });
-  await page.route('https://coastline.test/', route => route.fulfill({ contentType: 'text/html', body:
-    '<section id="welcome"><button id="start">Let’s drive</button></section><div id="pause-overlay" hidden></div>' }));
+  await page.route('https://citydriver.test/', route => route.fulfill({ contentType: 'text/html', body:
+    '<section id="welcome"><button id="start">Let’s drive</button></section><div id="pause-overlay" hidden><div class="pause-settings"></div></div>' }));
   async function setup() {
-    await page.goto('https://coastline.test/');
+    await page.goto('https://citydriver.test/');
     await page.addStyleTag({ content: css });
     await page.addScriptTag({ content: script });
     assert.equal(await page.locator('#welcome button').count(), 1, 'The menu has one main action');
@@ -21,7 +21,7 @@ try {
     await page.evaluate(() => { document.querySelector('#pause-overlay').hidden = false; });
   }
   await setup();
-  const button = page.getByRole('button', { name: 'Install Coastline' });
+  const button = page.getByRole('button', { name: 'Install Citydriver' });
   const help = page.locator('#pwa-install-help');
   await button.click();
   assert.match(await help.textContent(), /browser menu/);
@@ -52,14 +52,14 @@ try {
   await page.evaluate(() => window.dispatchEvent(new Event('appinstalled')));
   assert.equal(await button.isVisible(), false, 'Installed apps hide the option');
 
-  await page.goto('https://coastline.test/');
+  await page.goto('https://citydriver.test/');
   await page.evaluate(() => Object.defineProperty(navigator, 'userAgent', { value: 'iPhone' }));
   await page.addScriptTag({ content: script });
   await page.evaluate(() => { document.querySelector('#pause-overlay').hidden = false; });
   await button.click();
   assert.match(await help.textContent(), /Safari, tap Share/);
   for (const mode of ['standalone', 'fullscreen']) {
-    await page.goto('https://coastline.test/');
+    await page.goto('https://citydriver.test/');
     await page.evaluate(mode => {
       const original = window.matchMedia.bind(window);
       window.matchMedia = query => query.includes(`(display-mode: ${mode})`) ? { matches: true } : original(query);

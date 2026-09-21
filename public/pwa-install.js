@@ -8,7 +8,7 @@
   let installPrompt;
   const container = document.createElement('div');
   container.className = 'pwa-install';
-  container.innerHTML = '<button type="button" class="pwa-install-button" aria-controls="pwa-install-help" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3v12m-4-4 4 4 4-4M5 15v5h14v-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Install Coastline</span></button><p id="pwa-install-help" class="pwa-install-help" role="status" hidden></p>';
+  container.innerHTML = '<button type="button" class="pwa-install-button" aria-controls="pwa-install-help" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3v12m-4-4 4 4 4-4M5 15v5h14v-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Install Citydriver</span></button><p id="pwa-install-help" class="pwa-install-help" role="status" hidden></p>';
   parent.append(container);
   const button = container.querySelector('button');
   const help = container.querySelector('p');

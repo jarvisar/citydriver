@@ -6,6 +6,7 @@ import './car.css';
 import './menu.css';
 import './audio/mixer.css';
 import './pause.css';
+import './city-ui.css';
 import { createRendering } from './rendering.js';
 import { Graphics } from './graphics.js';
 import { JOURNEYS } from './journeys.js';
@@ -14,12 +15,14 @@ import { carArt } from './car-art.js';
 import { PAINTS, DEFAULT_PAINT, DEFAULT_PAINT_NAME, paintName, readPaint } from './car-paint.js';
 import { SEED, journeyStart } from './world/route.js';
 import { freshSceneStart } from './world/generation.js';
-import { ChunkWorker } from './world/chunk-source.js';
+import { CityWeather } from './world/city-weather.js';
+import { cityCell, cityDistrict } from './world/city-grid.js';
 import { setResidentWindow } from './world/resident.js';
 import { DrivingController } from './vehicle.js';
-import { Traffic, TRAFFIC_CRUISE_SPEED } from './traffic.js';
+import { CityTraffic as Traffic } from './city-traffic.js';
+import { TRAFFIC_CRUISE_SPEED } from './traffic.js';
 import { collideScenery } from './collision.js';
-import { Autodrive } from './autodrive.js';
+import { CityAutodrive as Autodrive } from './city-autodrive.js';
 import { Input } from './input.js';
 import { touchDrivingInput, thirdPersonDrivingInput } from './touch-stick.js';
 import { DriveAudio } from './audio.js';
@@ -39,14 +42,14 @@ const MENU_CRUISE_SPEED = TRAFFIC_CRUISE_SPEED * 1.4;
 // A chooser's ring holds its cards and paint chips; the pause screen's holds
 // resume, the garage and every driving, sound and graphics setting.
 const MENU_CARDS = '[data-journey], [data-car], [data-paint]';
-const PAUSE_CONTROLS = '#resume, #change-car, #autodrive, #traffic, #sound, #audio-mixer-toggle, #audio-mixer button, #audio-mixer input, #fullscreen, #graphics-toggle, [data-quality], #pixel-density, #soft-shading, #enter-vr-pause, .update-entry, .pwa-install-button';
+const PAUSE_CONTROLS = '#resume, #change-car, #autodrive, #traffic, #city-weather, #sound, #audio-mixer-toggle, #audio-mixer button, #audio-mixer input, #fullscreen, #graphics-toggle, [data-quality], #pixel-density, #soft-shading, #enter-vr-pause, .update-entry, .pwa-install-button';
 const mileageFormat = new Intl.NumberFormat('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 let paused = false, started = false, time = 0, hudTime = 0;
 const frameClock = new FrameClock();
 let toastTimer; let sceneReady = false;
 // The chosen car and scene outlive the visit; positions and mileage do not.
-const carStorageKey = 'coastline-car';
-const journeyStorageKey = 'coastline-journey';
+const carStorageKey = 'citydriver-car';
+const journeyStorageKey = 'citydriver-journey';
 let carId = DEFAULT_CAR;
 try { const saved = localStorage.getItem(carStorageKey); if (saved && CARS[saved]) carId = saved; } catch { /* Storage is optional. */ }
 // One colour dresses the whole garage and follows the player from car to car.
@@ -56,7 +59,6 @@ let paint = null;
 const toast = message => { $('#toast').textContent = message; $('#toast').classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => $('#toast').classList.remove('show'), 2200); };
 
 async function boot() {
-  let chunkWorker;
   try {
     // `?ao=0` still forces the soft shading off, whatever the quality level is.
     const graphics = new Graphics({ ambientOcclusion: new URLSearchParams(window.location.search).get('ao') === '0' ? false : null });
@@ -87,10 +89,11 @@ async function boot() {
     let needsRender = true;
     window.addEventListener('resize', () => { needsRender = true; });
     document.addEventListener('visibilitychange', () => { if (!document.hidden) needsRender = true; });
-    let journey = 'coast';
+    let journey = 'city';
     try { const saved = localStorage.getItem(journeyStorageKey); if (saved && Object.hasOwn(JOURNEYS, saved)) journey = saved; } catch { /* Storage is optional. */ }
-    chunkWorker = new ChunkWorker();
-    let world = new JOURNEYS[journey].World(scene, chunkWorker.source(journey));
+    let world = new JOURNEYS[journey].World(scene);
+    const weather = new CityWeather(scene);
+    try { weather.setMode(localStorage.getItem('citydriver-weather') ?? 'auto', { immediate: true }); } catch { /* Storage is optional. */ }
     let changingJourney = true, journeyWasPaused = false;
     const savedJourneys = Object.fromEntries(Object.entries(JOURNEYS).map(([id, data]) => [id, journeyStart(Number(data.routeNumber))]));
     const vehicle = new DrivingController(JOURNEYS[journey].route, savedJourneys[journey], DEFAULT_CAR); const audio = new DriveAudio();
@@ -99,7 +102,7 @@ async function boot() {
     // out. The hidden code only changes the paint.
     vehicle.toggleFreeDriving();
     vehicle.setAppearance(journey);
-    vehicle.setLights(journey === 'snow' ? 1 : journey === 'city' ? .35 : 0);
+    vehicle.setLights(weather.state.lightLevel);
     rendering.setJourney(journey); audio.setJourney(journey);
     const journeyDialog = $('#journey-dialog'), carDialog = $('#car-dialog'), pauseOverlay = $('#pause-overlay');
     const openChooser = () => [journeyDialog, carDialog].find(dialog => dialog.open) ?? null;
@@ -126,7 +129,7 @@ async function boot() {
       if (autodrive.enabled) revealTouchControls();
     }, { capture: true, passive: true });
     $('#autodrive').addEventListener('click', () => action('autodrive'));
-    const trafficStorageKey = 'coastline-traffic';
+    const trafficStorageKey = 'citydriver-traffic';
     try { traffic.setEnabled(localStorage.getItem(trafficStorageKey) !== 'false', vehicle); } catch { /* Storage is optional. */ }
     primeMenuDrive();
     $('#traffic').setAttribute('aria-pressed', String(traffic.enabled));
@@ -170,9 +173,9 @@ async function boot() {
       document.body.dataset.journey = journey;
       $('.location-title').textContent = data.label;
       $('.location svg text').textContent = data.routeNumber;
-      $('#menu-route').textContent = data.label;
+      $('#menu-route').textContent = 'AN ENDLESS CITY';
       $('#scene').setAttribute('aria-label', data.canvas);
-      document.querySelector('meta[name="theme-color"]').content = { coast: '#c2e7e8', desert: '#efc692', snow: '#111d30', jungle: '#22402a', plains: '#ecd29a', city: '#b3bcc4' }[journey];
+      document.querySelector('meta[name="theme-color"]').content = '#263b47';
       document.querySelectorAll('button[data-journey]').forEach(button => button.setAttribute('aria-current', String(button.dataset.journey === journey)));
     }
     function buildCarCards() {
@@ -283,9 +286,9 @@ async function boot() {
       let nextWorld;
       try {
         await new Promise(resolve => setTimeout(resolve, 320));
-        nextWorld = new JOURNEYS[id].World(scene, chunkWorker.source(id));
-        await nextWorld.chunkSource.prepare(nextState.s);
-        nextWorld.update(nextState.s);
+        nextWorld = new JOURNEYS[id].World(scene);
+        nextWorld.update(nextState.s, 2.4);
+        while (nextWorld.pending.length) nextWorld.update(nextState.s, 2.4);
         if (renderer.extensions.has('KHR_parallel_shader_compile')) await renderer.compileAsync(scene, rendering.camera);
         else renderer.compile(scene, rendering.camera);
         world.dispose(); world = nextWorld; journey = id;
@@ -294,12 +297,14 @@ async function boot() {
         vehicle.setRoute(JOURNEYS[id].route, nextState);
         autodrive.reset();
         vehicle.setAppearance(id);
-        vehicle.setLights(id === 'snow' ? 1 : id === 'city' ? .35 : 0);
+        vehicle.setLights(weather.state.lightLevel);
         traffic.reset(vehicle.route, vehicle.s, id); traffic.render(1, world.origin);
         primeMenuDrive();
         rendering.setJourney(id); audio.setJourney(id); updateJourneyUi(); paintCards(); updatePaintUi();
         vehicle.render(1, world.origin);
         rendering.snap(); rendering.update(vehicle.car, 1, world.origin); world.animate(time, vehicle);
+        weather.update(time, vehicle, world.origin); rendering.setWeather(weather.state, 0);
+        world.setWetness(weather.state.wetness); vehicle.setLights(weather.state.lightLevel); traffic.models.setLights(weather.state.lightLevel);
         updateHud();
         if (renderer.xr.isPresenting) needsRender = true;
         else rendering.render();
@@ -391,14 +396,10 @@ async function boot() {
         else $('#resume').focus();
         return;
       }
-      if (name === 'nextJourney') {
-        const journeys = Object.keys(JOURNEYS);
-        await changeJourney(journeys[(journeys.indexOf(journey) + 1) % journeys.length]);
-        return;
-      }
-      if (name === 'journey') { openJourneys(); return; }
+      if (name === 'nextJourney' || name === 'journey') return;
       if (name === 'car') { openCars(); return; }
       if (name === 'autodrive') {
+        if (!autodrive.enabled && !autodrive.canStart(vehicle)) { toast('Join a street to start autodrive'); return; }
         const enabled = autodrive.toggle();
         revealTouchControls();
         // D-pad Up also begins the hidden code, so this shortcut must keep its progress.
@@ -482,7 +483,7 @@ async function boot() {
       if (event.pointerType !== 'touch') action('nextJourney');
     });
     let fullscreenPending = false;
-    const desktop = window.coastlineDesktop;
+    const desktop = window.citydriverDesktop;
     let desktopFullscreen = false;
     const fullscreenDisplay = window.matchMedia('(display-mode: fullscreen)');
     function updateFullscreenUi() {
@@ -578,7 +579,7 @@ async function boot() {
     window.addEventListener('focus', () => audio.setHidden(hidden()));
     window.addEventListener('pointerdown', () => audio.unlock(), { capture: true, passive: true });
     window.addEventListener('keydown', () => audio.unlock(), { capture: true });
-    window.addEventListener('pagehide', event => { audio.setHidden(true); if (!event.persisted) { chunkWorker.dispose(); void audio.dispose().catch(() => {}); } });
+    window.addEventListener('pagehide', event => { audio.setHidden(true); if (!event.persisted) { world.dispose(); weather.dispose(); traffic.dispose(); void audio.dispose().catch(() => {}); } });
     window.addEventListener('pageshow', () => { audio.setHidden(document.hidden); needsRender = true; });
     $('#scene').addEventListener('webglcontextlost', event => { event.preventDefault(); setPaused(true); toast('Graphics paused. Reload to restart the game.'); });
     $('#scene').addEventListener('webglcontextrestored', () => { needsRender = true; });
@@ -612,12 +613,26 @@ async function boot() {
     softShading.addEventListener('click', () => action('ambientOcclusion'));
     pixelDensity.addEventListener('input', () => graphics.setDensity(Number(pixelDensity.value) / 100));
     const hud = { distance: $('#distance') };
+    const weatherSelect = $('#city-weather');
+    weatherSelect.value = weather.mode;
+    weatherSelect.addEventListener('change', () => {
+      weather.setMode(weatherSelect.value, { immediate: paused });
+      weather.update(time, vehicle, world.origin); rendering.setWeather(weather.state, 0);
+      world.setWetness(weather.state.wetness); vehicle.setLights(weather.state.lightLevel); traffic.models.setLights(weather.state.lightLevel);
+      try { localStorage.setItem('citydriver-weather', weather.mode); } catch { /* Storage is optional. */ }
+      updateHud(); needsRender = true;
+    });
     function updateHud() {
       // Physics uses meters; convert only the displayed measurement. The drive
       // itself shows nothing, so this is read on the pause screen.
       const distance = mileageFormat.format(vehicle.distance / 1609.344);
       // Replacing unchanged text still invalidates layout, including while paused.
       if (hud.distance.textContent !== distance) hud.distance.textContent = distance;
+      const degrees = ((vehicle.heading * 180 / Math.PI) % 360 + 360) % 360;
+      $('#city-heading').textContent = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'][Math.round(degrees / 45) % 8];
+      const cell = cityCell(vehicle.s, vehicle.u);
+      $('#city-location').textContent = `${cityDistrict(vehicle.s, vehicle.u)} · ${cell.ix}, ${cell.iz}`;
+      $('#weather-label').textContent = weather.state.label;
     }
     function updateViewUi() {
       $('#view').title = `${rendering.viewLabel} · Change camera (V)`;
@@ -647,7 +662,7 @@ async function boot() {
       const modes = ['auto', 'high', 'balanced', 'smooth', 'basic'];
       return { id: 'pause', title: 'Paused', items: [
         item('Resume drive', 'pause'), item(`Camera: ${rendering.viewLabel}`, 'view'),
-        item('Change route', 'journey'), item('Garage & paint', 'car'),
+        item('Garage & paint', 'car'),
         item(`Autodrive: ${autodrive.enabled ? 'on' : 'off'}`, 'autodrive'),
         { label: `Traffic: ${traffic.enabled ? 'on' : 'off'}`, activate: () => $('#traffic').click() },
         item(`Sound: ${$('#sound').getAttribute('aria-pressed') === 'true' ? 'on' : 'off'}`, 'sound'),
@@ -679,12 +694,14 @@ async function boot() {
       const dt = frameClock.dt;
       if (running) {
         time += dt;
-        world.update(vehicle.s); vehicle.render(frameClock.alpha, world.origin);
+        world.update(vehicle.s, vehicle.u); vehicle.render(frameClock.alpha, world.origin);
         traffic.render(frameClock.alpha, world.origin);
         rendering.update(vehicle.car, dt, world.origin); world.animate(time, vehicle);
+        weather.update(time, vehicle, world.origin); rendering.setWeather(weather.state, dt);
+        world.setWetness(weather.state.wetness); vehicle.setLights(weather.state.lightLevel); traffic.models.setLights(weather.state.lightLevel);
       }
       soundScene.interior = rendering.viewLabel === 'First-person view';
-      soundScene.lightning = world.flash?.intensity ?? 0;
+      soundScene.lightning = weather.flash; soundScene.rain = weather.state.rain; soundScene.wetness = weather.state.wetness;
       const cameraMatrix = (vr.active ? rendering.vrCamera.camera : rendering.camera).matrixWorld.elements;
       soundScene.heading = Math.atan2(cameraMatrix[2], cameraMatrix[0]);
       audio.update(vehicle.audioTelemetry, dt, false, soundScene);
@@ -705,8 +722,10 @@ async function boot() {
       }
       updateFPS(timestamp, rendered);
     }
-    await world.chunkSource.prepare(vehicle.s);
-    world.update(vehicle.s);
+    world.update(vehicle.s, vehicle.u);
+    while (world.pending.length) world.update(vehicle.s, vehicle.u);
+    weather.update(time, vehicle, world.origin); rendering.setWeather(weather.state, 0);
+    world.setWetness(weather.state.wetness); vehicle.setLights(weather.state.lightLevel); traffic.models.setLights(weather.state.lightLevel);
     buildCarCards(); buildPaintSwatches(); updateCarUi();
     vehicle.render(1, world.origin); traffic.render(1, world.origin); rendering.update(vehicle.car, 1, world.origin); updateHud(); updateJourneyUi(); updateViewUi(); updateGraphicsUi();
     if (renderer.extensions.has('KHR_parallel_shader_compile')) await renderer.compileAsync(scene, rendering.camera);
@@ -715,7 +734,7 @@ async function boot() {
     renderer.setAnimationLoop(frame);
     void vr.detect();
     // Development-only inspection surface for automated driving and streaming checks.
-    if (import.meta.env.DEV) window.__coastline = { seed: SEED, chunkWorker, vehicle, traffic, audio, graphics, vr, get world() { return world; }, rendering, input, action, changeJourney, chooseCar, applyPaint, get carId() { return carId; }, get paint() { return paint; }, get journey() { return journey; }, get changingJourney() { return changingJourney; }, get paused() { return paused; }, get started() { return started; } };
-  } catch (error) { chunkWorker?.dispose(); console.error('Could not start Coastline:', error); $('#loading').classList.add('loaded'); $('#error').hidden = false; }
+    if (import.meta.env.DEV) window.__citydriver = { seed: SEED, vehicle, traffic, weather, autodrive, audio, graphics, vr, get world() { return world; }, rendering, input, action, changeJourney, chooseCar, applyPaint, get carId() { return carId; }, get paint() { return paint; }, get journey() { return journey; }, get changingJourney() { return changingJourney; }, get paused() { return paused; }, get started() { return started; } };
+  } catch (error) { console.error('Could not start Citydriver:', error); $('#loading').classList.add('loaded'); $('#error').hidden = false; }
 }
 boot();

@@ -9,8 +9,8 @@ import { _electron as electron } from '@playwright/test';
 // Smoke test for the desktop shell. It launches the real Electron app on the
 // production renderer build and checks the few things the wrapper is responsible
 // for: serving the build over app://, keeping the worker and secure-context APIs
-// working, hiding web-only install UI, keyboard driving, fullscreen, and route
-// changes. Screenshots and a JSON report go to .artifacts/electron/.
+// working, hiding web-only install UI, keyboard driving, fullscreen, and city
+// settings. Screenshots and a JSON report go to .artifacts/electron/.
 //
 //   npm run test:electron               build dist-electron/ if missing, test `electron .`
 //   npm run test:electron -- --build    rebuild dist-electron/ first
@@ -19,9 +19,10 @@ import { _electron as electron } from '@playwright/test';
 const root = path.resolve(import.meta.dirname, '..');
 const flags = new Set(process.argv.slice(2));
 const packaged = flags.has('--packaged');
-const softwareGl = flags.has('--software-gl') || process.env.COASTLINE_SOFTWARE_GL === '1';
+const softwareGl = flags.has('--software-gl') || process.env.CITYDRIVER_SOFTWARE_GL === '1';
 const out = path.join(root, '.artifacts', 'electron');
 const userData = path.join(out, 'user-data');
+if (!path.resolve(userData).startsWith(path.resolve(root, '.artifacts') + path.sep)) throw new Error('Test profile must stay in workspace artifacts');
 await rm(userData, { recursive: true, force: true });
 await mkdir(userData, { recursive: true });
 
@@ -53,8 +54,7 @@ const appArgs = ['--seed=4817', ...(flags.has('--windowed') ? ['--windowed'] : [
 const { ELECTRON_RUN_AS_NODE: _ignored, ...env } = process.env;
 const launchOptions = {
   cwd: root,
-  // No update check: a packaged build must not download a release or show a dialog mid-test.
-  env: { ...env, COASTLINE_FULLSCREEN: '', COASTLINE_USER_DATA: userData, COASTLINE_NO_UPDATE: '1' },
+  env: { ...env, CITYDRIVER_FULLSCREEN: '', CITYDRIVER_USER_DATA: userData },
   args: packaged ? appArgs : ['.', ...appArgs],
   ...(packaged ? { executablePath: packagedExecutable() } : {}),
   timeout: 60_000,
@@ -91,20 +91,21 @@ try {
     webgl2: Boolean(document.createElement('canvas').getContext('webgl2')),
     installUi: document.querySelectorAll('.pwa-install, #pwa-install-invitation').length,
     serviceWorkers: 'serviceWorker' in navigator ? (await navigator.serviceWorker.getRegistrations().catch(() => [])).length : 0,
-    storage: (() => { try { localStorage.setItem('coastline-desktop-check', '1'); localStorage.removeItem('coastline-desktop-check'); return true; } catch { return false; } })(),
+    storage: (() => { try { localStorage.setItem('citydriver-desktop-check', '1'); localStorage.removeItem('citydriver-desktop-check'); return true; } catch { return false; } })(),
     journey: document.body.dataset.journey,
     title: document.title,
     pixelRatio: window.devicePixelRatio,
     viewport: [window.innerWidth, window.innerHeight],
   }));
-  check('renderer served over app://', packaged || environment.href.startsWith('app://coastline/'), environment.href);
+  check('renderer served over app://', environment.href.startsWith('app://citydriver/'), environment.href);
   check('seed flag reaches the page', new URL(environment.href).searchParams.get('seed') === '4817');
   check('secure context', environment.secureContext);
   check('WebGL 2 available', environment.webgl2);
   check('web-only install UI suppressed', environment.installUi === 0, environment.installUi);
   check('no service worker registered', environment.serviceWorkers === 0, environment.serviceWorkers);
   check('localStorage works on app://', environment.storage);
-  check('chunk worker running', page.workers().some(worker => /chunk-worker/.test(worker.url())), page.workers().map(worker => worker.url()));
+  check('city scene active', environment.journey === 'city', environment.journey);
+  check('no update destination', await page.evaluate(async () => (await window.citydriverDesktop.getUpdate()) === undefined));
   const initial = await windowState();
   const strictFullscreen = process.platform !== 'linux';
   const fullscreenCheck = (name, condition, detail) => strictFullscreen ? check(name, condition, detail) : condition ? check(name, true) : warn(`${name} (not enforced on Linux CI without a window manager)`, detail);
@@ -172,18 +173,16 @@ try {
   state = await windowState();
   fullscreenCheck('F11 restores the window', !state.fullscreen, state.bounds);
 
-  // Route changes exercise worker streaming for every journey inside the shell.
-  const journeys = await page.evaluate(() => [...document.querySelectorAll('button[data-journey]')].map(button => button.dataset.journey));
-  check('journeys listed', journeys.length >= 3, journeys);
-  for (const expected of [...journeys.slice(1), journeys[0]]) {
-    await page.keyboard.press('KeyN');
-    await page.waitForFunction(id => document.body.dataset.journey === id && !document.querySelector('#journey-transition').classList.contains('active'), expected, { timeout: 60_000 });
-    await page.waitForTimeout(700);
-    await page.screenshot({ path: path.join(out, `${expected}.png`) });
-    check(`switched to ${expected}`, true);
-  }
+  // City-only settings and garage remain available in the local bundle.
   await page.keyboard.press('KeyP');
-  await page.waitForTimeout(300);
+  await page.waitForFunction(() => !document.querySelector('#pause-overlay').hidden);
+  await page.locator('#city-weather').selectOption('night');
+  check('weather setting available', await page.locator('#city-weather').inputValue() === 'night');
+  await page.locator('#change-car').click();
+  check('garage opens', await page.locator('#car-dialog').evaluate(dialog => dialog.open));
+  await page.locator('#close-cars').click();
+  check('route chooser removed', !(await page.locator('#change-journey').isVisible()));
+  await page.screenshot({ path: path.join(out, 'city.png') });
 
   const benign = [/Autofill\./, /DevTools/];
   const errors = consoleErrors.filter(text => !benign.some(pattern => pattern.test(text)));

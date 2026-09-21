@@ -15,12 +15,12 @@ export class SoundDirector {
     const { graph: g, journey, mix } = audio, profile = AMBIENCE[journey];
     if (now >= this.nextWildlife) {
       this.nextWildlife = now + profile.interval[0] + this.random() * (profile.interval[1] - profile.interval[0]);
-      if (mix.ambience > 0) this.wildlife(g, profile.wildlife, now, 1 - state.motion * .45);
+      if (mix.ambience > 0 && (journey !== 'city' || (scene?.rain ?? 0) > .05)) this.wildlife(g, profile.wildlife, now, 1 - state.motion * .45);
     }
     if (scene?.lightning > .05 && now - this.lastLightning > 6) {
       this.lastLightning = now; this.nextThunder = now + 1.4 + this.random() * 1.6;
     }
-    if ((!scene && now >= this.nextWeather) || now >= this.nextThunder) {
+    if (now >= this.nextThunder) {
       this.nextThunder = Infinity;
       this.nextWeather = now + 24 + this.random() * 25;
       if (journey === 'city' && mix.ambience > 0) g.event('weather', { time: now, duration: 4.5, frequency: 140, endFrequency: 65, level: .12, pan: this.random() - .5, attack: .7 });

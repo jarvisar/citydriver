@@ -22,7 +22,7 @@ export class Input {
     window.addEventListener('keydown', e => {
       // Native mixer sliders own their arrow, Home and End keys. Editing a
       // volume must not also accelerate the car or swallow keyboard access.
-      if (e.target.matches?.('input[type="range"]') && !['Escape', 'KeyP', 'KeyM'].includes(e.code)) return;
+      if (e.target.matches?.('input, select, textarea') && !['Escape', 'KeyP'].includes(e.code)) return;
       // Let menu buttons keep their native keyboard activation.
       if (e.target.closest?.('button') && ['Space', 'Enter'].includes(e.code)) return;
       // The keyboard and controller sequences share the same hidden toggle.
@@ -38,12 +38,6 @@ export class Input {
       if (e.code === 'KeyF' && !e.ctrlKey && !e.metaKey && !e.altKey) {
         e.preventDefault();
         if (!e.repeat) onAction('fullscreen');
-        return;
-      }
-      const routeKey = /^(?:Digit([1-6])|Numpad([135]))$/.exec(e.code);
-      if (routeKey && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
-        e.preventDefault();
-        if (!e.repeat) onAction('selectJourney', routeKey[1] || routeKey[2]);
         return;
       }
       if (['KeyC', 'KeyG'].includes(e.code) && !e.ctrlKey && !e.metaKey && !e.altKey) {
@@ -63,7 +57,6 @@ export class Input {
         if (e.code === 'KeyM') onAction('sound');
         if (e.code === 'KeyH' && !e.ctrlKey && !e.metaKey && !e.altKey) onAction('autodrive');
         if (e.code === 'KeyO' && !e.ctrlKey && !e.metaKey && !e.altKey) onAction('ambientOcclusion');
-        if (e.code === 'KeyN' && !e.ctrlKey && !e.metaKey && !e.altKey) onAction('nextJourney');
       }
     });
     window.addEventListener('keyup', e => this.keys.delete(e.code));

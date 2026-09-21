@@ -1,5 +1,5 @@
 ﻿// electron-builder configuration.
-// Name, description, and homepage come from the web app's own metadata so the
+// Name and description come from the web app's own metadata so the
 // desktop packages follow the web app without a second copy to maintain.
 const { execFileSync } = require('node:child_process');
 const { existsSync, mkdirSync, readFileSync, rmSync } = require('node:fs');
@@ -27,7 +27,9 @@ async function electronDist({ platformName, arch, version }) {
   if (platformName === 'win32' && archName === process.arch && existsSync(path.join(local, 'electron.exe'))) return local;
   const electronVersion = version ?? require('electron/package.json').version;
   const name = `electron-v${electronVersion}-${platformName}-${archName}`;
-  const out = path.join(root, 'node_modules', '.cache', 'coastline-electron', name);
+  const cacheRoot = path.resolve(root, 'node_modules', '.cache', 'citydriver-electron');
+  const out = path.resolve(cacheRoot, name);
+  if (path.dirname(out) !== cacheRoot) throw new Error('Electron cache target must stay inside this project');
   try {
     if (!existsSync(path.join(out, 'version'))) {
       const { downloadArtifact } = require('@electron/get'); // Electron's own downloader and cache
@@ -47,35 +49,32 @@ async function electronDist({ platformName, arch, version }) {
 
 /** @type {import('electron-builder').Configuration} */
 module.exports = {
-  appId: 'io.github.jarvisar.coastline',
+  appId: 'games.citydriver.desktop',
   productName,
   copyright: `Copyright Â© ${new Date().getFullYear()} jarvisar`,
   extraMetadata: {
     // Written into the packaged package.json only; the repository's stays untouched.
     description: manifest.description,
     author: { name: 'jarvisar' },
-    homepage: 'https://jarvisar.github.io/coastline/',
     // Electron reads desktopName at startup so Linux desktops can match the window to its launcher.
     desktopName: `${executableName}.desktop`,
   },
   directories: { buildResources: 'electron/build', output: 'release' },
   electronDist,
-  // The renderer is fully bundled by Vite, so its libraries stay out of the package. The only
-  // runtime node_modules shipped are electron-updater and its dependencies, for electron/main.js.
+  // The renderer is bundled by Vite; the desktop shell has no runtime packages.
   files: [
     'electron/main.js',
     'electron/preload.cjs',
     'electron/window-state.js',
     'electron/build/icon.png',
     'dist-electron/**/*',
-    ...Object.keys(pkg.dependencies).filter(name => name !== 'electron-updater').map(name => `!node_modules/${name}/**`),
+    ...Object.keys(pkg.dependencies).map(name => `!node_modules/${name}/**`),
   ],
   asar: true,
   npmRebuild: false,
   nodeGypRebuild: false,
-  // Tells electron-updater where releases live and makes each build emit its latest*.yml
-  // update manifest. The build scripts pass --publish never: the workflow uploads the files.
-  publish: { provider: 'github', owner: 'jarvisar', repo: 'coastline' },
+  // Publishing is intentionally unconfigured for this new project.
+  publish: null,
   artifactName: '${productName}-${version}-${os}-${arch}.${ext}',
 
   win: {
@@ -98,9 +97,9 @@ module.exports = {
     executableName,
     syncDesktopName: true,
     category: 'Game',
-    synopsis: 'A scenic driving game',
+    synopsis: 'An endless city driving game',
     description: manifest.description,
-    desktop: { entry: { Name: productName, Keywords: 'driving;scenic;game;', StartupWMClass: executableName } },
+    desktop: { entry: { Name: productName, Keywords: 'driving;city;procedural;game;', StartupWMClass: executableName } },
   },
 
   mac: {

@@ -2,7 +2,7 @@
 const VERSION = __BUILD_VERSION__;
 const FILES = __PRECACHE_FILES__;
 const SCOPE = self.registration.scope;
-const PREFIX = `coastline:${SCOPE}:`;
+const PREFIX = `citydriver:${SCOPE}:`;
 const CACHE = `${PREFIX}${VERSION}`;
 const urls = FILES.map(file => new URL(file, SCOPE).href);
 

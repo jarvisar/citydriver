@@ -1,4 +1,8 @@
-# Working in this repository
+# Working in Citydriver
+
+This directory is an independent city driving game, versioned separately from the original project. Make changes only inside this workspace. Never modify or push to the original game, its backup, or its GitHub repository.
+
+The game has one procedural city that extends north, south, east, and west. Keep all intersections and bridges driveable, detail buildings on every side, and use Citydriver-specific storage and application identities. No hosting or automatic update destination is configured.
 
 ## Attribution
 

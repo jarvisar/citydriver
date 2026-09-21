@@ -13,7 +13,7 @@ import { createServer } from 'vite';
 // Any other flag goes to the app, for example --seed=4817, --fullscreen, --devtools.
 const argv = process.argv.slice(2);
 const built = argv.includes('--built');
-let url = argv.find(arg => arg.startsWith('--url='))?.slice(6) ?? process.env.COASTLINE_DEV_URL;
+let url = argv.find(arg => arg.startsWith('--url='))?.slice(6) ?? process.env.CITYDRIVER_DEV_URL;
 let server;
 if (!built && !url) {
   server = await createServer({ server: { host: '127.0.0.1', port: 0 }, clearScreen: false });
@@ -22,10 +22,10 @@ if (!built && !url) {
   console.log(`Vite dev server for Electron: ${url}`);
 }
 // Editor terminals often export ELECTRON_RUN_AS_NODE, which would start Electron as plain Node.
-const { ELECTRON_RUN_AS_NODE: _ignored, COASTLINE_DEV_URL: _unused, ...env } = process.env;
+const { ELECTRON_RUN_AS_NODE: _ignored, CITYDRIVER_DEV_URL: _unused, ...env } = process.env;
 const appArgs = argv.filter(arg => arg !== '--built' && !arg.startsWith('--url='));
 const child = spawn(electronPath, ['.', ...appArgs], {
-  stdio: 'inherit', env: built ? env : { ...env, COASTLINE_DEV_URL: url },
+  stdio: 'inherit', env: built ? env : { ...env, CITYDRIVER_DEV_URL: url },
 });
 child.on('exit', async code => { await server?.close(); process.exit(code ?? 0); });
 for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => child.kill());

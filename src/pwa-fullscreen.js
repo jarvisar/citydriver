@@ -1,7 +1,7 @@
 // The manifest requests fullscreen at launch. If the browser falls back to an
 // app window, the Fullscreen API needs a user gesture before it can hide chrome.
 export function setupPwaFullscreen() {
-  if (window.coastlineDesktop) return;
+  if (window.citydriverDesktop) return;
   const matches = mode => window.matchMedia(`(display-mode: ${mode})`).matches;
   const installed = matches('standalone') || matches('minimal-ui') || navigator.standalone === true;
   if (!installed || matches('fullscreen')) return;

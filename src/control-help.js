@@ -1,4 +1,4 @@
-const storageKey = 'coastline-control-help-dismissed';
+const storageKey = 'citydriver-control-help-dismissed';
 let dismissed = false;
 try { dismissed = localStorage.getItem(storageKey) === 'true'; } catch { /* Storage is optional. */ }
 

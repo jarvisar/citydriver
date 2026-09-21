@@ -1,101 +1,68 @@
-# Coastline
+# Citydriver
 
-Endless driving game built with [Three.js](https://threejs.org/). Drive yourself or turn on autodrive. Supports keyboard, touch, controllers, and browser VR.
+Every street leads somewhere.
 
-[Play in your browser](https://jarvisar.github.io/coastline/) or download a [desktop build](https://github.com/jarvisar/coastline/releases). See [desktop setup](ELECTRON.md) for Windows, Linux, macOS, and Steam Deck, or [PWA.md](PWA.md) to install the website for offline use.
+Citydriver is a free-driving game built with Three.js. It turns the original sixth city scene into a world of its own: a procedural city that extends north, south, east, and west. Turn at intersections, cross river bridges, and explore at your own pace.
+
+This is the first playable foundation, version 0.1.0. The city has connected streets, buildings detailed on every side, a choice of weather and lighting, and the existing garage, camera views, audio, keyboard, touch, and controller support. Traffic runs along both street axes, follows other vehicles, and waits at timed intersections. The initial world uses a rectangular street grid; missions and more district variety remain future work.
 
 ## Run locally
 
-Requires Node.js 22.12 or newer.
+Use Node.js 22.12 or newer. From this directory:
 
 ```sh
 npm install
 npm run dev
 ```
 
-Open the URL printed by Vite. Use its Network URL to play on a phone on the same Wi-Fi. On Windows, allow Node through the firewall for private networks if prompted.
-
-To build and preview:
+Open the local URL Vite prints. To build and preview the production game:
 
 ```sh
 npm run build
 npm run preview
 ```
 
-## Routes and cars
+Add `?seed=4817` to the URL to return to the same generated layout. Without a seed, a new session chooses a new world. Reset moves to a fresh area of the same seeded city and clears the distance driven.
 
-Use **Change Route** or press **1–6**:
-
-1. Pacific Coast
-2. Red Rock Desert
-3. Midnight Alpine
-4. Emerald Jungle
-5. Golden Plains
-6. Rainy Downtown
-
-Each route keeps your position and mileage for the current visit. Reset starts the current route in a new area with zero mileage. Reloading generates a new world; add `?seed=4817` to the URL to revisit or share one. Seeds can be any unsigned 32-bit integer.
-
-Open **Garage** to change cars or paint. **Default** uses the route's car. Cars have different handling and lose speed and grip off-road. Your car choice is saved; paint applies to all cars for the current visit and resets on reload.
-
-## Controls
-
-Controller labels below use Xbox / PlayStation names.
+## Driving
 
 | Action | Keyboard | Controller |
 | --- | --- | --- |
-| Accelerate | W / ↑ | RT / R2, or A / Cross |
-| Brake, then reverse | S / ↓ | LT / L2, or B / Circle |
-| Steer | A D / ← → | Left stick / D-pad left and right |
+| Accelerate | W / Up | RT / R2 or A / Cross |
+| Brake, then reverse | S / Down | LT / L2 or B / Circle |
+| Steer | A D / Left Right | Left stick or D-pad |
 | Strong brake | Space | — |
-| Change view | V | X / Square |
-| Autodrive | H | D-pad Up |
-| Pause / resume | P / Escape | Start / Menu / Options |
-| Garage | C / G | Left stick press (L3) |
-| Next route | N | RB / R1 |
-| Choose route | 1–6 | Select / Back / View |
-| Reset | R | Y / Triangle |
-| Sound | M | Pause menu |
-| Soft shading | O | Pause menu |
+| Change camera | V | X / Square |
+| Pause / resume | P / Escape | Start / Menu |
+| Garage | C / G | Left stick press |
+| Reset in a new area | R | Y / Triangle |
+| Cruise along the current street | H | D-pad Up |
 | Fullscreen | F | LB / L1 |
-| FPS counter | F3 | Right stick press (R3) |
+| Sound | M | Pause menu |
 
-Numpad 8 / 2 / 4 / 6 also work for driving, with Num Lock on or off. Views include four overhead distances, third-person, and first-person.
+On touchscreens, drag the virtual joystick to drive and release to stop. The pause menu holds the garage, sound, graphics, and weather settings. Choose changing skies, clear day, overcast, rain, storm, golden hour, or night.
 
-Autodrive follows the road and passes slower traffic when there's room. Steering, accelerating, or braking gives control back to you.
+Autodrive cruises along the nearest street in your current cardinal direction, obeying traffic and signals. Turn it off to choose a turn at an intersection.
 
-On a controller, use the D-pad or stick to move through menus, A / Cross to select, and B / Circle to go back. Press a button if the browser hasn't detected the controller. Disconnecting or leaving the tab pauses the game; release held controls before resuming. If a browser blocks controller fullscreen, use F or the pause menu's Fullscreen button.
+The compass and neighbourhood readout help you keep your bearings. Roads continue in both axes, including connected bridge crossings. Your chosen car is saved locally; garage paint applies across the fleet for the current visit.
 
-On touchscreens, tap **Let's drive**, then drag the joystick in the direction you want to move on screen. Drag farther to go faster; release to stop. In first-person and third-person views, push up to accelerate, left/right to steer, and down to brake or reverse.
-
-You can drive off the road anywhere. Water and cliffs still stop the car, as buildings, tree trunks, fences and other solid scenery do everywhere.
-
-For rainbow paint, enter **↑ ↑ ↓ ↓ ← → ← → B A** on the keyboard. On a controller, use the same D-pad sequence, then B and A (Circle and Cross), while driving. Enter it again to get your paint back. Reloading turns it off.
-
-## Settings
-
-The pause menu has traffic, sound, fullscreen, and graphics controls. **Auto** adjusts graphics quality while driving; High, Balanced, Smooth, and Basic set a fixed level. Lower levels reduce resolution, shadow detail, and view distance. The pixel-density slider adjusts resolution separately. Changes to multisampling take effect on the next load.
-
-**Soft shading** adds ambient occlusion and starts off. Whether it is on is saved separately from graphics quality, and neither a preset nor Auto switches it; while it is on, its cost follows the quality level. `?ao=0` disables it for a visit. Sound also starts off. Press **M** to enable it, and use **Audio settings** for channel volumes, presets, and optional music. See [audio.md](docs/audio.md).
-
-## Quest / browser VR
-
-Open the HTTPS site in the Quest browser, then choose **Enter VR** on the title screen or in the pause menu. The button appears when immersive WebXR is available. A plain HTTP local-network URL won't work; local headset development needs HTTPS with a trusted certificate. VR is only available in the browser build.
-
-- **Left stick:** steer. The right stick works if only the right controller is connected.
-- **Right trigger:** accelerate. **Left trigger:** brake, then reverse. **Either grip:** strong brake.
-- **A:** change view. **B / left stick press:** pause or resume.
-- **X:** reset. **Y:** exit VR. **Right stick press:** recenter.
-
-VR starts in third-person and supports all six views. In menus, use stick up/down and A, or point at a button and pull a trigger. B goes back. Exiting VR pauses the game and restores the previous camera. Custom paint entry remains on the regular page.
-
-## Development
-
-Route generation and scenery live in [src/world/](src/world/), driving in [vehicle.js](src/vehicle.js), and scene setup in [main.js](src/main.js). Geometry and audio are generated in code; there are no external model, texture, or audio downloads.
+## Checks
 
 ```sh
 npm test
+npm run build
+npm run test:browser
+npm run test:pwa
 ```
 
-With the dev server running, `npm run test:browser` checks driving and streaming. Other checks are listed in [package.json](package.json) and [scripts/](scripts/). Browser scripts generally use Chrome installed at the standard Windows path and accept `TEST_URL` to change the server address. Reports go to `.artifacts/`. Emulated browser and VR checks don't measure performance on physical phones or headsets.
+The browser check uses the running development server; set `TEST_URL` if it is not at the default address. `CHROME_PATH` selects a Chrome executable when needed. The PWA check starts its own local servers and checks installation assets and offline loading.
 
-See [discovery frequency](docs/discoveries.md) to change how often landmarks appear.
+## Desktop and offline play
+
+[Desktop setup](ELECTRON.md) describes the Electron shell and local packages. [PWA setup](PWA.md) describes browser installation and offline caching. The new city mark is a local SVG; `npm run pwa:icons` and `npm run electron:icons` regenerate installation icons.
+
+No public Citydriver deployment or release feed is configured. Desktop automatic updates are disabled, and GitHub workflows only validate or produce downloadable build artifacts. They do not publish the game.
+
+## Project scope
+
+All work for this project belongs inside the `citydriver` directory. The separate original game, its backup, and its GitHub repository must remain untouched. This copy uses its own app identity, browser storage, offline cache, desktop origin, and package name.

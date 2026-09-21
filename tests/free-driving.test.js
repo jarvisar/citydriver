@@ -1,183 +1,117 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { DrivingController, impassable } from '../src/vehicle.js';
+import { DrivingController } from '../src/vehicle.js';
 import { CAR_IDS } from '../src/cars.js';
-import { JOURNEYS } from '../src/journeys.js';
+import { CITY_BLOCK, citydriverRoute } from '../src/world/city-grid.js';
 
 const palette = car => {
   const colors = new Set();
   car.car.traverse(object => { if (object.isMesh) colors.add(object.material.color.getHexString()); });
   return [...colors].sort();
 };
-
-test('every car cycles rainbow paint while stationary and restores its finish', () => {
-  for (const id of CAR_IDS) {
-    const car = new DrivingController(undefined, {}, id);
-    const original = palette(car);
-    assert.equal(car.rainbow, false);
-    assert.equal(car.toggleRainbow(), true);
-    const red = palette(car);
-    for (let frame = 0; frame < 60; frame++) car.update(1 / 60, {});
-    assert.notDeepEqual(palette(car), red, `${id} should animate at rest`);
-    assert.equal(car.speed, 0);
-    assert.equal(car.toggleRainbow(), false);
-    assert.deepEqual(palette(car), original, `${id} restores its factory finish`);
-    car.disposeModel();
-  }
-});
-
-test('rainbow paint and free driving are independent', () => {
-  const car = new DrivingController();
-  const original = palette(car);
-  car.toggleFreeDriving();
-  for (let frame = 0; frame < 60; frame++) car.update(1 / 60, {});
-  assert.equal(car.rainbow, false);
-  assert.deepEqual(palette(car), original, 'free driving leaves the paint alone');
-  car.toggleRainbow();
-  car.u = 1000; car.update(0, {});
-  car.toggleRainbow();
-  assert.equal(car.freeDriving, true);
-  assert.equal(car.u, 1000, 'the paint toggle does not return the car to the road');
-  car.toggleRainbow(); car.toggleFreeDriving();
-  assert.equal(car.rainbow, true);
-  assert.ok(palette(car).includes('ff0000'));
-  car.disposeModel();
-});
-
-test('rainbow survives garage and route changes and restores the latest chosen paint', () => {
-  const car = new DrivingController();
-  car.toggleRainbow();
-  for (const id of CAR_IDS) {
-    car.setCar(id, { paint: '#123456' });
-    car.setAppearance('desert');
-    car.setRoute(JOURNEYS.desert.route);
-    assert.ok(palette(car).includes('ff0000'), `${id} keeps rainbow after changes`);
-    assert.equal(car.paintColor, '#123456');
-  }
-  car.setPaint('#654321');
-  assert.ok(palette(car).includes('ff0000'));
-  car.toggleRainbow();
-  assert.ok(palette(car).includes('654321'));
-  car.setCar('auto'); car.setAppearance('desert');
-  const desert = palette(car);
-  car.toggleRainbow(); car.setAppearance('snow'); car.toggleRainbow();
-  assert.notDeepEqual(palette(car), desert, 'factory paint follows the latest route');
-  const snow = new DrivingController(); snow.setAppearance('snow');
-  assert.deepEqual(palette(car), palette(snow));
-  snow.disposeModel(); car.disposeModel();
-});
-
 function assertGrounded(car) {
   const p = car.route.position(car.s, car.u);
   assert.ok(Math.hypot(car.car.position.x - p.x, car.car.position.y - p.y - .13, car.car.position.z - p.z) < 1e-8);
   assert.ok(car.car.quaternion.toArray().every(Number.isFinite));
 }
 
-for (const [id, { route }] of Object.entries(JOURNEYS)) {
-  test(`${id}: free driving defaults off and disabling it restores the road limits`, () => {
-    const car = new DrivingController(route);
-    assert.equal(car.freeDriving, false);
-    car.u = 1000; car.update(0, {});
-    assert.equal(car.u, route.bounds(car.s)[1]);
-    assert.equal(car.toggleFreeDriving(), true);
-    car.u = 1000; car.update(0, {});
-    assert.equal(car.u, 1000);
-    const { s, distance } = car;
-    assert.equal(car.toggleFreeDriving(), false);
-    assert.equal(car.s, s); assert.equal(car.distance, distance);
-    assert.equal(car.u, 2.4); assert.equal(car.speed, 0);
-    assertGrounded(car);
-    car.u = -1000; car.update(0, {});
-    assert.equal(car.u, route.bounds(car.s)[0]);
-    car.disposeModel();
-  });
-
-  test(`${id}: throttle, reverse and touch drive beyond either roadside until water or a cliff stops them`, () => {
-    for (const mode of ['forward', 'reverse', 'touch']) for (const side of [-1, 1]) {
-      const car = new DrivingController(route);
-      car.toggleFreeDriving();
-      const direction = mode === 'reverse' ? -side : side;
-      car.heading = route.frame(car.s).angle + direction * Math.PI / 2;
-      const input = mode === 'touch'
-        ? { touchDrive: { amount: 1, along: 0, across: side, heading: car.heading } }
-        : mode === 'reverse' ? { brake: true } : { forward: true };
-      for (let i = 0; i < 60 * 24; i++) {
-        car.update(1 / 60, input);
-        assertGrounded(car);
-        assert.ok(!impassable(car.ground(car.s, car.u)), `${mode} drove onto impassable ground at u=${car.u}`);
-      }
-      assert.ok(side * car.u > route.bounds(car.s)[side < 0 ? 0 : 1] * side - .01, `${mode} never left the road, u=${car.u}`);
-      // Only impassable ground just ahead may hold the car up or slow it down.
-      if (![.5, 1, 1.5, 2, 3].some(d => impassable(car.ground(car.s, car.u + side * d)))) {
-        assert.ok(side * car.u > 150, `${mode} stopped on open ground at u=${car.u}`);
-        assert.ok(Math.abs(car.speed) > 5, `${mode} lost speed far from the road`);
-      }
-      car.disposeModel();
-    }
-  });
-
-  test(`${id}: off-road headings and traffic displacement do not pull cars back to the road`, () => {
-    const car = new DrivingController(route);
-    car.toggleFreeDriving();
-    for (const side of [-1, 1]) {
-      car.s = -1025; car.u = side * 1500; car.speed = 12; car.steer = 0;
-      const heading = route.frame(car.s).angle + side * .4;
-      car.heading = heading;
-      for (let i = 0; i < 120; i++) car.update(1 / 60, { forward: true });
-      assert.equal(car.heading, heading);
-      assert.ok(side * car.u > 1500);
-      assertGrounded(car);
-
-      // Shoved aside and slowed by 3 m/s, then left to slide until the knock wears off.
-      const before = car.groundedPosition.clone(), speed = car.speed;
-      car.resolveTrafficCollision(side * .5, -.2, Math.cos(heading) * side * 2 - Math.sin(heading) * 3, Math.sin(heading) * side * 2 + Math.cos(heading) * 3, side * .5);
-      assert.ok(car.groundedPosition.distanceTo(before) < 5, 'collision teleported the car');
-      assert.ok(side * car.u > 1500);
-      assert.ok(Math.abs(car.speed - (speed - 3)) < 1e-9);
-      assert.ok(Math.abs(Math.hypot(car.knock.x, car.knock.z) - 2) < 1e-9);
-      assertGrounded(car);
-      car.speed = 0;
-      for (let i = 0; i < 120; i++) car.update(1 / 60, {});
-      assert.deepEqual(car.knock, { x: 0, z: 0, spin: 0 });
-      assert.ok(car.groundedPosition.distanceTo(before) < 5, 'the knock carried the car away');
-      assert.ok(side * car.u > 1500);
-      assertGrounded(car);
-    }
-    const s = car.s;
-    car.reset();
-    assert.equal(car.freeDriving, true);
-    assert.equal(car.s, s);
-    assert.equal(car.u, 2.4);
+test('every car cycles rainbow paint while stationary and restores its finish', () => {
+  for (const id of CAR_IDS) {
+    const car = new DrivingController(undefined, {}, id), original = palette(car);
+    assert.equal(car.rainbow, false);
+    assert.equal(car.toggleRainbow(), true);
+    const red = palette(car);
+    for (let frame = 0; frame < 60; frame++) car.update(1 / 60, {});
+    assert.notDeepEqual(palette(car), red, id + ' should animate at rest');
     assert.equal(car.speed, 0);
+    assert.equal(car.toggleRainbow(), false);
+    assert.deepEqual(palette(car), original, id + ' restores its factory finish');
+    car.disposeModel();
+  }
+});
+
+test('rainbow paint leaves the driving position and free-driving preference alone', () => {
+  const car = new DrivingController(citydriverRoute, { s: CITY_BLOCK * 12 });
+  car.toggleFreeDriving();
+  car.u = CITY_BLOCK * 10 + 3; car.update(0, {});
+  const before = car.groundedPosition.clone();
+  car.toggleRainbow(); car.toggleRainbow();
+  assert.equal(car.freeDriving, true);
+  assert.deepEqual(car.groundedPosition, before);
+  car.disposeModel();
+});
+
+test('rainbow survives garage changes and restores the latest chosen paint', () => {
+  const car = new DrivingController();
+  car.toggleRainbow();
+  for (const id of CAR_IDS) {
+    car.setCar(id, { paint: '#123456' });
+    car.setAppearance('city');
+    car.setRoute(citydriverRoute);
+    assert.ok(palette(car).includes('ff0000'), id + ' keeps rainbow after changes');
+    assert.equal(car.paintColor, '#123456');
+  }
+  car.setPaint('#654321');
+  assert.ok(palette(car).includes('ff0000'));
+  car.toggleRainbow();
+  assert.ok(palette(car).includes('654321'));
+  car.disposeModel();
+});
+
+test('normal driving has no east or west boundary in any city quadrant', () => {
+  for (const side of [-1, 1]) for (const north of [-1, 1]) {
+    const car = new DrivingController(citydriverRoute, { s: north * CITY_BLOCK * 80 });
+    car.u = side * CITY_BLOCK * 100;
+    car.heading = side * Math.PI / 2;
+    car.update(0, {});
+    const before = car.u;
+    for (let frame = 0; frame < 600; frame++) {
+      car.update(1 / 60, { forward: true });
+      assertGrounded(car);
+    }
+    assert.equal(car.freeDriving, false, 'ordinary city driving needs no unlock');
+    assert.ok(side * (car.u - before) > CITY_BLOCK, 'the car crosses a full city block');
+    assert.ok(Math.abs(car.s - north * CITY_BLOCK * 80) < 1e-8, 'no lane assist turns an east-west drive north');
+    car.disposeModel();
+  }
+});
+
+test('traffic displacement far from the origin preserves location and decays smoothly', () => {
+  for (const side of [-1, 1]) {
+    const car = new DrivingController(citydriverRoute, { s: -CITY_BLOCK * 20 + 24 });
+    car.u = side * CITY_BLOCK * 100 + 3;
+    car.heading = 0; car.speed = 12; car.update(0, {});
+    const before = car.groundedPosition.clone();
+    car.resolveTrafficCollision(side * .5, -.2, side * 2, 3, side * .5);
+    assert.ok(car.groundedPosition.distanceTo(before) < 1);
+    assert.ok(Math.abs(car.speed - 9) < 1e-9);
+    assertGrounded(car);
+    car.speed = 0;
+    for (let frame = 0; frame < 120; frame++) car.update(1 / 60, {});
+    assert.deepEqual(car.knock, { x: 0, z: 0, spin: 0 });
+    assert.ok(car.groundedPosition.distanceTo(before) < 5);
     assertGrounded(car);
     car.disposeModel();
-  });
-}
+  }
+});
 
-test('switching cars far off-road preserves the location for every car', () => {
-  const car = new DrivingController(JOURNEYS.plains.route);
-  car.toggleFreeDriving();
-  car.u = 1000; car.update(0, {});
+test('switching every garage car preserves a distant city location', () => {
+  const car = new DrivingController(citydriverRoute, { s: -CITY_BLOCK * 23 + 4 });
+  car.u = CITY_BLOCK * 63 + 3; car.update(0, {});
   const before = car.groundedPosition.clone();
   for (const id of CAR_IDS) {
     car.setCar(id);
-    assert.equal(car.u, 1000);
     assert.deepEqual(car.groundedPosition, before);
     assertGrounded(car);
   }
   car.disposeModel();
 });
 
-test('free driving persists across route changes but starts disabled in a new session', () => {
-  const car = new DrivingController();
-  car.toggleFreeDriving();
-  for (const { route } of Object.values(JOURNEYS)) {
-    car.setRoute(route);
-    assert.equal(car.freeDriving, true);
-    car.u = -1000; car.update(0, {});
-    assert.equal(car.u, -1000);
-  }
-  const nextSession = new DrivingController();
-  assert.equal(nextSession.freeDriving, false);
-  nextSession.disposeModel(); car.disposeModel();
+test('a new session clears the optional free-driving preference', () => {
+  const car = new DrivingController(); car.toggleFreeDriving();
+  car.setRoute(citydriverRoute);
+  assert.equal(car.freeDriving, true);
+  const next = new DrivingController();
+  assert.equal(next.freeDriving, false);
+  next.disposeModel(); car.disposeModel();
 });

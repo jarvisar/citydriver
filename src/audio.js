@@ -3,7 +3,7 @@ import { createSoundGraph } from './audio/synthesis.js';
 import { AMBIENCE, MIX_CHANNELS, MIX_PRESETS, engineFor, sanitizeMix } from './audio/profiles.js';
 import { SoundDirector } from './audio/director.js';
 
-const STORAGE_KEY = 'coastline-audio-v1';
+const STORAGE_KEY = 'citydriver-audio-v1';
 
 // One lazy graph for the entire visit. Sources and event voices are bounded;
 // all transitions use the audio clock, and silent contexts sleep after fading.
@@ -125,7 +125,8 @@ export class DriveAudio {
     set(g.intake.level, state.load ** 2 * .022 * profile.intake);
     set(g.intake.frequency, 800 + state.rpm * .22);
     set(g.reverse.frequency, state.reverseFrequency); set(g.reverseLevel, state.reverseLevel);
-    set(g.road.level, state.roadLevel * (this.journey === 'city' ? 1.6 : 1.4)); set(g.road.frequency, 480 + state.motion * (this.journey === 'city' ? 2600 : 1000), .25);
+    const wetness = this.journey === 'city' ? Math.max(0, Math.min(1, scene?.wetness ?? scene?.rain ?? 0)) : 0;
+    set(g.road.level, state.roadLevel * (1.4 + wetness * .25)); set(g.road.frequency, 480 + state.motion * (1000 + wetness * 1600), .25);
     set(g.road.rate, .65 + state.motion * .7, .3);
     const roughness = state.roughLevel * 1.8;
     set(g.rough.level, roughness); set(g.roughPulse, roughness * .16); set(g.roughMod.frequency, 12 + state.motion * 31);
@@ -136,26 +137,27 @@ export class DriveAudio {
     set(g.skidTone.frequency, state.skidFrequency * 1.13); set(g.skidToneLevel, state.skidLevel * .12);
     const cabin = scene?.interior && !profile.open;
     for (const name of ['engine', 'road', 'ambience', 'traffic']) set(g.perspective[name], cabin ? name === 'engine' ? 2200 : 1600 : 14000, .35);
-    this.ambience(state, now);
+    this.ambience(state, now, scene);
     if (this.audible) {
       this.effects(telemetry, state, now);
       this.director.update(this, state, now, scene);
     }
     this.updateTraffic(scene);
   }
-  ambience(state, now) {
+  ambience(state, now, scene = null) {
     const g = this.graph, profile = AMBIENCE[this.journey], set = (param, value, seconds = .8) => this.target(param, value, seconds);
     const swell = (.5 + .5 * Math.sin(now * .47 + .6 * Math.sin(now * .113))) ** 2;
     const gust = .5 + .3 * Math.sin(now * .23) + .2 * Math.sin(now * .61 + 2);
     const envelope = this.journey === 'coast' ? swell : this.journey === 'city' ? .62 + gust * .38 : gust;
-    set(g.bed.level, profile.bed + envelope * profile.swell);
+    const rain = this.journey === 'city' ? Math.max(0, Math.min(1, scene?.rain ?? 0)) : 0;
+    set(g.bed.level, (profile.bed + envelope * profile.swell) * (this.journey === 'city' ? .6 + rain * .4 : 1));
     set(g.bed.frequency, profile.low);
     // The breaking crest and retreating foam lag the low surf surge. Wind
     // and foliage breathe slowly; city rain uses a separate droplet texture.
     const foam = this.journey === 'coast' ? (.5 + .5 * Math.sin(now * .47 - .7 + .6 * Math.sin(now * .113))) ** 3 : envelope ** 1.5;
-    set(g.air.level, this.journey === 'city' ? .025 : profile.air + foam * profile.wash, 1);
+    set(g.air.level, this.journey === 'city' ? .012 + .02 * rain : profile.air + foam * profile.wash, 1);
     set(g.air.frequency, profile.high * (.8 + envelope * .4), 1);
-    set(g.rain.level, this.journey === 'city' ? .28 + gust * .09 : 0, 1);
+    set(g.rain.level, rain * (.28 + gust * .09), 1);
     const insects = ['jungle', 'plains'].includes(this.journey) ? (.018 + .012 * Math.sin(now * .83) ** 4) * (1 - state.motion * .4) : 0;
     set(g.insects.level, insects); set(g.insectPulse, insects * .7);
     set(g.insects.frequency, this.journey === 'plains' ? 4300 : 3600);

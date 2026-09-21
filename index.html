@@ -3,23 +3,23 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#c2e7e8" />
-    <meta name="description" content="A scenic driving game with coastal highways, desert canyons, snowy mountain roads, a misty jungle river valley, golden farmland plains, and a rain-soaked city." />
-    <title>Coastline — A scenic driving game</title>
+    <meta name="theme-color" content="#20323d" />
+    <meta name="description" content="An endless city to make your own. Explore connected streets, cross river bridges, and drive through changing weather." />
+    <title>Citydriver — Every street leads somewhere.</title>
     <!-- Keep startup styles inline so the page is covered before the game module loads. -->
     <style>
-      html, body { margin: 0; overflow: hidden; background: #d5e7d9; }
+      html, body { margin: 0; overflow: hidden; background: #20323d; }
       .loading {
         position: fixed; inset: 0; z-index: 8;
         display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
-        background: #d5e7d9; color: #25473e;
+        background: #20323d; color: #e9f0ef;
         font: 12px 'Segoe UI', Arial, sans-serif; letter-spacing: .3px;
         transition: opacity .25s, visibility 0s .25s;
       }
       .loading.loaded { opacity: 0; visibility: hidden; pointer-events: none; }
       .loading-spinner {
         box-sizing: border-box; width: 20px; height: 20px;
-        border: 2px solid #25473e26; border-top-color: #25473e; border-radius: 50%;
+        border: 2px solid #e9f0ef26; border-top-color: #e9f0ef; border-radius: 50%;
         animation: loading-spin .9s linear infinite;
       }
       .loading.loaded .loading-spinner { animation: none; }
@@ -33,13 +33,17 @@
   </head>
   <body>
     <main id="app">
-      <div id="loading" class="loading" role="status"><span class="loading-spinner" aria-hidden="true"></span><span>Loading Coastline…</span></div>
-      <canvas id="scene" aria-label="A low-poly coastal landscape. Drive with WASD or the arrow keys."></canvas>
+      <div id="loading" class="loading" role="status"><span class="loading-spinner" aria-hidden="true"></span><span>Loading Citydriver…</span></div>
+      <canvas id="scene" aria-label="An endless low-poly city. Drive in any direction with WASD or the arrow keys."></canvas>
       <div class="vignette" aria-hidden="true"></div>
       <header class="topbar">
+        <div class="city-hud" aria-label="City navigation">
+          <span id="city-heading" class="city-heading" aria-label="Heading">N</span>
+          <span class="city-hud-copy"><span id="city-location">DOWNTOWN</span><span id="weather-label">Changing skies</span></span>
+        </div>
         <div class="drive-actions" role="group" aria-label="Driving actions">
           <button id="view" title="Change camera (V)"><kbd>V</kbd><svg class="touch-utility-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3" y="6" width="18" height="14" rx="3" stroke="currentColor" stroke-width="1.5"/><path d="m8 6 2-3h4l2 3" stroke="currentColor" stroke-width="1.5"/><circle cx="12" cy="13" r="3" stroke="currentColor" stroke-width="1.5"/></svg> <span class="control-label">view</span></button>
-          <button id="reset" title="Reset scene and generate a fresh area (R)" aria-label="Reset scene and generate a fresh area"><kbd>R</kbd><svg class="touch-utility-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 10a8 8 0 1 1 1 7M4 4v6h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg> <span class="control-label">reset</span></button>
+          <button id="reset" title="Reset in a new area (R)" aria-label="Reset scene and generate a fresh area"><kbd>R</kbd><svg class="touch-utility-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 10a8 8 0 1 1 1 7M4 4v6h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg> <span class="control-label">reset</span></button>
           <button id="pause" title="Pause (P or Escape)" aria-label="Pause" aria-pressed="false"><kbd>P</kbd><svg class="pause-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M8 6v12M16 6v12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><svg class="play-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m9 5 10 7-10 7V5Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg> <span class="control-label">pause</span></button>
         </div>
       </header>
@@ -48,12 +52,13 @@
       <section id="welcome" class="welcome" aria-labelledby="menu-title">
         <div class="brand menu-brand">
           <img class="brand-mark" src="/brand-mark.svg" width="96" height="96" alt="" />
-          <h1 id="menu-title" class="wordmark">coastline</h1>
-          <div class="eyebrow" id="menu-route">PACIFIC COAST</div>
+          <h1 id="menu-title" class="wordmark">citydriver</h1>
+          <div class="eyebrow" id="menu-route">AN ENDLESS CITY</div>
+          <p class="menu-tagline">Every street leads somewhere.</p>
         </div>
         <div class="menu-actions">
           <button id="start" class="start-button"><svg class="wheel-icon" viewBox="0 0 32 32" fill="none" aria-hidden="true"><circle cx="16" cy="16" r="12.5" stroke="currentColor" stroke-width="3"/><path d="M4 14h5c3 0 4-3 7-3s4 3 7 3h5v4h-6a4 4 0 0 0-4 4v6h-4v-6a4 4 0 0 0-4-4H4Z" fill="currentColor"/></svg><span>Let’s drive</span></button>
-          <button id="change-journey" class="journey-button start-button menu-secondary" aria-haspopup="dialog"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h15m-4-4 4 4-4 4M20 17H5m4-4-4 4 4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="control-label">Change route</span></button>
+          <button id="change-journey" hidden class="journey-button start-button menu-secondary" aria-haspopup="dialog"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h15m-4-4 4 4-4 4M20 17H5m4-4-4 4 4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="control-label">Change route</span></button>
           <button id="enter-vr" class="start-button vr-entry menu-secondary" type="button" hidden><svg class="vr-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3.8 7.5h16.4a1.8 1.8 0 0 1 1.8 1.8v5.4a1.8 1.8 0 0 1-1.8 1.8h-3.6a2 2 0 0 1-1.7-.9l-1.2-1.8a2 2 0 0 0-3.4 0l-1.2 1.8a2 2 0 0 1-1.7.9H3.8A1.8 1.8 0 0 1 2 14.7V9.3a1.8 1.8 0 0 1 1.8-1.8Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg><span class="vr-entry-label">Enter VR</span></button>
         </div>
       </section>
@@ -61,7 +66,7 @@
         <div class="pause-content">
           <header class="pause-header">
             <h2>Paused</h2><button id="resume" class="start-button"><svg class="wheel-icon" viewBox="0 0 32 32" fill="none" aria-hidden="true"><circle cx="16" cy="16" r="12.5" stroke="currentColor" stroke-width="3"/><path d="M4 14h5c3 0 4-3 7-3s4 3 7 3h5v4h-6a4 4 0 0 0-4 4v6h-4v-6a4 4 0 0 0-4-4H4Z" fill="currentColor"/></svg><span>Resume drive</span></button>
-            <div class="location"><svg viewBox="0 0 29 34" fill="none" aria-hidden="true"><path d="M4 4c7 2 14 2 21 0v17c0 4-7 7-10.5 10C11 28 4 25 4 21V4Z" stroke="currentColor" stroke-width="1.3"/><text x="14.5" y="22" text-anchor="middle" fill="currentColor" font-size="19" font-family="Georgia">1</text></svg><div class="location-copy"><span class="location-title">PACIFIC COAST</span><span class="location-sub"><span id="distance">0.0</span> mi driven</span></div></div>
+            <div class="location"><svg viewBox="0 0 29 34" fill="none" aria-hidden="true"><path d="M4 4c7 2 14 2 21 0v17c0 4-7 7-10.5 10C11 28 4 25 4 21V4Z" stroke="currentColor" stroke-width="1.3"/><text x="14.5" y="22" text-anchor="middle" fill="currentColor" font-size="19" font-family="Georgia">1</text></svg><div class="location-copy"><span class="location-title">ENDLESS CITY</span><span class="location-sub"><span id="distance">0.0</span> mi driven</span></div></div>
           </header>
           <div class="pause-settings">
             <section class="pause-panel" aria-labelledby="garage-heading">
@@ -69,6 +74,11 @@
               <button type="button" id="change-car" class="panel-button" aria-haspopup="dialog" title="Garage (G)"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3.5 16h17v-4.2l-1.6-4A2 2 0 0 0 17 6.5H7a2 2 0 0 0-1.9 1.3l-1.6 4V16Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M3.5 11.8h17M4.8 16v1.8M19.2 16v1.8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg><span class="panel-button-label">Garage</span><span id="current-car" class="panel-button-value"></span></button>
               <button type="button" id="autodrive" class="panel-button panel-toggle" aria-pressed="false" title="Autodrive (H / D-pad Up while driving)"><span class="panel-button-label">Autodrive</span><span class="panel-switch" aria-hidden="true"></span></button>
               <button type="button" id="traffic" class="panel-button panel-toggle" aria-pressed="true"><span class="panel-button-label">Traffic</span><span class="panel-switch" aria-hidden="true"></span></button>
+            </section>
+            <section class="pause-panel weather-panel" aria-labelledby="weather-heading">
+              <h3 id="weather-heading">The city</h3>
+              <label class="weather-setting" for="city-weather"><span>Weather &amp; light</span><select id="city-weather"><option value="auto">Changing skies</option><option value="clear">Clear day</option><option value="overcast">Overcast</option><option value="rain">Rain</option><option value="storm">Storm</option><option value="sunset">Golden hour</option><option value="night">Night</option></select></label>
+              <p class="weather-note">Choose a mood, or let the skies change as you explore.</p>
             </section>
             <section class="pause-panel" aria-labelledby="sound-heading">
               <h3 id="sound-heading">Sound</h3>
@@ -97,47 +107,22 @@
               </div>
             </section>
             <button id="enter-vr-pause" class="panel-button vr-entry" type="button" hidden><svg class="vr-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3.8 7.5h16.4a1.8 1.8 0 0 1 1.8 1.8v5.4a1.8 1.8 0 0 1-1.8 1.8h-3.6a2 2 0 0 1-1.7-.9l-1.2-1.8a2 2 0 0 0-3.4 0l-1.2 1.8a2 2 0 0 1-1.7.9H3.8A1.8 1.8 0 0 1 2 14.7V9.3a1.8 1.8 0 0 1 1.8-1.8Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg><span class="vr-entry-label">Enter VR</span></button>
-            <span class="controller-hint">D-pad / stick: choose · A / Cross: select<br>B / Circle or Start / Menu: resume<br>Select / View: choose scenery · R3: garage</span>
+            <span class="controller-hint">D-pad / stick: choose · A / Cross: select<br>B / Circle or Start / Menu: resume<br>L3: garage · X / Square: camera</span>
           </div>
         </div>
       </div>
       <footer class="bottom-bar">
-        <div class="controls"><span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> <span class="control-label">drive</span></span><span class="control-separator"></span><button id="next-journey" title="Next scene (N / RB / R1)" aria-label="Next scene"><kbd>N</kbd><svg class="touch-utility-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m5 5 9 7-9 7V5ZM19 5v14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg> <span class="control-label">next</span></button></div>
+        <div class="controls"><span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> <span class="control-label">drive</span></span><button id="next-journey" hidden title="Next scene (N / RB / R1)" aria-label="Next scene"><kbd>N</kbd><svg class="touch-utility-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m5 5 9 7-9 7V5ZM19 5v14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg> <span class="control-label">next</span></button></div>
       </footer>
       <div class="touch-controls" role="group" aria-label="Touch driving controls"><div id="touch-stick" role="group" aria-label="Virtual joystick" aria-describedby="stick-help"><span class="stick-guide" aria-hidden="true"></span><span class="stick-thumb" aria-hidden="true"></span></div><span id="stick-help"><span class="stick-help-copy">Drag to drive<br><span class="stick-help-line">Release to stop</span></span></span></div>
       <div id="toast" role="status"></div>
       <dialog id="journey-dialog" class="chooser" aria-labelledby="journey-heading" aria-describedby="journey-description">
-        <div class="chooser-heading"><span class="eyebrow">ROUTES</span><button id="close-journeys" class="icon-button" aria-label="Close route chooser"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" stroke="currentColor" stroke-width="1.5"/></svg></button></div>
-        <h2 id="journey-heading" class="chooser-title">Choose a route</h2>
-        <p id="journey-description" class="chooser-intro">Coast, desert, mountains, jungle, plains, or city. Choose where to drive.</p>
-        <span class="controller-hint">D-pad / stick: choose · A / Cross: select · B / Circle: close</span>
+        <div class="chooser-heading"><span class="eyebrow">CITYDRIVER</span><button id="close-journeys" class="icon-button" aria-label="Close city information">×</button></div>
+        <h2 id="journey-heading" class="chooser-title">One city. Every direction.</h2>
+        <p id="journey-description" class="chooser-intro">Explore an endless grid of streets, neighbourhoods, and river crossings.</p>
         <div class="chooser-options">
-          <button class="chooser-card journey-card" data-journey="coast" aria-label="Pacific Coast" aria-current="true">
-            <svg class="chooser-art" viewBox="0 0 280 150" aria-hidden="true"><rect width="280" height="150" fill="#a9d9d6"/><path d="M42 0h238v150h-63L160 88 95 58Z" fill="#94ad56"/><path d="m42 0 53 58 65 30 57 62h-34l-44-41-66-28Z" fill="#b8ad91"/><path d="m97 0 34 43 60 41 40 66" fill="none" stroke="#ddcfaa" stroke-width="13"/><path d="m97 0 34 43 60 41 40 66" fill="none" stroke="#7c8580" stroke-width="9"/><path d="m97 0 34 43 60 41 40 66" fill="none" stroke="#efe5bb" stroke-width="1"/><g fill="#34604a"><path d="m183 14-12 32h24Zm40 27-15 38h28Zm30 39-13 31h26Zm-111-69-9 23h18Z"/></g><path d="m36 80 29 10m20 35 28 11M20 116l23 8" stroke="#e0f6e9" stroke-width="3" fill="none"/></svg>
-            <span class="chooser-card-copy"><span class="chooser-card-title">Pacific Coast <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 18 18 6M6 6h12v12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="chooser-card-description">Salt air, green hills &amp; open water.</span><span class="chooser-current">CURRENT ROUTE</span></span>
-          </button>
-          <button class="chooser-card journey-card" data-journey="desert" aria-label="Red Rock Desert" aria-current="false">
-            <svg class="chooser-art" viewBox="0 0 280 150" aria-hidden="true"><rect width="280" height="150" fill="#ecc18a"/><path d="m0 76 49-21 50 26 57-26 124 25v70H0Z" fill="#e3ad6d"/><path d="M182 18h56l14 80-20 16-65-17Z" fill="#bf6b3b"/><path d="m182 18 13 62 37 34-65-17Z" fill="#a85835"/><path d="m182 18 22-8 33 4 1 4-43 6Z" fill="#e59550"/><path d="M22 37h42l16 60-65 2Z" fill="#ce7d42"/><path d="m22 37 20 8 5 47-32 7Z" fill="#b3633b"/><path d="m22 37 20-7 22 7-22 8Z" fill="#e8a05c"/><path d="m140 0-13 46 30 42-45 62" fill="none" stroke="#fae0ac" stroke-width="13"/><path d="m140 0-13 46 30 42-45 62" fill="none" stroke="#817662" stroke-width="9"/><path d="m140 0-13 46 30 42-45 62" fill="none" stroke="#edcf91" stroke-width="1"/><path d="m58 132-1-19-9-8m9 12 12-14m-12 14 3-18" stroke="#7a6840" stroke-width="4" fill="none"/><g fill="#8f924d"><path d="m41 105 5-9 7 11Zm19-3 9-9 7 12Zm-4-4 5-9 5 11Z"/></g></svg>
-            <span class="chooser-card-copy"><span class="chooser-card-title">Red Rock Desert <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 18 18 6M6 6h12v12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="chooser-card-description">Sandstone cliffs &amp; winding canyon roads.</span><span class="chooser-current">CURRENT ROUTE</span></span>
-          </button>
-          <button class="chooser-card journey-card" data-journey="snow" aria-label="Midnight Alpine" aria-current="false">
-            <svg class="chooser-art" viewBox="0 0 280 150" aria-hidden="true"><rect width="280" height="150" fill="#152238"/><path d="m0 145 47-71 53 9 46-58 37 11L220 5l60 47v98Z" fill="#364965"/><path d="m146 25 37 11 37-31 60 47-37-16-16 14-19-17-26 30-19-13-27 20-31 33-19-6Z" fill="#9cb3d5"/><path d="m0 145 47-71 16 15-28 19Z" fill="#778eaf"/><path d="M176 0c-63 45-69 62-14 79s48 43-47 71" fill="none" stroke="#b2c4dc" stroke-width="16"/><path d="M176 0c-63 45-69 62-14 79s48 43-47 71" fill="none" stroke="#354355" stroke-width="11"/><path d="M176 0c-63 45-69 62-14 79s48 43-47 71" fill="none" stroke="#b9b299" stroke-width="1"/><g fill="#172f3c"><path d="m207 62-10 27h20Zm38-15-8 23h16Zm-27 58-12 33h24Zm-143 9-10 26h20Z"/></g><g fill="#afc2dd"><path d="m207 62-7 17h14Zm38-15-5 15h10Zm-27 58-8 22h16Zm-143 9-7 17h14Z"/></g><g stroke="#8592a3" stroke-width="2"><path d="M121 60V42h7m60 65V89h-7m-43 56v-17h7"/></g><g fill="#ffdda0"><circle cx="128" cy="43" r="2.5"/><circle cx="181" cy="90" r="2.5"/><circle cx="145" cy="129" r="2.5"/></g><g fill="#bdcce5"><circle cx="24" cy="21" r="1"/><circle cx="61" cy="37" r="1"/><circle cx="100" cy="13" r="1"/></g></svg>
-            <span class="chooser-card-copy"><span class="chooser-card-title">Midnight Alpine <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 18 18 6M6 6h12v12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="chooser-card-description">Moonlit peaks &amp; snow-covered pines.</span><span class="chooser-current">CURRENT ROUTE</span></span>
-          </button>
-          <button class="chooser-card journey-card" data-journey="jungle" aria-label="Emerald Jungle" aria-current="false">
-            <svg class="chooser-art" viewBox="0 0 280 150" aria-hidden="true"><rect width="280" height="150" fill="#b4cfaa"/><path d="m132 46 46-30 42 22 38-16 22 18v40H132Z" fill="#7fa48e"/><path d="M0 150V88l36-26 44 18 48-30 58 24 40-20 54 28v68Z" fill="#2c6035"/><path d="M0 128c26-4 40-16 56-28s28-10 40-2c14 8 16 22 34 24" fill="none" stroke="#5fc4b3" stroke-width="13"/><path d="M0 128c26-4 40-16 56-28s28-10 40-2c14 8 16 22 34 24" fill="none" stroke="#8fe0cf" stroke-width="3" stroke-dasharray="7 11"/><path d="m56 100 6-11 8 9" fill="#eafff5"/><path d="m50 112 9-6 7 5-5 5Z" fill="#dff8ec"/><g fill="#7b8a80"><path d="m44 92 7-8 8 3-3 8-9 1Z"/><path d="m92 92 8-7 9 4-2 9-10 1Z"/><path d="m104 118 6-6 8 3-2 7Z"/></g><path d="M126 150c6-30-18-50 2-76s54-24 66-74" fill="none" stroke="#c9b98a" stroke-width="13"/><path d="M126 150c6-30-18-50 2-76s54-24 66-74" fill="none" stroke="#525a5c" stroke-width="9"/><path d="M126 150c6-30-18-50 2-76s54-24 66-74" fill="none" stroke="#e0bd47" stroke-width="1.2"/><g fill="#3c8a3b"><circle cx="24" cy="70" r="15"/><circle cx="76" cy="58" r="13"/><circle cx="160" cy="112" r="17"/><circle cx="238" cy="96" r="16"/><circle cx="112" cy="40" r="12"/></g><g fill="#5aa244"><circle cx="40" cy="60" r="10"/><circle cx="196" cy="126" r="12"/><circle cx="256" cy="72" r="11"/><circle cx="152" cy="26" r="9"/><circle cx="222" cy="120" r="9"/></g><g fill="#2a5a2c"><circle cx="8" cy="96" r="11"/><circle cx="120" cy="66" r="9"/><circle cx="182" cy="90" r="11"/><circle cx="264" cy="130" r="13"/><circle cx="92" cy="78" r="8"/></g><g fill="none" stroke="#6fb34f" stroke-width="3" stroke-linecap="round"><path d="M172 74v-16m0 0-9-7m9 7 9-6m-9 6-6 9m6-9 7 9"/><path d="M60 136v-14m0 0-8-6m8 6 8-5m-8 5-5 8m5-8 6 8"/></g><g stroke="#3a6a30" stroke-width="1.5" fill="none"><path d="M236 84v26m10-28v18m-20-14v14"/></g></svg>
-            <span class="chooser-card-copy"><span class="chooser-card-title">Emerald Jungle <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 18 18 6M6 6h12v12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="chooser-card-description">Dense canopy, waterfalls &amp; hanging vines.</span><span class="chooser-current">CURRENT ROUTE</span></span>
-          </button>
-          <button class="chooser-card journey-card" data-journey="plains" aria-label="Golden Plains" aria-current="false">
-            <svg class="chooser-art" viewBox="0 0 280 150" aria-hidden="true"><rect width="280" height="150" fill="#f0d9a6"/><path d="M0 62c40-9 80-12 130-8s90 10 150 4v92H0Z" fill="#d9b55a"/><path d="M0 92c50-8 100-10 150-4s90 10 130 2v60H0Z" fill="#c9ab5e"/><path d="M0 118c60-6 120-4 180 4s70 2 100-2v30H0Z" fill="#96a54c"/><circle cx="214" cy="38" r="14" fill="#ffe6a8"/><path d="M0 62c40-9 80-12 130-8s90 10 150 4" fill="none" stroke="#e2c26b" stroke-width="2"/><g stroke="#c39d4f" stroke-width="1.2"><path d="M20 78h44M26 84h44M40 90h40"/><path d="M160 74h60M166 80h58M180 86h50"/></g><path d="M112 150c4-30-8-56 6-80s36-34 62-70" fill="none" stroke="#cbb587" stroke-width="13"/><path d="M112 150c4-30-8-56 6-80s36-34 62-70" fill="none" stroke="#5d5e59" stroke-width="9"/><path d="M112 150c4-30-8-56 6-80s36-34 62-70" fill="none" stroke="#e2be4b" stroke-width="1"/><path d="M186 92h30v18h-30Z" fill="#a6412f"/><path d="m186 92 15-11 15 11Z" fill="#5e4d45"/><rect x="221" y="86" width="9" height="24" rx="1.5" fill="#c3c7c2"/><path d="M221 86a4.5 4.5 0 0 1 9 0Z" fill="#8f9594"/><g fill="#d9b566"><ellipse cx="34" cy="126" rx="7" ry="5.5"/><ellipse cx="60" cy="132" rx="7" ry="5.5"/><ellipse cx="86" cy="124" rx="7" ry="5.5"/></g><g fill="#b8964f"><ellipse cx="34" cy="126" rx="3" ry="2.4"/><ellipse cx="60" cy="132" rx="3" ry="2.4"/><ellipse cx="86" cy="124" rx="3" ry="2.4"/></g><g stroke="#8b7455" stroke-width="1.6"><path d="M8 104v10m16-11v10m16-11v10m16-11v10"/><path d="M8 108h48" stroke-width=".8"/></g><g fill="#587f3a"><path d="M248 74c-8 0-12-8-10-16s6-14 10-14 8 6 10 14-2 16-10 16Z"/><path d="M262 84c-6 0-9-6-8-12s4-11 8-11 7 5 8 11-2 12-8 12Z"/><path d="M150 132c-8 0-12-8-10-16s6-14 10-14 8 6 10 14-2 16-10 16Z"/></g><g stroke="#e7e9e4" stroke-width="2.2" stroke-linecap="round"><path d="M40 62V26m0 0-9-10m9 10 12-6m-12 6-2 13"/><path d="M78 56V28m0 0-8-8m8 8 10-4m-10 4-1 11"/></g></svg>
-            <span class="chooser-card-copy"><span class="chooser-card-title">Golden Plains <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 18 18 6M6 6h12v12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="chooser-card-description">Wheat fields, red barns &amp; a wide sky.</span><span class="chooser-current">CURRENT ROUTE</span></span>
-          </button>
-          <button class="chooser-card journey-card" data-journey="city" aria-label="Rainy Downtown" aria-current="false">
-            <svg class="chooser-art" viewBox="0 0 280 150" aria-hidden="true"><rect width="280" height="150" fill="#a5afb7"/><g fill="#8b96a0"><rect x="8" y="42" width="22" height="50"/><rect x="34" y="28" width="16" height="64"/><rect x="58" y="50" width="26" height="42"/><rect x="196" y="30" width="18" height="60"/><rect x="218" y="44" width="30" height="46"/><rect x="254" y="22" width="20" height="68"/><rect x="150" y="38" width="24" height="52"/></g><path d="M0 150V90c34-4 60 2 80 16s30 28 42 44Z" fill="#5c6b75"/><path d="M0 102c34-4 60 2 80 16" fill="none" stroke="#71818b" stroke-width="2"/><path d="M0 90c34-4 60 2 80 16s30 28 42 44h14c-10-20-26-40-46-54S32 82 0 84Z" fill="#8d9296"/><rect x="136" y="124" width="144" height="26" fill="#7d8286"/><path d="M112 150c4-30-8-56 6-80s36-34 62-70" fill="none" stroke="#464a4f" stroke-width="13"/><path d="M112 150c4-30-8-56 6-80s36-34 62-70" fill="none" stroke="#c9ccc9" stroke-width=".8" stroke-dasharray="6 8"/><g fill="#6e7883"><rect x="150" y="78" width="26" height="48"/><rect x="180" y="62" width="22" height="64"/><rect x="206" y="84" width="30" height="42"/><rect x="240" y="68" width="36" height="58"/></g><g fill="#59626c"><rect x="150" y="78" width="26" height="4"/><rect x="180" y="62" width="22" height="4"/><rect x="206" y="84" width="30" height="4"/><rect x="240" y="68" width="36" height="4"/></g><g fill="#8c3a3a"><rect x="150" y="114" width="26" height="4"/><rect x="206" y="114" width="30" height="4"/></g><g fill="#2f3a44"><rect x="154" y="88" width="4" height="6"/><rect x="162" y="88" width="4" height="6"/><rect x="170" y="88" width="4" height="6"/><rect x="154" y="100" width="4" height="6"/><rect x="170" y="100" width="4" height="6"/><rect x="184" y="72" width="4" height="6"/><rect x="192" y="72" width="4" height="6"/><rect x="184" y="84" width="4" height="6"/><rect x="192" y="96" width="4" height="6"/><rect x="184" y="108" width="4" height="6"/><rect x="210" y="94" width="4" height="6"/><rect x="218" y="94" width="4" height="6"/><rect x="226" y="94" width="4" height="6"/><rect x="210" y="106" width="4" height="6"/><rect x="226" y="106" width="4" height="6"/><rect x="246" y="78" width="4" height="6"/><rect x="254" y="78" width="4" height="6"/><rect x="262" y="78" width="4" height="6"/><rect x="246" y="90" width="4" height="6"/><rect x="262" y="90" width="4" height="6"/><rect x="254" y="102" width="4" height="6"/><rect x="246" y="114" width="4" height="6"/></g><g fill="#efd39c"><rect x="162" y="100" width="4" height="6"/><rect x="192" y="84" width="4" height="6"/><rect x="218" y="106" width="4" height="6"/><rect x="254" y="90" width="4" height="6"/><rect x="262" y="114" width="4" height="6"/></g><g stroke="#e6ecf0" stroke-width="1.1" stroke-linecap="round" opacity=".6"><path d="m30 8-4 13M78 4l-4 13M122 18l-4 13M168 6l-4 13M232 12l-4 13M60 58l-4 13M102 92l-4 13M140 40l-4 13M262 48l-4 13M198 112l-4 13M40 130l-4 13M252 126l-4 13M94 26l-4 13M20 72l-4 13M212 64l-4 13M130 128l-4 13"/></g></svg>
-            <span class="chooser-card-copy"><span class="chooser-card-title">Rainy Downtown <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 18 18 6M6 6h12v12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="chooser-card-description">Wet streets, a grey river &amp; a stormy skyline.</span><span class="chooser-current">CURRENT ROUTE</span></span>
-          </button>
+          <button class="chooser-card journey-card" data-journey="city" aria-label="Endless City" aria-current="true"><span class="chooser-card-copy"><span class="chooser-card-title">Endless City</span><span class="chooser-card-description">Turn at every intersection. Find your own way.</span><span class="chooser-current">YOUR CITY</span></span></button>
         </div>
-        <p class="chooser-note">Your position and mileage on each route are saved for this visit.</p>
       </dialog>
       <dialog id="car-dialog" class="chooser" aria-labelledby="car-heading">
         <div class="chooser-heading"><h2 id="car-heading" class="garage-title">Garage</h2><button id="close-cars" class="icon-button" aria-label="Close garage"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" stroke="currentColor" stroke-width="1.5"/></svg></button></div>
@@ -151,12 +136,12 @@
             <div id="paint-swatches" class="paint-swatches" role="radiogroup" aria-labelledby="paint-heading"></div>
             <label id="paint-custom-well" class="paint-custom" title="Mix your own colour"><input type="color" id="paint-custom" aria-label="Mix a custom paint colour" value="#d96143"><span class="paint-custom-chip" aria-hidden="true"></span><span class="paint-custom-label">Custom</span></label>
           </div>
-          <p class="paint-note">One colour dresses the whole garage and follows you from car to car. <b>Default</b> hands every car the finish it arrived in back, and the Default car its route colours.</p>
+          <p class="paint-note">One colour dresses the whole garage and follows you from car to car. <b>Default</b> hands every car the finish it arrived in back, and the Default car its original finish.</p>
         </section>
         <h3 id="fleet-heading" class="garage-subheading">Fleet</h3>
         <div class="chooser-options car-options" role="group" aria-labelledby="fleet-heading"></div>
       </dialog>
-      <div id="journey-transition" aria-hidden="true"><span>Changing route…</span></div>
+      <div id="journey-transition" aria-hidden="true"><span>Building your city…</span></div>
       <div id="error" class="error" hidden><h2>Unable to start the game</h2><p>This drive needs a browser with WebGL 2 enabled. Try an up-to-date Chrome, Edge, Firefox, or Safari.</p><button onclick="location.reload()">Try again</button></div>
     </main>
     <script type="module" src="/src/main.js"></script>

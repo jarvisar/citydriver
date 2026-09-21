@@ -6,7 +6,7 @@ function memoryStorage(initial = {}) {
   const map = new Map(Object.entries(initial));
   return { getItem: key => map.get(key) ?? null, setItem: (key, value) => map.set(key, String(value)), map };
 }
-const stored = storage => JSON.parse(storage.map.get('coastline.graphics'));
+const stored = storage => JSON.parse(storage.map.get('citydriver.graphics'));
 
 // A stand-in device with a running clock, like requestAnimationFrame has.
 // `rates` is either a fixed refresh rate or the frame rate this device reaches
@@ -255,7 +255,7 @@ test('custom density is remembered, survives Auto adjustments, and resets with p
 
 test('density validates saved values and clamps user choices to the slider limits', () => {
   for (const density of [null, '0.8', -1, .49, 1.01]) {
-    const storage = memoryStorage({ 'coastline.graphics': JSON.stringify({ density }) });
+    const storage = memoryStorage({ 'citydriver.graphics': JSON.stringify({ density }) });
     assert.equal(graphicsAt(1, { storage }).settings.density, .85);
   }
   const graphics = graphicsAt(0);
@@ -269,7 +269,7 @@ test('density validates saved values and clamps user choices to the slider limit
 });
 
 test('?ao=0 starts every level without soft shading, and can still be switched back', () => {
-  const storage = memoryStorage({ 'coastline.graphics': JSON.stringify({ mode: 'auto', level: 'high', ambientOcclusion: true }) });
+  const storage = memoryStorage({ 'citydriver.graphics': JSON.stringify({ mode: 'auto', level: 'high', ambientOcclusion: true }) });
   const graphics = new Graphics({ storage, detect: () => 0, ambientOcclusion: false });
   assert.equal(graphics.settings.ambientOcclusion, false, 'the URL beats a remembered choice');
   assert.equal(graphics.toggleAmbientOcclusion(), true);
@@ -290,7 +290,7 @@ test('changes reach listeners, and unusable storage never breaks the game', () =
 });
 
 test('a stored level that no longer exists falls back to detection', () => {
-  const storage = memoryStorage({ 'coastline.graphics': JSON.stringify({ mode: 'ludicrous', level: 'ludicrous' }) });
+  const storage = memoryStorage({ 'citydriver.graphics': JSON.stringify({ mode: 'ludicrous', level: 'ludicrous' }) });
   const graphics = new Graphics({ storage, detect: () => levelIndex('smooth') });
   assert.equal(graphics.auto, true);
   assert.equal(graphics.levelId, 'smooth');
@@ -317,11 +317,11 @@ test('Auto adjustments and route changes never change the AO choice', () => {
 
 test('legacy preset and adaptive AO defaults do not count as explicit opt-in', () => {
   for (const ambientOcclusion of [null, undefined, false, 'true']) {
-    const storage = memoryStorage({ 'coastline.graphics': JSON.stringify({
+    const storage = memoryStorage({ 'citydriver.graphics': JSON.stringify({
       mode: 'high', level: 'high', ambientOcclusion, softShading: true,
     }) });
     assert.equal(graphicsAt(0, { storage }).ambientOcclusion, false);
   }
-  const storage = memoryStorage({ 'coastline.graphics': JSON.stringify({ ambientOcclusion: true }) });
+  const storage = memoryStorage({ 'citydriver.graphics': JSON.stringify({ ambientOcclusion: true }) });
   assert.equal(graphicsAt(0, { storage }).ambientOcclusion, true, 'explicit opt-in is preserved');
 });
