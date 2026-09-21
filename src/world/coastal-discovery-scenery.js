@@ -3,6 +3,7 @@ import { positionAt, groundHeight, roadFrame, CHUNK_LENGTH } from './route.js';
 import { discoveryAssets as assets, discoveryMaterial, timberMaterial, footingMaterial, pathMaterial, boatMaterial, whaleMaterial } from './coastal-discovery-assets.js';
 import { createRockWashMaterial } from './water.js';
 import { registerChunkResources } from './chunk-resources.js';
+import { solidModel } from './colliders.js';
 
 const washMaterial = createRockWashMaterial();
 registerChunkResources('coastal-discovery-wash', {washMaterial});
@@ -54,9 +55,11 @@ export function buildCoastalDiscoveries(chunk, sites) {
     if (kind === 'lighthouse') {
       const y = base(s, u, 3.5, 3.5, true);
       add('coastal-lighthouse', assets.lighthouse, discoveryMaterial, point(s, u, y), undefined, [0, angle, 0]);
+      solidModel(chunk, assets.lighthouse, point(s, u, y), angle, 1, true);
       const cottageS = s - 8.5, cottageU = u + 8;
       const cottageY = base(cottageS, cottageU, 2.9, 3.8);
       add('lighthouse-keeper-cottage', assets.cottage, discoveryMaterial, point(cottageS, cottageU, cottageY), undefined, [0, angle, 0]);
+      solidModel(chunk, assets.cottage, point(cottageS, cottageU, cottageY), angle);
       path(s, -6.1, u + 3.2);
       record.ground = y;
     } else if (kind === 'dock') {

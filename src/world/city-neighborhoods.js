@@ -45,6 +45,7 @@ export function buildNeighborhoods(chunk) {
   function building(target, s0, s1, u0, u1, height, seed) {
     chunk.reserveBuilding(s0, s1, u0, u1);
     if (!chunk.inChunk((s0 + s1) / 2)) return;
+    chunk.solidLot(s0, s1, u0, u1);
     const corners = [[s0, u0], [s1, u0], [s1, u1], [s0, u1]].map(([s, u]) => ground(s, u));
     const base = Math.min(...corners.map(p => p.y)) - .2, top = Math.max(...corners.map(p => p.y)) + height;
     const color = new THREE.Color(WALLS[Math.floor(randomAt(seed, 3691) * WALLS.length)]);

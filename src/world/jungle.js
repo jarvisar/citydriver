@@ -11,6 +11,7 @@ import { animateWater } from './water.js';
 import { jungleDiscoveries, jungleDiscoveryClears } from './jungle-discoveries.js';
 import { buildJungleDiscoveries } from './jungle-discovery-scenery.js';
 import { terrainSampler } from './coastal-assets.js';
+import { solidModel, solidPost } from './colliders.js';
 import { jungleCrowns, emergentCrowns, emergentTrunks, junglePalms, fernGeometry, bigLeafGeometry, bananaGeometry, bambooGeometry, lilyGeometry, vineGeometry, tuftGeometry,
   jungleBoulders, cliffBlocks } from './jungle-assets.js';
 
@@ -402,6 +403,7 @@ export class JungleChunk {
       if (!discoveryClear(s,u,height*.55)) return;
       const p = ground(s, u), width = height * (.4 + random() * .18);
       trunks.push({ p: [p.x, p.y + height * .3, p.z], scale: [height * .045, height * .62, height * .045] });
+      solidPost(this, p.x, p.z, height * .045 * .72);
       // Crowns deep in the forest skip the shadow pass; their shade lands on other canopy anyway.
       (Math.abs(u) > 70 ? farCrowns : crowns)[Math.floor(random() * crowns.length)].push({ p: [p.x, p.y + height * .42, p.z], scale: [width, height * .58, width], r: [0, random() * 6.28, 0], color: pick(palette) });
       spots.push({ s, u, r: width * .45 });
@@ -414,7 +416,9 @@ export class JungleChunk {
       if (!discoveryClear(s,u,height*.65)) return;
       const p = ground(s, u), width = height * (.36 + random() * .1), angle = random() * 6.28;
       const tallHeight = Math.min(height + Math.max(0, height - 28) * 2, headroom(s, u, p.y));
-      emergents[Math.floor(random() * emergents.length)].push({ p: [p.x, p.y - .1, p.z], scale: [height, tallHeight, height], r: [0, angle, 0] });
+      const trunk = Math.floor(random() * emergents.length);
+      emergents[trunk].push({ p: [p.x, p.y - .1, p.z], scale: [height, tallHeight, height], r: [0, angle, 0] });
+      solidModel(this, emergentTrunks[trunk], [p.x, p.y, p.z], angle, height, true);
       const crownLean = lean * .25, c = positionAt(s, u - crownLean), top = p.y + tallHeight * .78;
       emergentTops[Math.floor(random() * emergentTops.length)].push({ p: [c.x, top, c.z + this.start], scale: [width, width, width], r: [0, angle, 0], color: pick(sunlitCrowns) });
       spots.push({ s, u, r: width * .6 });
@@ -428,6 +432,7 @@ export class JungleChunk {
       if (!discoveryClear(s,u,height*.55)) return;
       const p = ground(s, u), w = height * .8, angle = random() * 6.28, variant = Math.floor(random() * junglePalms.length);
       palmTrunks[variant].push({ p: [p.x, p.y - .1, p.z], scale: [w, height, w], r: [0, angle, 0] });
+      solidModel(this, junglePalms[variant].trunk, [p.x, p.y, p.z], angle, w, true);
       palmFronds[variant].push({ p: [p.x, p.y - .1, p.z], scale: [w, height, w], r: [0, angle, 0], color: pick(palmColors) });
       spots.push({ s, u, r: 1.2 });
     };

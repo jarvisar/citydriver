@@ -8,6 +8,7 @@ import { DESERT_COLUMNS, DESERT_STEP, DESERT_VALLEY_EDGE, desertFacetColumn, des
 import { buildDesertCrossing, buildDesertWater, desertWaterClock } from './desert-river.js';
 import { desertDiscoveries, desertDiscoveryClears, desertFuelApronWidth } from './desert-discoveries.js';
 import { buildDesertDiscoveries } from './desert-discovery-scenery.js';
+import { solidPost } from './colliders.js';
 
 const groundMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 1 });
 const rockMaterial = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 1, flatShading: true });
@@ -145,20 +146,21 @@ export class DesertChunk {
       const p = this.groundPosition(site.s,site.u), road = this.groundPosition(site.s,0),frame=roadFrame(site.s);
       return {...site,x:p.x,z:p.z+this.start,roadX:road.x,roadZ:road.z+this.start,frame};
     });
+    const cleared = (x,z,radius) => footprints.some(site => {
+      if (Math.hypot(x-site.x,z-site.z) < Math.hypot(site.halfS,site.halfU)+radius) return true;
+      if (site.kind!=='fuel-stop') return false;
+      const dx=x-site.roadX,dz=z-site.roadZ,{nx,nz,scale}=site.frame;
+      const s=site.s+(dx*nz-dz*nx)/scale,u=dx*nx+dz*nz;
+      return !desertDiscoveryClears(s,u,[site],radius+2);
+    });
+    // A tree cleared from a site takes its footprint with it.
+    if (this.features?.colliders) this.features.colliders = this.features.colliders.filter(solid => !cleared(solid.x,solid.z+this.start,solid.reach*1.3));
     this.group.traverse(object => {
       if (!object.isInstancedMesh) return;
       let kept=0;
       for (let i=0;i<object.count;i++) {
         object.getMatrixAt(i,matrix); matrix.decompose(position,rotation,scale);
-        const radius = Math.min(5,Math.max(scale.x,scale.z)*1.3);
-        const blocked = footprints.some(site => {
-          if (Math.hypot(position.x-site.x,position.z-site.z) < Math.hypot(site.halfS,site.halfU)+radius) return true;
-          if (site.kind!=='fuel-stop') return false;
-          const dx=position.x-site.roadX,dz=position.z-site.roadZ,{nx,nz,scale}=site.frame;
-          const s=site.s+(dx*nz-dz*nx)/scale,u=dx*nx+dz*nz;
-          return !desertDiscoveryClears(s,u,[site],radius+2);
-        });
-        if (blocked) continue;
+        if (cleared(position.x,position.z,Math.min(5,Math.max(scale.x,scale.z)*1.3))) continue;
         if (kept!==i) {
           object.setMatrixAt(kept,matrix);
           if (object.instanceColor) {object.getColorAt(i,color);object.setColorAt(kept,color);}
@@ -400,7 +402,7 @@ export class DesertChunk {
       const p = this.groundPosition(s, u); const height = 4.2 + random() * 4.1;
       const root = new THREE.Vector3(p.x, p.y - .2, p.z + this.start);
       const fork = root.clone().add(new THREE.Vector3(.2, height * .5, -.1));
-      branch(root, fork, height * .078);
+      branch(root, fork, height * .078); solidPost(this, root.x, root.z, height * .078);
       for (let arm = 0; arm < 3; arm++) {
         const angle = arm * 2.1 + random() * .7;
         const elbow = fork.clone().add(new THREE.Vector3(Math.cos(angle) * height * .26, height * .17, Math.sin(angle) * height * .26));
@@ -448,7 +450,7 @@ export class DesertChunk {
       const root = at(s, u); root.y -= .18;
       const height = 3.3 + random() * 2.2;
       const fork = root.clone().add(new THREE.Vector3(.25, height * .48, -.15));
-      branch(root, fork, height * .055);
+      branch(root, fork, height * .055); solidPost(this, root.x, root.z, height * .055);
       for (let arm = 0; arm < 4; arm++) {
         const angle = arm * 1.57 + random() * .65;
         const elbow = fork.clone().add(new THREE.Vector3(Math.cos(angle) * height * .24, height * .19, Math.sin(angle) * height * .24));
@@ -555,7 +557,7 @@ export class DesertChunk {
         const root = at(treeS, treeU); root.y -= .2;
         const height = 8.5 + random() * 4.5;
         const fork = root.clone().add(new THREE.Vector3(-height * .065, height * .43, height * .04));
-        branch(root, fork, height * .053);
+        branch(root, fork, height * .053); solidPost(this, root.x, root.z, height * .053);
         for (let arm = 0; arm < 5; arm++) {
           const angle = heading + arm * 2.4;
           const reach = height * (.18 + random() * .15);

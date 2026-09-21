@@ -14,6 +14,7 @@ import { plainsDiscoveries, plainsDiscoveryClears } from './plains-discoveries.j
 import { plainsDiscoveryAssets, plainsDiscoveryMaterial } from './plains-discovery-assets.js';
 import { buildPlainsDiscoveries } from './plains-discovery-scenery.js';
 import { PLAINS_RAIL_REACH } from './plains-railway.js';
+import { solidModel, solidPost, solidSpan } from './colliders.js';
 
 const material = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: 1, flatShading: true, ...extra });
 const terrainMaterial = material('#ffffff', { vertexColors: true });
@@ -706,6 +707,7 @@ export class PlainsChunk {
               const p = this.ground(t, v), yaw = -roadFrame(t).angle + (randomAt(Math.round(s), Math.round(cross) + 2824) - .5) * .5;
               const color = strawTints[Math.floor(randomAt(Math.round(s), Math.round(cross) + 2825) * 3)];
               for (let k = 0; k < 2; k++) this.tuft(t + (random() - .5) * 4.5, v + (random() - .5) * 4.5, field.kind, random);
+              solidModel(this, square ? squareBaleGeometry : baleGeometry, [p.x, p.y, p.z], yaw, square ? 1 : 1.2);
               if (!square) { bales.push({ p: [p.x, p.y + .85, p.z], scale: [1.2, 1.2, 1.2], r: [0, yaw, 0], color }); continue; }
               const stack = 1 + Math.floor(randomAt(Math.round(s), Math.round(cross) + 2827) * 2.6);
               for (let k = 0; k < stack; k++) squareBales.push({ p: [p.x, p.y + .4 + k * .8, p.z], scale: [1, 1, 1], r: [0, yaw + (k % 2) * .12, 0], color });
@@ -982,6 +984,8 @@ export class PlainsChunk {
       if (previous) for (const height of [.62, 1.04]) {
         this.beam(rails, { ...previous, y: previous.y + height }, { ...p, y: p.y + height }, .13);
       }
+      // The rails stop the car from post to post; a gap stays a way through.
+      if (previous) solidSpan(this, previous, p, .15);
       // A gate fills its own opening, so the fence's rails stop at its posts.
       previous = point.stop ? null : p;
     }
@@ -1124,10 +1128,12 @@ export class PlainsChunk {
     this.dirtPatch(s, u, 8.4, 7.2, mouth);
     this.scenery.painted.push({ p: [p.x, (low - .3 + high + .05) / 2, p.z], scale: [7.2, high - low + .35, 9.6], r: [0, yaw, 0], color: '#b1a892' });
     this.scenery.sheds.push({ p: [p.x, high + .05, p.z], scale: [1.2, 1.2, 1.2], r: [0, yaw, 0] });
+    solidModel(this, plainsDiscoveryAssets.shed, [p.x, p.y, p.z], yaw, 1.2);
     // A squat galvanised tank, kept dull: a pale drum under the low sun read
     // as a haystack from the road.
     const tank = this.ground(s + 6.2, u + (u > 0 ? 2.5 : -2.5));
     this.scenery.tanks.push({ p: [tank.x, tank.y + 1, tank.z], scale: [1.7, 2.1, 1.7], r: [0, random() * 6.28, 0], color: '#6c746f' });
+    solidPost(this, tank.x, tank.z, 1.7);
     for (const [ds, du, kind, height, color] of [[-8.5, 5, 'oak', 9, '#587f3a'], [7, -7, 'hedge', 7.5, '#4d7434'], [-6, -8, 'cypress', 11, CYPRESS_GREENS[0]]]) {
       if (this.clearAt(s + ds, u + du, 2)) this.tree(kind, s + ds, u + du, height + random() * 2, color, random() * 6.28);
     }
@@ -1138,6 +1144,7 @@ export class PlainsChunk {
     if (!bark.has(variant)) { bark.set(variant, []); leaves.set(variant, []); }
     bark.get(variant).push({ p: [p.x, p.y - .12, p.z], scale: [height, height, height], r: [0, yaw, 0] });
     leaves.get(variant).push({ p: [p.x, p.y - .12, p.z], scale: [height, height, height], r: [0, yaw, 0], color });
+    solidModel(this, variant.bark, [p.x, p.y, p.z], yaw, height, true);
   }
   finishScenery() {
     const { posts, wires, rails, poles, shrubs, bales, squareBales, boxes, painted, cows, rushes, grass, wheat, farLumps, concrete, sheds, tanks, bark, leaves, dirt, dirtTints, shores, shoreTints } = this.scenery;

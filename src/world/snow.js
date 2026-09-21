@@ -12,6 +12,7 @@ import { CABIN_SPACING, alpineCabin, nearCabin, buildAlpineCabin } from './alpin
 import { Snowfall } from './snowfall.js';
 import { snowDiscoveries, snowDiscoveryClears } from './snow-discoveries.js';
 import { buildSnowDiscoveries, animateSnowDiscoveries } from './snow-discovery-scenery.js';
+import { solidPost } from './colliders.js';
 import { buildAlpineLandmarks, nearAlpineRelay } from './alpine-landmarks.js';
 
 const material = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: .95, flatShading: true, ...extra });
@@ -190,6 +191,7 @@ export class SnowChunk {
       if (onLake(s, u, height * .18) || nearCabin(s, u) || !clearOfDiscoveries(s, u, height * .2)) return;
       const variant = Math.floor(random() * alpinePines.length), width = height * (.85 + random() * .25);
       trunks.push({ p: point(s, u, y + height * .36), scale: [height * .018, height * .85, height * .018] });
+      solidPost(this, trunks.at(-1).p[0], trunks.at(-1).p[2], height * .03);
       const item = { p: point(s, u, y - .2), scale: [width, height, width], angle };
       pines[variant].push({ ...item, color: ['#29473e', '#36564b', '#203b35'][Math.floor(random() * 3)] });
       caps[variant].push(item);

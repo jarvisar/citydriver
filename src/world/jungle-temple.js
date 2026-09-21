@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { positionAt, roadFrame, randomAt } from './route.js';
 import { JungleDiscoveryParts } from './jungle-discovery-assets.js';
 import { registerChunkResources } from './chunk-resources.js';
+import { solidModel } from './colliders.js';
 
 // A square cobblestone ruin: broad lower chamber, recessed upper sanctuary,
 // stepped cornices and a broken parapet. The entrance faces the road.
@@ -100,5 +101,6 @@ export function buildJungleTemple(chunk, site) {
     mesh.position.set(center.x, base, center.z + chunk.start);
     mesh.rotation.y = angle;
   }
+  solidModel(chunk, geometry, [center.x, base, center.z + chunk.start], angle);
   return {base, bottom, angle};
 }

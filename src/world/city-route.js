@@ -206,4 +206,6 @@ export const cityDrivingRoute = {
   frame: cityFrame, position: cityPosition, height: cityHeight,
   // Both kerbs are solid: the car stays between them.
   bounds: () => [-KERB + .1, KERB - .1],
+  // The river bed is the only ground in the city below the river's surface.
+  water: (s, u, height) => height < RIVER_LEVEL + .3,
 };

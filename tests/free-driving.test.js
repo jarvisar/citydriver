@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { DrivingController } from '../src/vehicle.js';
+import { DrivingController, impassable } from '../src/vehicle.js';
 import { CAR_IDS } from '../src/cars.js';
 import { JOURNEYS } from '../src/journeys.js';
 
@@ -73,7 +73,7 @@ for (const [id, { route }] of Object.entries(JOURNEYS)) {
     car.disposeModel();
   });
 
-  test(`${id}: throttle, reverse and touch can drive far beyond either roadside`, () => {
+  test(`${id}: throttle, reverse and touch drive beyond either roadside until water or a cliff stops them`, () => {
     for (const mode of ['forward', 'reverse', 'touch']) for (const side of [-1, 1]) {
       const car = new DrivingController(route);
       car.toggleFreeDriving();
@@ -85,9 +85,14 @@ for (const [id, { route }] of Object.entries(JOURNEYS)) {
       for (let i = 0; i < 60 * 24; i++) {
         car.update(1 / 60, input);
         assertGrounded(car);
+        assert.ok(!impassable(car.ground(car.s, car.u)), `${mode} drove onto impassable ground at u=${car.u}`);
       }
-      assert.ok(side * car.u > 150, `${mode} stopped at u=${car.u}`);
-      assert.ok(Math.abs(car.speed) > 5, `${mode} lost speed far from the road`);
+      assert.ok(side * car.u > route.bounds(car.s)[side < 0 ? 0 : 1] * side - .01, `${mode} never left the road, u=${car.u}`);
+      // Only impassable ground just ahead may hold the car up or slow it down.
+      if (![.5, 1, 1.5, 2, 3].some(d => impassable(car.ground(car.s, car.u + side * d)))) {
+        assert.ok(side * car.u > 150, `${mode} stopped on open ground at u=${car.u}`);
+        assert.ok(Math.abs(car.speed) > 5, `${mode} lost speed far from the road`);
+      }
       car.disposeModel();
     }
   });

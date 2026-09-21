@@ -231,4 +231,5 @@ export function lampAt(index) {
   if (Math.abs(offset) < 38) s = bridge.center + (offset >= 0 ? 38 : -38);
   return { s, u, hidden, ...snowPosition(s, u, snowRoadHeight(s) + 7.6) };
 }
-export const snowDrivingRoute = { frame: snowFrame, position: snowPosition, height: snowHeight, bounds: () => [-5.85, 6.3] };
+export const snowDrivingRoute = { frame: snowFrame, position: snowPosition, height: snowHeight, bounds: () => [-5.85, 6.3],
+  water: (s, u, height) => height < LAKE_LEVEL + .3 };

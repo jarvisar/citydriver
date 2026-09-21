@@ -9,6 +9,7 @@ import { CoastalBirds } from './birds.js';
 import { coastalCrags, coastalPines, coastalCypress, coastalMontereyPine, coastalSedge, terrainSampler } from './coastal-assets.js';
 import { coastalDiscoveries, discoveryClearsPlanting } from './coastal-discoveries.js';
 import { buildCoastalDiscoveries } from './coastal-discovery-scenery.js';
+import { solidModel, solidPost } from './colliders.js';
 
 const terrainMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 1 });
 const waterMaterial = createWaterMaterial();
@@ -355,9 +356,11 @@ export class CoastalChunk {
       if (u < 58 && (u < 0 || i % 4 === 0)) {
         const item = { p: [p.x, y, p.z + this.start], scale: [size * .85, size, size * .85], r: [0, rotation, 0], color: green[i % green.length] };
         (u < 0 ? cypresses : monterey).push(item);
+        solidModel(this, (u < 0 ? coastalCypress : coastalMontereyPine).bark, item.p, rotation, size * .85, true);
         continue;
       }
       trunks.push({ p: [p.x, y + size * .29, p.z + this.start], scale: [size * .35, size * .6, size * .35] });
+      solidPost(this, p.x, p.z + this.start, size * .09);
       const palette = upland > .5 ? uplandGreen : green;
       const color = palette[Math.floor(random() * palette.length)];
       foliage[i % 2].push({ p: [p.x, y, p.z + this.start], scale: [size, size, size], r: [0, rotation, 0], color });
@@ -549,6 +552,7 @@ export class CoastalChunk {
       if (!canGrow(s, u) || u > -11) continue;
       const p = planted(s, u), size = 6.5 + detailRandom() * 4;
       cypresses.push({ p: [p.x, p.y - .12, p.z + this.start], scale: [size, size, size], r: [0, -.6 + detailRandom() * .5, 0], color: green[i % green.length] });
+      solidModel(this, coastalCypress.bark, cypresses.at(-1).p, cypresses.at(-1).r[1], size, true);
     }
     // Shoreline details grow in interrupted colonies. Find the water's edge
     // on the rendered faces, so sedges and partly submerged stones touch the

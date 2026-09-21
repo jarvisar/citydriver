@@ -18,6 +18,7 @@ import { ChunkWorker } from './world/chunk-source.js';
 import { setResidentWindow } from './world/resident.js';
 import { DrivingController } from './vehicle.js';
 import { Traffic, TRAFFIC_CRUISE_SPEED } from './traffic.js';
+import { collideScenery } from './collision.js';
 import { Autodrive } from './autodrive.js';
 import { Input } from './input.js';
 import { touchDrivingInput, thirdPersonDrivingInput } from './touch-stick.js';
@@ -94,6 +95,9 @@ async function boot() {
     const savedJourneys = Object.fromEntries(Object.entries(JOURNEYS).map(([id, data]) => [id, journeyStart(Number(data.routeNumber))]));
     const vehicle = new DrivingController(JOURNEYS[journey].route, savedJourneys[journey], DEFAULT_CAR); const audio = new DriveAudio();
     const refreshAudioMixer = setupAudioMixer(audio);
+    // Free driving starts on for now, while off-road collision is being tried
+    // out. The code still turns it off, and a reload turns it back on.
+    vehicle.toggleFreeDriving();
     vehicle.setAppearance(journey);
     vehicle.setLights(journey === 'snow' ? 1 : journey === 'city' ? .35 : 0);
     rendering.setJourney(journey); audio.setJourney(journey);
@@ -665,6 +669,7 @@ async function boot() {
         else state.touchDrive = touchDrivingInput(state.touchStick, rendering.camera, vehicle.route, vehicle.s, vehicle.u, world.origin);
       }
       vehicle.update(dt, state);
+      collideScenery(vehicle, world.chunks, dt);
       traffic.update(dt, vehicle);
     };
     function frame(timestamp, xrFrame) {

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { roadFrame, randomAt } from './route.js';
 import { BANDS } from './city-route.js';
+import { solidModel } from './colliders.js';
 import { cityDiscoveryAssets as assets, cityDiscoveryMaterial as material } from './city-discovery-assets.js';
 
 const transform = new THREE.Object3D();
@@ -48,6 +49,7 @@ export function buildCityDiscoveries(chunk, discoveries) {
       if (chunk.inChunk(s)) {
         const p = chunk.ground(s, u);
         add('city-fountains', assets.fountain, [p.x, p.y, p.z], [0, yaw, 0]);
+        solidModel(chunk, assets.fountain, [p.x, p.y, p.z], yaw, 1, true);
         for (const [ds, du] of [[-7.5, 0], [7.5, 0], [0, -7.5], [0, 7.5]]) {
           const angle = Math.atan2(ds, du);
           chunk.furniture('bench', s + ds, u + du, yaw + angle + Math.PI, {});
@@ -72,6 +74,7 @@ export function buildCityDiscoveries(chunk, discoveries) {
     boxes.push({ p: [plinth.x, plinth.y, plinth.z], scale: [26, .6, 15], r: [0, yaw, 0], color: '#8e8a83' });
     // Drawn a little over life size, as the plains do with their barns, so it reads from the road.
     add('city-clock-towers', assets.clockTower, [root.x, base, root.z], [0, yaw, 0], [CLOCK_SCALE, CLOCK_SCALE, CLOCK_SCALE]);
+    solidModel(chunk, assets.clockTower, [root.x, base, root.z], yaw, CLOCK_SCALE);
     // A pocket garden in the unused corner beside the church. Two small
     // trees and a bench fill the setback while leaving the front door and
     // the pavement clear. All pieces reuse existing scenery/instance batches.

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { CHUNK_LENGTH, roadFrame, randomAt } from './route.js';
 import { buildPlainsRailway } from './plains-railway.js';
+import { solidModel } from './colliders.js';
 import { plainsDiscoveryAssets as assets, plainsDiscoveryMaterial as material, plainsFoundationMaterial, plainsWindmillMaterial, plainsTurbineMaterial } from './plains-discovery-assets.js';
 
 const transform = new THREE.Object3D();
@@ -38,6 +39,11 @@ export function buildPlainsDiscoveries(chunk, discoveries) {
     if (!batches.has(name)) batches.set(name, { geometry, paint, items: [] });
     batches.get(name).items.push({ p, rotation, scale });
   }
+  // A building or a machine: drawn like the rest, and it stops the car.
+  function solid(name, geometry, p, rotation, scale = [1, 1, 1], round = false) {
+    add(name, geometry, material, p, rotation, scale);
+    solidModel(chunk, geometry, p, rotation[1], scale[0], round);
+  }
   // A footing spans the ground's highs and lows, so buildings stand level on
   // a plain that still rolls a little.
   function foundation(s, u, halfU, halfS, angle) {
@@ -62,7 +68,7 @@ export function buildPlainsDiscoveries(chunk, discoveries) {
         const yaw = -roadFrame(tower.s).angle + (randomAt(site.index, 2931 + k) - .5) * .9;
         const ground = foundation(tower.s, tower.u, 2.2, 2.2, yaw);
         const root = point(tower.s, tower.u, ground);
-        add('plains-wind-turbines', assets.turbineTower, material, root, [0, yaw, 0]);
+        solid('plains-wind-turbines', assets.turbineTower, root, [0, yaw, 0], undefined, true);
         add('plains-turbine-rotors', assets.turbineRotor, plainsTurbineMaterial, offset(root, yaw, 0, 38.6, -3.3), [0, yaw, 0]);
       }
       if (inChunk(s)) chunk.features.discoveries.push({ ...site });
@@ -97,10 +103,10 @@ export function buildPlainsDiscoveries(chunk, discoveries) {
       if (layout.barn) {
         const barn = stand('barn', 0);
         ground = foundation(barn.s, barn.u, 5.8, 9.2, barn.yaw);
-        add('plains-barns', assets.barn, material, point(barn.s, barn.u, ground), [0, barn.yaw + Math.PI, 0], big);
+        solid('plains-barns', assets.barn, point(barn.s, barn.u, ground), [0, barn.yaw + Math.PI, 0], big);
         const silo = stand('silo', 1);
         const siloGround = foundation(silo.s, silo.u, 3.5, 3.5, silo.yaw);
-        add('plains-silos', assets.silo, material, point(silo.s, silo.u, siloGround), [0, silo.yaw, 0], big);
+        solid('plains-silos', assets.silo, point(silo.s, silo.u, siloGround), [0, silo.yaw, 0], big, true);
         // Feed and tools sit beside the silo, away from the working doorway.
         for (let k = 0; k < 3; k++) {
           const [bs, bu] = local(layout.silo[0] - 2 + k * 2, layout.silo[1] + 5);
@@ -111,7 +117,7 @@ export function buildPlainsDiscoveries(chunk, discoveries) {
         const house = stand('house', 2);
         const houseGround = foundation(house.s, house.u - side * 1.6, 6.6, 6.2, house.yaw);
         ground ??= houseGround;
-        add('plains-farmhouses', assets.farmhouse, material, point(house.s, house.u, houseGround), [0, house.yaw + Math.PI, 0], big);
+        solid('plains-farmhouses', assets.farmhouse, point(house.s, house.u, houseGround), [0, house.yaw + Math.PI, 0], big);
         // A small kitchen garden beside the house, with timber-edged beds.
         for (let k = 0; k < 3; k++) {
           const [gs, gu] = local(layout.house[0] + (layout.house[0] < 0 ? -1 : 1) * 9, layout.house[1] - 3 + k * 2.5);
@@ -124,12 +130,12 @@ export function buildPlainsDiscoveries(chunk, discoveries) {
         const mill = stand('mill', 3);
         const millGround = foundation(mill.s, mill.u, 1.4, 1.4, mill.yaw);
         const millRoot = point(mill.s, mill.u, millGround), millYaw = angle + (randomAt(site.index, 2932) - .5) * 1.2;
-        add('plains-windmill-towers', assets.windmillTower, material, millRoot, [0, millYaw, 0]);
+        solid('plains-windmill-towers', assets.windmillTower, millRoot, [0, millYaw, 0]);
         add('plains-windmill-rotors', assets.windmillRotor, plainsWindmillMaterial, offset(millRoot, millYaw, 0, 8.65, -.55), [0, millYaw, 0]);
       }
       if (layout.tractor) {
         const tractor = stand('tractor', 4);
-        add('plains-tractors', assets.tractor, material, point(tractor.s, tractor.u), [0, angle + .5 + randomAt(site.index, 2933) * .6, 0]);
+        solid('plains-tractors', assets.tractor, point(tractor.s, tractor.u), [0, angle + .5 + randomAt(site.index, 2933) * .6, 0]);
       }
       // Oaks on the road frontage, and conifers to shelter the yard the way a
       // farm's windbreak does.
@@ -148,7 +154,7 @@ export function buildPlainsDiscoveries(chunk, discoveries) {
       if (layout.shed) {
         const shed = stand('shed', 5);
         const shedGround = foundation(shed.s, shed.u, 3, 4.2, shed.yaw);
-        add('plains-farm-sheds', assets.shed, material, point(shed.s, shed.u, shedGround), [0, shed.yaw, 0]);
+        solid('plains-farm-sheds', assets.shed, point(shed.s, shed.u, shedGround), [0, shed.yaw, 0]);
       }
       // A mailbox marks the entrance without narrowing the access road.
       const [mailS, mailU] = [s + site.drive + 4.5, side * 9];
@@ -174,7 +180,7 @@ export function buildPlainsDiscoveries(chunk, discoveries) {
     } else {
       chunk.dirtPatch(s + 1, u, 15, 11, drive);
       ground = foundation(s, u, 5, 8, angle);
-      add('plains-grain-elevators', assets.grainElevator, material, point(s, u, ground), [0, angle + Math.PI / 2, 0], [1.25, 1.25, 1.25]);
+      solid('plains-grain-elevators', assets.grainElevator, point(s, u, ground), [0, angle + Math.PI / 2, 0], [1.25, 1.25, 1.25]);
     }
     chunk.features.discoveries.push({ ...site, ground });
   }

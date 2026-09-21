@@ -18,6 +18,7 @@ import { buildCityRoads } from './city-roads.js';
 import { buildNeighborhoods } from './city-neighborhoods.js';
 import { cityDiscoveries, cityDiscoveryClears, cityLotClears, cityBuildingSpans } from './city-discoveries.js';
 import { buildCityDiscoveries, reserveCityLandmarks } from './city-discovery-scenery.js';
+import { solidModel, solidSpan } from './colliders.js';
 import { CityPlanting } from './city-planting.js';
 import { Rainfall } from './rainfall.js';
 
@@ -313,7 +314,8 @@ export class CityChunk {
     const { blocks } = this.scenery, { s0, s1, u0, u1 } = b;
     this.reserveBuilding(s0, s1, u0, u1);
     if (!this.inChunk((s0 + s1) / 2)) return;
-    const heights = [[s0, u0], [s1, u0], [s1, u1], [s0, u1], [(s0 + s1) / 2, (u0 + u1) / 2]].map(([s, u]) => this.ground(s, u).y);
+    this.solidLot(s0, s1, u0, u1);
+    const heights =[[s0, u0], [s1, u0], [s1, u1], [s0, u1], [(s0 + s1) / 2, (u0 + u1) / 2]].map(([s, u]) => this.ground(s, u).y);
     const y0 = Math.min(...heights) - .25, y1 = Math.max(...heights) + b.height;
     const color = new THREE.Color(b.wall);
     this.prism(blocks, s0, s1, u0, u1, y0, y1, color, { top: b.roof !== 'gable', shade: b.shade });
@@ -415,6 +417,7 @@ export class CityChunk {
         const height = 30 + r(4) * 95 + lane * 6;
         const base = cityGroundHeight(s, u) - 1, color = new THREE.Color(lane % 2 ? '#78828d' : '#808a95').lerp(fog, .15 + .06 * (lane % 5));
         this.prism(skyline, s, s + w, u, u + d, base, base + height, color, { back: false, sides: true });
+        this.solidLot(s, s + w, u, u + d);
         dressSkyline(this, { s0: s, s1: s + w, u0: u, u1: u + d }, base, base + height, color, lane);
       }
     }
@@ -430,6 +433,13 @@ export class CityChunk {
     // Include projecting sills and roof edges, as well as the wall itself.
     this.planting.reserve(points, .65);
   }
+  // A building's walls stop the car. A lot is a rectangle in (s, u), which a
+  // bend shears a little; the rectangle through the middles of its four sides
+  // stays within a hand of the walls.
+  solidLot(s0, s1, u0, u1) {
+    const s = (s0 + s1) / 2, u = (u0 + u1) / 2, near = this.at(s, u0, 0), far = this.at(s, u1, 0);
+    solidSpan(this, this.at(s0, u, 0), this.at(s1, u, 0), Math.hypot(far.x - near.x, far.z - near.z) / 2);
+  }
   furniture(name, s, u, yaw, extra = {}) {
     const p = this.ground(s, u), { furniture } = this.scenery;
     if (!furniture.has(name)) furniture.set(name, []);
@@ -441,6 +451,7 @@ export class CityChunk {
     if (!this.planting.clears(p, variant.radius * height)) return false;
     if (plantingHeight !== null) p.y = plantingHeight;
     if (!bark.has(variant)) { bark.set(variant, []); leaves.set(variant, []); }
+    solidModel(this, variant.bark, [p.x, p.y, p.z], yaw, height, true);
     bark.get(variant).push({ p: [p.x, p.y - .12, p.z], scale: [height, height, height], r: [0, yaw, 0], pit: plantingHeight === null });
     leaves.get(variant).push({ p: [p.x, p.y - .12, p.z], scale: [height, height, height], r: [0, yaw, 0], color });
     return true;

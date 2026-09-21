@@ -371,4 +371,6 @@ export const plainsDrivingRoute = {
     if (s > creek.start - 8 && s < creek.end + 8) return [-4.8, 4.8];
     return [-11.5, 11.5];
   },
+  // The creek either side of its bridge, and the stock ponds.
+  water: (s, u) => Math.abs(u) > 7 && (creekDistance(s, u) < CREEK_WATER_HALF_WIDTH + 1 || pondDistance(s, u).d < 1.05),
 };

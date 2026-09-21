@@ -274,4 +274,5 @@ export function jungleVertex(row, column) {
 }
 
 // Keep the car on the narrow river-side verge, including unguarded stretches.
-export const jungleDrivingRoute = { frame: s => ({ ...roadFrame(s), y: jungleRoadHeight(s) }), position: junglePosition, height: jungleHeight, bounds: () => [-6.9, 8.8] };
+export const jungleDrivingRoute = { frame: s => ({ ...roadFrame(s), y: jungleRoadHeight(s) }), position: junglePosition, height: jungleHeight, bounds: () => [-6.9, 8.8],
+  water: (s, u) => onRiver(s, u, 1) };

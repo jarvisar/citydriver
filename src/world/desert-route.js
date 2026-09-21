@@ -263,4 +263,6 @@ export const desertDrivingRoute = {
     const creek = desertCreek(s), margin = creek.width + 4.7;
     return creek.center < 0 ? [Math.max(-DESERT_VERGE, creek.center + margin), DESERT_VERGE] : [-DESERT_VERGE, Math.min(DESERT_VERGE, creek.center - margin)];
   },
+  // The creek either side of its bridge.
+  water: (s, u) => Math.abs(u) > 7 && desertCreekDistance(s, u) < 1,
 };

@@ -437,4 +437,12 @@ export const coastalDrivingRoute = {
     // A rail is solid; without one the roadside limit stays soft.
     return [coastalGuardrail(s) ? Math.max(open, GUARDRAIL_STOP) : open, COAST_VERGE.inland];
   },
+  // Where a free-roaming car would be driving into water: the sea and its
+  // inlets a little above the waterline, so the car stops on the wet sand
+  // with its nose dry, and the inside of a pond's basin.
+  water(s, u, height) {
+    if (height < .35) return true;
+    const pond = pondAt(s);
+    return height < pond.level + .3 && pondRadius(s, u, pond) < 1.2;
+  },
 };

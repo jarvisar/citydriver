@@ -139,6 +139,13 @@ export function createCar(id = DEFAULT_CAR) {
   return entry.kind === 'classic' ? createClassicCar(entry) : createShapeCar(entry);
 }
 
+// Ground steeper than this is a cliff face rather than a hillside.
+const STEEP = 1.2;
+// The ground has to be sound this far round the car's middle, a little over half its
+// length, so whichever way it faces no corner hangs over a quay or a cliff.
+const FOOTING = 2.5;
+export const impassable = ground => ground.blocked;
+
 export class DrivingController {
   constructor(route = coastalDrivingRoute, state = {}, carId = DEFAULT_CAR, paint = null) {
     this.route = route;
@@ -226,6 +233,47 @@ export class DrivingController {
     this.currentPose.position.copy(this.groundedPosition); this.currentPose.bodyPitch = this.bodyPitch;
     this.render(1);
   }
+  // Standing scenery gives nothing. The car is put back outside it along the
+  // contact normal and keeps only the speed that runs along the face it hit,
+  // and while it is still moving it is turned toward that face, so a glancing
+  // blow slides off a wall instead of grinding to a halt against it.
+  resolveSceneryCollision(nx, nz, depth, dt) {
+    const direction = Math.sign(this.speed), fx = Math.sin(this.heading) * direction, fz = -Math.cos(this.heading) * direction;
+    const closing = -(fx * nx + fz * nz);
+    if (closing > 0) {
+      const impact = Math.abs(this.speed) * closing;
+      if (impact > .4) { this.audioTelemetry.impact = impact; this.audioTelemetry.impactSerial++; }
+      this.bodyPitch = clamp(this.bodyPitch + direction * impact * .003, -.09, .09);
+      this.speed *= Math.sqrt(Math.max(0, 1 - closing * closing)); this.audioTelemetry.speed = this.speed;
+      const turn = Math.atan2(fx + closing * nx, -fz - closing * nz) - Math.atan2(fx, -fz);
+      this.heading += Math.atan2(Math.sin(turn), Math.cos(turn)) * Math.min(1, Math.abs(this.speed) * dt * .6);
+    }
+    // Away from the road (s, u) is not a rigid frame, so the push is carried
+    // back through the route's own mapping rather than the road's angle.
+    const at = (s, u) => this.route.position(s, u, 0), p = at(this.s, this.u), a = at(this.s + 1, this.u), b = at(this.s, this.u + 1);
+    const sx = a.x - p.x, sz = a.z - p.z, ux = b.x - p.x, uz = b.z - p.z, det = sx * uz - sz * ux, push = depth + .025;
+    const s = this.s + (nx * uz - nz * ux) * push / det, u = this.u + (sx * nz - sz * nx) * push / det;
+    // A trunk on a quay must not shove the car over the edge behind it.
+    if (!impassable(this.ground(s, u)) || impassable(this.ground(this.s, this.u))) { this.s = s; this.u = u; }
+    if (!this.freeDriving) this.u = clamp(this.u, ...this.route.bounds(this.s));
+    const placed = this.route.position(this.s, this.u);
+    this.groundedPosition.set(placed.x, placed.y + .13, placed.z);
+    this.currentPose.position.copy(this.groundedPosition); this.currentPose.bodyPitch = this.bodyPitch;
+    this.render(1);
+  }
+  // The ground under the car: its height, and its fall along and across the
+  // road over about a wheelbase and a track. Free driving also asks whether
+  // the car may stand here: not on water or a cliff face, nor with either of
+  // them within its own reach. The road itself is always sound.
+  ground(s, u) {
+    const terrainHeight = this.route.height, height = terrainHeight(s, u);
+    const ground = { s, u, height, slope: (terrainHeight(s + 1.5, u) - terrainHeight(s - 1.5, u)) / 3, lateralSlope: (terrainHeight(s, u + .7) - terrainHeight(s, u - .7)) / 1.4, blocked: false };
+    if (!this.freeDriving) return ground;
+    const unsound = (s, u, h) => Boolean(this.route.water?.(s, u, h)) || Math.abs(h - height) > STEEP * FOOTING;
+    ground.blocked = Math.hypot(ground.slope, ground.lateralSlope) > STEEP || unsound(s, u, height)
+      || Math.abs(u) + FOOTING > 7 && [[FOOTING, 0], [-FOOTING, 0], [0, FOOTING], [0, -FOOTING]].some(([ds, du]) => unsound(s + ds, u + du, terrainHeight(s + ds, u + du)));
+    return ground;
+  }
   render(alpha, origin = 0) {
     const a = this.previousPose, b = this.currentPose;
     alpha = clamp(alpha, 0, 1);
@@ -244,7 +292,7 @@ export class DrivingController {
   update(dt, input) {
     if (this.freeDriving) this.updatePaint(dt);
     this.copyPose(this.previousPose, this.currentPose);
-    const { frame: roadFrame, position: positionAt, height: terrainHeight } = this.route;
+    const { frame: roadFrame, position: positionAt } = this.route;
     const stats = this.stats;
     const touch = input.touchDrive;
     const forward = clamp(Number(input.forward) || 0, 0, 1); const brake = clamp(Number(input.brake) || 0, 0, 1);
@@ -295,7 +343,7 @@ export class DrivingController {
       this.heading -= (difference + laneCorrection) * Math.min(1, dt * .85);
       difference = this.heading - frame.angle;
     }
-    const step = this.speed * dt;
+    const step = this.speed * dt, fromS = this.s, fromU = this.u;
     this.s += touch?.amount ? touch.along * step : Math.cos(difference) * step / frame.scale;
     this.u += touch?.amount ? touch.across * step : Math.sin(difference) * step;
     if (!touch && assist && Math.abs(difference) < 1.15) this.heading += (roadFrame(this.s).angle - frame.angle) * (1 - Math.abs(this.steer)) * .92;
@@ -306,10 +354,23 @@ export class DrivingController {
         this.u = clamp(this.u, coastLimit, inlandLimit); this.speed *= Math.exp(-dt * 4);
       }
     }
-    const p = positionAt(this.s, this.u); p.y += .13;
+    let ground = this.ground(this.s, this.u);
+    // The roadside limits already keep a car off bad ground. With them lifted,
+    // water and cliffs stop it instead. Whichever half of the move stays on
+    // firm ground is kept, so the car runs along a shore rather than sticking
+    // to it; a car already standing somewhere impassable may always leave.
+    if (this.freeDriving && impassable(ground)) {
+      const from = this.ground(fromS, fromU);
+      if (!impassable(from)) {
+        let kept = this.ground(this.s, fromU);
+        if (impassable(kept)) kept = this.ground(fromS, this.u);
+        ground = impassable(kept) ? from : kept;
+        this.s = ground.s; this.u = ground.u; this.speed *= ground === from ? 0 : Math.exp(-dt * 4);
+      }
+    }
+    const p = positionAt(this.s, this.u, ground.height); p.y += .13;
     this.groundedPosition.set(p.x, p.y, p.z); this.car.position.copy(this.groundedPosition);
-    const slope = (terrainHeight(this.s + 1.5, this.u) - terrainHeight(this.s - 1.5, this.u)) / 3;
-    const lateralSlope = (terrainHeight(this.s, this.u + .7) - terrainHeight(this.s, this.u - .7)) / 1.4;
+    const { slope, lateralSlope } = ground;
     this.pitch = THREE.MathUtils.damp(this.pitch, Math.atan(slope * Math.cos(difference) + lateralSlope * Math.sin(difference)), 10, dt || 1);
     this.roll = THREE.MathUtils.damp(this.roll, Math.atan(lateralSlope * Math.cos(difference) - slope * Math.sin(difference)), 9, dt || 1);
     this.car.rotation.set(0, -this.heading, 0, 'YXZ'); this.car.rotateX(this.pitch); this.car.rotateZ(this.roll);

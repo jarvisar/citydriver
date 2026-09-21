@@ -12,6 +12,7 @@
     "test:browser": "node scripts/browser-test.mjs",
     "test:ao": "node scripts/ambient-occlusion-test.mjs",
     "test:traffic": "node scripts/traffic-test.mjs",
+    "test:collision": "node scripts/collision-test.mjs",
     "test:audio": "node scripts/audio-test.mjs",
     "review:audio": "node scripts/audio-review.mjs",
     "test:mobile": "node scripts/mobile-test.mjs",

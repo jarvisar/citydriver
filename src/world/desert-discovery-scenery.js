@@ -2,12 +2,13 @@ import * as THREE from 'three';
 import { CHUNK_LENGTH, roadFrame, roadHeight, randomAt, smoothstep } from './route.js';
 import { DESERT_COLUMNS, DESERT_STEP, DESERT_VALLEY_EDGE, desertRowStep, desertPosition } from './desert-route.js';
 import { desertFuelApronWidth, DESERT_FUEL_APRON_HALF_LENGTH } from './desert-discoveries.js';
+import { solidModel } from './colliders.js';
 import { desertDiscoveryAssets as assets, desertDiscoveryMaterial as material, desertFoundationMaterial, desertApronMaterial, desertRotorMaterial } from './desert-discovery-assets.js';
 
 const transform = new THREE.Object3D();
 
 export function buildDesertDiscoveries(chunk, discoveries) {
-  chunk.features = {discoveries: []};
+  chunk.features = {...chunk.features, discoveries: []};
   const batches = new Map();
   const point = (s, u, height) => {
     const p = chunk.groundPosition(s, u);
@@ -16,6 +17,11 @@ export function buildDesertDiscoveries(chunk, discoveries) {
   function add(name, geometry, paint, p, rotation = [0,0,0], scale = [1,1,1]) {
     if (!batches.has(name)) batches.set(name, {geometry, paint, items: []});
     batches.get(name).items.push({p, rotation, scale});
+  }
+  // A building or a fixture: drawn like the rest, and it stops the car.
+  function solid(name, geometry, p, rotation) {
+    add(name, geometry, material, p, rotation);
+    solidModel(chunk, geometry, p, rotation[1]);
   }
   function foundation(s, u, halfU, halfS, angle) {
     const samples = [-halfS, 0, halfS].flatMap(ds => [-halfU, 0, halfU].map(du => chunk.groundPosition(s + ds, u + du).y));
@@ -82,17 +88,17 @@ export function buildDesertDiscoveries(chunk, discoveries) {
     let ground;
     if (kind === 'fuel-stop') {
       ground = foundation(s,u,5.6,5.5,angle);
-      add('desert-fuel-stop',assets.fuelStop,material,point(s,u,ground),[0,angle,0]);
+      solid('desert-fuel-stop',assets.fuelStop,point(s,u,ground),[0,angle,0]);
       apron(site);
     } else if (kind === 'windpump') {
       ground = foundation(s,u,1.8,1.8,angle);
-      add('desert-windpump-tower',assets.windTower,material,point(s,u,ground),[0,angle,0]);
+      solid('desert-windpump-tower',assets.windTower,point(s,u,ground),[0,angle,0]);
       const rotor = new THREE.Vector3(0,11.15,-.72).applyAxisAngle(new THREE.Vector3(0,1,0),angle);
       const root = point(s,u,ground);
       add('desert-windpump-rotor',assets.windRotor,desertRotorMaterial,[root[0]+rotor.x,root[1]+rotor.y,root[2]+rotor.z],[0,angle,0]);
       const troughS = s+4, troughU = u-side*3.8;
       const troughGround = foundation(troughS,troughU,1.15,2.4,angle);
-      add('desert-ranch-trough',assets.trough,material,point(troughS,troughU,troughGround),[0,angle,0]);
+      solid('desert-ranch-trough',assets.trough,point(troughS,troughU,troughGround),[0,angle,0]);
     } else {
       // A single sun-bleached skull, tucked into the sand beside the road.
       ground = point(s,u)[1]-.025;
@@ -104,7 +110,7 @@ export function buildDesertDiscoveries(chunk, discoveries) {
       const orientation=new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),normal)
         .multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0),yaw));
       const rotation=new THREE.Euler().setFromQuaternion(orientation);
-      add('desert-cattle-skull',assets.skull,material,point(s,u,ground),[rotation.x,rotation.y,rotation.z]);
+      solid('desert-cattle-skull',assets.skull,point(s,u,ground),[rotation.x,rotation.y,rotation.z]);
     }
     chunk.features.discoveries.push({...site,ground});
   }

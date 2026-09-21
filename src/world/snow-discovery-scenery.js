@@ -3,6 +3,7 @@ import { CHUNK_LENGTH, seededRandom, smoothstep, lerp, clamp } from './route.js'
 import { snowPosition, snowGroundHeight } from './snow-route.js';
 import { CABLE_ROPE_OFFSET, CABIN_DROP, CABLE_CYCLE, spanSag, cableTravel } from './snow-discoveries.js';
 import { SnowDiscoveryParts, snowDiscoveryMaterial, cableCabinGeometry } from './snow-discovery-assets.js';
+import { solidBox, solidPost } from './colliders.js';
 
 const up = new THREE.Vector3(0, 1, 0), transform = new THREE.Object3D();
 const vector = (x, y, z) => new THREE.Vector3(x, y, z);
@@ -77,6 +78,7 @@ function buildSnowmen(chunk, site) {
       part.scale(figure.scale, figure.scale, figure.scale);
       part.rotateY(yaw); part.translate(p.x, y - .12, z);
     }
+    solidPost(chunk, p.x, z, .94 * figure.scale);
     return { ...figure, x: p.x, z: p.z, ground: y };
   });
   chunk.addMesh(parts.finish(), snowDiscoveryMaterial, 'snowmen');
@@ -103,6 +105,9 @@ function buildCableCar(chunk, site) {
     base.setY(Math.max(place.ground, deck));
     const top = anchor.y - base.y;
     const box = (position, size, color, glow = 0) => parts.box(position, size, color, rotation, glow);
+    // The building and its boarding deck stop the car as one block.
+    const middle = at(0, 0, 1);
+    solidBox(chunk, middle.x, middle.z, yaw, 4.8, 5.3);
     box(at(0, (low - base.y + .7) / 2, -1), [9.6, base.y + .7 - low, 6.6], '#495365');
     box(at(0, 2.75, -1), [8.9, 4.1, 5.6], '#6b5448');
     for (const x of [-4.48, 4.48]) for (const z of [-2.5, -1, .5]) box(at(x, 3.05, z), [.1, 1, 1.2], '#ffcf8c', 2.1);
@@ -144,6 +149,8 @@ function buildCableCar(chunk, site) {
       return [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([sx, sz]) => at(sx * spread, sz * depth, y));
     };
     const feet = corner(0, -height), tops = corner(1, -1.6), footings = [];
+    // Four legs on their blocks, which no car passes between.
+    solidBox(chunk, point.x, point.z, Math.atan2(line.x, line.z), 3.1, 2.8);
     feet.forEach((foot, i) => {
       const y = groundAt(foot, place.low);
       // A concrete block on a steep slope has to reach the ground under its
@@ -290,7 +297,7 @@ export function poseCabins(mesh, feature, time) {
 }
 
 export function buildSnowDiscoveries(chunk, discoveries) {
-  chunk.features = { discoveries: [] };
+  chunk.features = { ...chunk.features, discoveries: [] };
   for (const site of discoveries) {
     if (site.s < chunk.start || site.s >= chunk.start + CHUNK_LENGTH) continue;
     chunk.features.discoveries.push(site.kind === 'snowmen' ? buildSnowmen(chunk, site) : buildCableCar(chunk, site));
