@@ -1,9 +1,8 @@
 # Discovery frequency
 
-Each scene lists all its special encounters in a `*_DISCOVERY_MILES` table
-at the top of its discovery file:
+To change how often a landmark appears, edit its value in the route's `*_DISCOVERY_MILES` table and reload:
 
-| Scene | File |
+| Route | File |
 | --- | --- |
 | Pacific Coast | [coastal-discoveries.js](../src/world/coastal-discoveries.js) |
 | Red Rock Desert | [desert-discoveries.js](../src/world/desert-discoveries.js) |
@@ -12,35 +11,16 @@ at the top of its discovery file:
 | Golden Plains | [plains-discoveries.js](../src/world/plains-discoveries.js) |
 | Rainy Downtown | [city-discoveries.js](../src/world/city-discoveries.js) |
 
-Change **one value** to set that discovery's approximate average miles between
-sightings, then reload the game. For example, `'cable-car': 5` means about one
-cable-car encounter every five miles. Change it to `8` for fewer, or `4` for
-more. Use `Infinity` to disable a type; zero and negative values are invalid.
+`'cable-car': 5` means roughly one cable car encounter every five miles. Lower values make it more frequent; higher values make it rarer. Use `Infinity` to disable a type. Zero and negative values are invalid.
 
-The defaults combine to about **one special encounter every 2.5 miles** per
-scene. Individual discoveries remain rarer: two types at five miles each
-combine to an encounter about every 2.5 miles. Changing a value changes that
-scene's combined rate; it does not automatically rebalance the other values.
+Defaults add up to about one discovery every 2.5 miles per route. Changing one value doesn't rebalance the others. Terrain and the world seed affect placement, so gaps vary. The scheduler enforces minimum spacing even with very frequent settings. Changes can move other discoveries in the same route.
 
-These are long-run averages, not fixed gaps. Terrain suitability and seed
-affect placement. The shared scheduler compensates for typical failed sites,
-keeps one encounter per district, and leaves breathing room between them.
-Very frequent settings eventually reach a safety limit instead of packing
-structures together. Settings changes regenerate discovery locations, including
-other kinds in the same scene, but do not reset saved driving progress.
+Birds, Alpine lakeside cabins, and ordinary road bridges use separate schedules. A discovery's smaller objects, such as a dock's boat or a farm's tractor, follow the parent discovery.
 
-Birds and Alpine lakeside cabins keep their existing schedules and are excluded
-from these targets. Regular scenery such as ordinary road bridges is also
-excluded. Objects belonging to a discovery—such as a dock's boat, a farmstead's
-tractor, or a grain elevator's rail siding—share that discovery's setting.
-
-To measure actual frequencies after editing:
+Check the resulting frequencies from the repo root:
 
 ```sh
 node scripts/discovery-frequency.mjs
 ```
 
-The report samples a long route, accounts for road bends, and shows targets and
-observed averages in miles. An optional numeric argument changes the sampled
-route length; `TEST_WORLD_SEED` selects another world. The automated frequency
-test checks five different seeds.
+The report compares target and measured averages over 2,000 route miles. Pass a number to change the sample length, such as `node scripts/discovery-frequency.mjs 500`. Set `TEST_WORLD_SEED` to check another world. The automated frequency test covers five seeds.
