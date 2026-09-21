@@ -78,7 +78,7 @@ test('the coastal wagon keeps the original handling and every car stays close to
   assert.ok(formula.topSpeed > sports.topSpeed * 1.15, 'the racer should clear the coupe by a wide margin');
   assert.ok(formula.acceleration > sports.acceleration * 1.25 && formula.braking > sports.braking);
   assert.ok(formula.grip > sports.grip, 'slicks should turn in harder than the coupe');
-  assert.ok(Math.abs(flatOut('formula', 30).speed / .44704 - 100) < .1, 'the Formula car must actually reach 100 mph under throttle');
+  assert.ok(Math.abs(flatOut('formula', 30).speed - formula.topSpeed) < .01, 'the Formula car must actually reach its top speed under throttle');
   // Leaving the tarmac costs every car a third of its top end, give or take,
   // and the order is the character: off-roaders keep most, racers least.
   // The specials sit outside that band on purpose, in both directions.

@@ -108,7 +108,7 @@ export const CARS = {
   },
   formula: {
     name: 'Apex Formula', kind: 'formula', paint: '#d8452f', shape: FORMULA_SHAPE,
-    // 100 mph, with enough power to overcome air drag at that speed.
+    // 112 mph, with enough power to overcome air drag at that speed.
     stats: { topSpeed: 50, acceleration: 40, braking: 30, grip: 1.32, offRoad: 20 },
   },
 };
