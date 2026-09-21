@@ -141,6 +141,7 @@ export class DrivingController {
   constructor(route = coastalDrivingRoute, state = {}, carId = DEFAULT_CAR, paint = null) {
     this.route = route;
     this.freeDriving = false;
+    this.rainbowHue = 0; this.rainbowColor = new THREE.Color();
     this.night = false; this.journeyId = 'coast';
     this.setCar(carId, { rebuild: false, paint });
     this.s = state.s ?? 24; this.u = 2.4; this.speed = 0; this.steer = 0; this.heading = route.frame(this.s).angle;
@@ -178,17 +179,27 @@ export class DrivingController {
     this.update(0, {});
   }
   // A garage colour, or null for the finish the car left the factory in.
-  setPaint(color) { this.paintColor = color ?? null; this.paintCar(this.paintColor); }
+  setPaint(color) { this.paintColor = color ?? null; this.updatePaint(); }
+  updatePaint(dt = 0) {
+    if (this.freeDriving) {
+      // A smooth six-second RGB loop, without changing the garage's chosen paint.
+      this.rainbowHue = (this.rainbowHue + dt / 2.8) % 1;
+      this.rainbowColor.setHSL(this.rainbowHue, 1, .5, THREE.SRGBColorSpace);
+      this.paintCar(this.rainbowColor);
+    } else this.paintCar(this.paintColor);
+  }
   reset() { this.u = 2.4; this.speed = 0; this.steer = 0; this.heading = this.route.frame(this.s).angle; this.update(0, {}); }
   toggleFreeDriving() {
     this.freeDriving = !this.freeDriving;
+    if (this.freeDriving) this.rainbowHue = 0;
+    this.updatePaint();
     if (!this.freeDriving) this.reset();
     return this.freeDriving;
   }
   // Lamps from daytime (0) to night (1); a storm runs them part way up.
   setLights(level) { this.night = level; for (const light of this.nightLights) light.material.emissiveIntensity = light.day + (light.night - light.day) * level; }
   setNight(enabled) { this.setLights(enabled ? 1 : 0); }
-  setAppearance(journey) { this.journeyId = journey; this.applyTrim(journey); }
+  setAppearance(journey) { this.journeyId = journey; this.applyTrim(journey); this.updatePaint(); }
   setRoute(route, state = {}) {
     this.route = route; this.s = state.s ?? 24; this.distance = state.distance ?? 0;
     this.pitch = 0; this.roll = 0; this.bodyPitch = 0; this.bodyRoll = 0; this.reset();
@@ -224,6 +235,7 @@ export class DrivingController {
     for (const w of this.wheels) { if (w.front) w.pivot.rotation.y = -steer * .38; w.wheel.rotation.x = spin; w.hub.rotation.x = spin; }
   }
   update(dt, input) {
+    if (this.freeDriving) this.updatePaint(dt);
     this.copyPose(this.previousPose, this.currentPose);
     const { frame: roadFrame, position: positionAt, height: terrainHeight } = this.route;
     const stats = this.stats;

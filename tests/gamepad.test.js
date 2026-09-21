@@ -11,6 +11,52 @@ function fixture() {
   return { device, devices, input, actions, connections };
 }
 
+const konamiButtons = [12, 12, 13, 13, 14, 15, 14, 15, 1, 0];
+function enterCode(input, device, sequence = konamiButtons, options) {
+  for (const index of sequence) {
+    hold(device, index); input.update(options); input.update(options);
+    hold(device, index, 0); input.update(options);
+  }
+}
+
+test('controller Konami code toggles once per entry, including through autodrive input clearing', () => {
+  const { input, device } = fixture();
+  let toggles = 0;
+  input.onFreeDriving = () => toggles++;
+  input.onAction = action => { if (action === 'autodrive') input.clear({ preserveKonami: true }); };
+  enterCode(input, device);
+  assert.equal(toggles, 1);
+  assert.deepEqual(input.state, {}, 'the final A does not accelerate');
+  enterCode(input, device);
+  assert.equal(toggles, 2);
+});
+
+test('controller code requires distinct, ordered presses and resets on interrupted input', () => {
+  for (const interrupt of ['wrong', 'held', 'blocked', 'clear', 'menu', 'replacement']) {
+    const { input, device, devices } = fixture();
+    let toggles = 0;
+    input.onFreeDriving = () => toggles++;
+    if (interrupt === 'held') {
+      enterCode(input, device, [12]);
+      enterCode(input, device, konamiButtons.slice(2));
+    } else {
+      enterCode(input, device, konamiButtons.slice(0, 8));
+      if (interrupt === 'wrong') enterCode(input, device, [2]);
+      if (interrupt === 'blocked') input.update({ blocked: true });
+      if (interrupt === 'clear') input.clear();
+      if (interrupt === 'menu') input.update({ paused: true, menu: 'pause' });
+      if (interrupt === 'replacement') {
+        devices[1] = pad(2); input.update(); devices[1] = device;
+      }
+      input.update();
+      enterCode(input, device, konamiButtons.slice(8));
+    }
+    assert.equal(toggles, 0, interrupt);
+    enterCode(input, device);
+    assert.equal(toggles, 1, `${interrupt}: a fresh attempt succeeds`);
+  }
+});
+
 test('controller detection handles sparse slots, disconnects, and missing or restricted APIs', () => {
   const { input, connections, devices, device } = fixture();
   input.update(); input.update();

@@ -34,7 +34,7 @@ setupPwaFullscreen();
 
 const $ = selector => document.querySelector(selector);
 const MENU_MOVES = ['menuNext', 'menuPrevious', 'menuUp', 'menuDown'];
-const MENU_CRUISE_SPEED = TRAFFIC_CRUISE_SPEED * 1.1;
+const MENU_CRUISE_SPEED = TRAFFIC_CRUISE_SPEED * 1.4;
 // A chooser's ring holds its cards and paint chips; the pause screen's holds
 // resume, the garage and every driving, sound and graphics setting.
 const MENU_CARDS = '[data-journey], [data-car], [data-paint]';
@@ -398,7 +398,8 @@ async function boot() {
       if (name === 'autodrive') {
         const enabled = autodrive.toggle();
         revealTouchControls();
-        if (enabled) input.clear();
+        // D-pad Up also begins the hidden code, so this shortcut must keep its progress.
+        if (enabled) input.clear({ preserveKonami: true });
         $('#autodrive').setAttribute('aria-pressed', String(enabled));
         if (enabled) start();
         toast(`Autodrive ${enabled ? 'on' : 'off'}`);

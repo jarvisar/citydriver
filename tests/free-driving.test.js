@@ -4,6 +4,50 @@ import { DrivingController } from '../src/vehicle.js';
 import { CAR_IDS } from '../src/cars.js';
 import { JOURNEYS } from '../src/journeys.js';
 
+const palette = car => {
+  const colors = new Set();
+  car.car.traverse(object => { if (object.isMesh) colors.add(object.material.color.getHexString()); });
+  return [...colors].sort();
+};
+
+test('every car cycles rainbow paint while stationary in free drive and restores its finish', () => {
+  for (const id of CAR_IDS) {
+    const car = new DrivingController(undefined, {}, id);
+    const original = palette(car);
+    car.toggleFreeDriving();
+    const red = palette(car);
+    for (let frame = 0; frame < 60; frame++) car.update(1 / 60, {});
+    assert.notDeepEqual(palette(car), red, `${id} should animate at rest`);
+    assert.equal(car.speed, 0);
+    car.toggleFreeDriving();
+    assert.deepEqual(palette(car), original, `${id} restores its factory finish`);
+    car.disposeModel();
+  }
+});
+
+test('rainbow survives garage and route changes and restores the latest chosen paint', () => {
+  const car = new DrivingController();
+  car.toggleFreeDriving();
+  for (const id of CAR_IDS) {
+    car.setCar(id, { paint: '#123456' });
+    car.setAppearance('desert');
+    car.setRoute(JOURNEYS.desert.route);
+    assert.ok(palette(car).includes('ff0000'), `${id} keeps rainbow after changes`);
+    assert.equal(car.paintColor, '#123456');
+  }
+  car.setPaint('#654321');
+  assert.ok(palette(car).includes('ff0000'));
+  car.toggleFreeDriving();
+  assert.ok(palette(car).includes('654321'));
+  car.setCar('auto'); car.setAppearance('desert');
+  const desert = palette(car);
+  car.toggleFreeDriving(); car.setAppearance('snow'); car.toggleFreeDriving();
+  assert.notDeepEqual(palette(car), desert, 'factory paint follows the latest route');
+  const snow = new DrivingController(); snow.setAppearance('snow');
+  assert.deepEqual(palette(car), palette(snow));
+  snow.disposeModel(); car.disposeModel();
+});
+
 function assertGrounded(car) {
   const p = car.route.position(car.s, car.u);
   assert.ok(Math.hypot(car.car.position.x - p.x, car.car.position.y - p.y - .13, car.car.position.z - p.z) < 1e-8);

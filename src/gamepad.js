@@ -1,3 +1,6 @@
+import { KonamiCode } from './konami-code.js';
+
+const CODE_BUTTONS = { 12: 'ArrowUp', 13: 'ArrowDown', 14: 'ArrowLeft', 15: 'ArrowRight', 1: 'KeyB', 0: 'KeyA' };
 const deadzone = (value = 0, threshold = .18) => Math.abs(value) <= threshold ? 0 : Math.sign(value) * Math.min(1, (Math.abs(value) - threshold) / (1 - threshold));
 const buttonValue = (pad, index) => {
   const button = pad.buttons[index];
@@ -7,12 +10,16 @@ const buttonValue = (pad, index) => {
 // Use the browser's standard Xbox / PlayStation layout, with the same indices
 // as a best-effort fallback for handhelds exposing an unmapped gamepad.
 export class GamepadInput {
-  constructor(onAction, onConnection, getGamepads = () => navigator.getGamepads?.() ?? []) {
+  constructor(onAction, onConnection, getGamepads = () => navigator.getGamepads?.() ?? [], onFreeDriving = () => {}) {
     this.onAction = onAction; this.onConnection = onConnection; this.getGamepads = getGamepads;
     this.index = null; this.connected = false; this.state = {};
     this.previousButtons = []; this.requireNeutral = false;
+    this.konami = new KonamiCode(); this.onFreeDriving = onFreeDriving;
   }
-  clear() { this.state = {}; this.requireNeutral = true; }
+  clear({ preserveKonami = false } = {}) {
+    this.state = {}; this.requireNeutral = true;
+    if (!preserveKonami) this.konami.reset();
+  }
   // `menu` is 'pause' for the pause screen, truthy for a modal chooser, and
   // false during a drive.
   update({ blocked = false, paused = false, menu = false } = {}) {
@@ -22,6 +29,7 @@ export class GamepadInput {
     const pad = pads.find(pad => pad.index === this.index) ?? pads.find(pad => pad.mapping === 'standard') ?? pads[0];
     if ((pad?.index ?? null) !== this.index) {
       this.index = pad?.index ?? null; this.state = {}; this.previousButtons = [];
+      this.konami.reset();
       // A replacement controller must start at rest; the first can start with Gas.
       this.requireNeutral = this.connected;
     }
@@ -46,9 +54,21 @@ export class GamepadInput {
     };
     const active = Object.values(state).some(Boolean) || buttons.some(Boolean);
     if (blocked || this.requireNeutral) {
+      if (blocked) this.konami.reset();
       this.state = {}; this.previousButtons = buttons;
       this.requireNeutral = blocked || active;
       return;
+    }
+    // D-pad directions, then the east and south face buttons (B/A or Circle/Cross).
+    // Menus keep their normal navigation; held buttons count only once.
+    if (paused || menu) this.konami.reset();
+    else {
+      const presses = buttons.flatMap((down, index) => down && pressed(index) && index < 17 ? [index] : []);
+      if (presses.length > 1) this.konami.reset();
+      else if (presses.length === 1 && this.konami.press(CODE_BUTTONS[presses[0]] ?? 'Other')) {
+        this.previousButtons = buttons; this.clear(); this.onFreeDriving();
+        return;
+      }
     }
     // Sample once per display frame, including while paused, so held shortcuts
     // fire once and Start can resume the game without a keyboard or touchscreen.

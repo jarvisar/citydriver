@@ -10,7 +10,10 @@ export class KonamiCode {
       this.reset();
       return false;
     }
-    this.keys.push(event.code);
+    return this.press(event.code);
+  }
+  press(code) {
+    this.keys.push(code);
     if (this.keys.length > CODE.length) this.keys.shift();
     if (this.keys.length !== CODE.length || !CODE.every((code, i) => code === this.keys[i])) return false;
     this.reset();

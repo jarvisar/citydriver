@@ -18,14 +18,14 @@ export class Input {
       this.keys.clear(); this.touchStick.clear();
       document.body.dataset.controller = String(connected);
       onControllerConnection(connected);
-    });
+    }, undefined, () => { this.clear(); onFreeDriving(); });
     window.addEventListener('keydown', e => {
       // Native mixer sliders own their arrow, Home and End keys. Editing a
       // volume must not also accelerate the car or swallow keyboard access.
       if (e.target.matches?.('input[type="range"]') && !['Escape', 'KeyP', 'KeyM'].includes(e.code)) return;
       // Let menu buttons keep their native keyboard activation.
       if (e.target.closest?.('button') && ['Space', 'Enter'].includes(e.code)) return;
-      // This hidden toggle is reachable only through the keyboard sequence.
+      // The keyboard and controller sequences share the same hidden toggle.
       if (this.konami.keydown(e)) {
         e.preventDefault(); this.clear(); onFreeDriving();
         return;
@@ -82,5 +82,5 @@ export class Input {
     else if (this.touchStick.engaged) state.touchStick = this.touchStick.vector;
     return state;
   }
-  clear() { this.keys.clear(); this.touchStick.clear(); this.gamepad.clear(); this.xr.clear(); this.konami.reset(); }
+  clear(options) { this.keys.clear(); this.touchStick.clear(); this.gamepad.clear(options); this.xr.clear(); this.konami.reset(); }
 }
