@@ -66,12 +66,12 @@ export class CityGuide {
     const run = this.taxi, vehicle = this.position(), target = run.target;
     $('taxi-offer').hidden = !this.expanded;
     const offer = run.status === 'pickup'
-      ? 'Stop in a pickup ring. Numbers show group size; everyone boards together.'
+      ? 'Red rings are close by, green rings go far. Numbers show group size.'
       : `${run.onboard} aboard · ${run.fare.stops.length - run.stopIndex} stop${run.fare.stops.length - run.stopIndex === 1 ? '' : 's'} left · Follow the gold route`;
     if ($('taxi-offer').textContent !== offer) $('taxi-offer').textContent = offer;
     this.canvas.title = run.status === 'pickup' ? 'Nearby passengers' : 'Route to the drop-off';
     this.canvas.setAttribute('aria-label', run.status === 'pickup'
-      ? 'Local street map. North is up; the white arrow is your car. Colored dots mark waiting passengers; numbers show group size.'
+      ? 'Local street map. North is up; the white arrow is your car. Dots mark waiting passengers, red for short trips through orange and yellow to green for long ones; numbers show group size.'
       : 'Local street map. North is up; the white arrow is your car. Gold marks the current drop-off; a dashed line leads to the next group stop.');
     if (this.expanded) this.draw(vehicle);
   }
@@ -100,7 +100,7 @@ export class CityGuide {
       const [x, y] = point(nextStop);
       if (x > 7 && y > 7 && x < width - 7 && y < height - 7) {
         ctx.beginPath(); ctx.arc(x, y, 7, 0, Math.PI * 2); ctx.fillStyle = '#95b8b9'; ctx.fill();
-        ctx.save(); ctx.fillStyle = '#17262f'; ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('2', x, y); ctx.restore();
+        ctx.save(); ctx.fillStyle = '#17262f'; ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(String(run.stopIndex + 2), x, y); ctx.restore();
       }
     }
     ctx.lineJoin = 'round'; ctx.lineCap = 'round'; ctx.lineWidth = 2; ctx.strokeStyle = '#efca8b';

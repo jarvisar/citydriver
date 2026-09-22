@@ -8,7 +8,7 @@ export class Input {
     this.keys = new Set(); this.onAction = onAction;
     this.xr = new XRInput(onAction); this.xrActive = false;
     this.konami = new KonamiCode();
-    this.touchStick = new TouchStick(document.querySelector('#touch-stick'), () => onAction('drive'));
+    this.touchStick = new TouchStick(document.querySelector('#touch-stick'), () => onAction('drive'), document.querySelector('#scene'));
     this.codes = { forward: ['KeyW', 'ArrowUp', 'Numpad8'], brake: ['KeyS', 'ArrowDown', 'Numpad2'], left: ['KeyA', 'ArrowLeft', 'Numpad4'], right: ['KeyD', 'ArrowRight', 'Numpad6'], handbrake: ['Space'], boost: ['ShiftLeft', 'ShiftRight'] };
     this.touchButtons = {};
     for (const action of ['boost', 'handbrake']) {

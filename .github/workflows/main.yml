@@ -25,6 +25,7 @@ jobs:
         with:
           name: citydriver-web
           path: dist
+          retention-days: 3
       - uses: actions/upload-pages-artifact@v4
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         with:

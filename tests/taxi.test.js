@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { TaxiRun, taxiRoute, leadStop, SHIFT_SECONDS, MAX_SHIFT_SECONDS, GROUP_MAX_ROUTE } from '../src/taxi-run.js';
+import { TaxiRun, taxiRoute, leadStop, SHIFT_SECONDS, MAX_SHIFT_SECONDS, GROUP_MAX_ROUTE, DROP_OFF_CLEARANCE } from '../src/taxi-run.js';
 import { citydriverRoute, cityStreetAt, cityRiverAt } from '../src/world/city-grid.js';
 import { DrivingController, createCar } from '../src/vehicle.js';
 import { steerCurve } from '../src/handling.js';
@@ -47,7 +47,7 @@ test('pickup and payment require stopping; successful fares add cash and time on
   car.speed = 0; const before = run.timeLeft;
   for (let i = 0; i < 29; i++) run.update(1 / 60, car);
   assert.equal(run.status, 'pickup'); assert.equal(run.delivered, 1); assert.ok(run.cash >= fare);
-  assert.ok(run.timeLeft > before + 17); assert.equal(run.drainEvents().filter(e => e.kind === 'paid').length, 1);
+  assert.ok(run.timeLeft > before + 12); assert.equal(run.drainEvents().filter(e => e.kind === 'paid').length, 1);
   assert.equal(run.drainEvents().length, 0);
   assert.equal(run.target, null, 'payment leaves the next passenger unselected');
   assert.equal(run.hold, 0);
@@ -75,16 +75,18 @@ test('navigation stays empty at startup, while cruising, and until boarding fini
   }
 });
 
-test('a pickup overlapping the drop-off waits for the cab to leave and return', () => {
-  const car = player(), run = new TaxiRun(); run.start(car); pickup(run, car);
+test('no pickup waits where the last rider got out', () => {
+  const car = player(), run = new TaxiRun(); run.start(car); pickup(run, car, run.customers.find(c => c.passengers === 1));
+  // Force the worst case: the drop-off is exactly on another waiting fare.
   const waiting = run.customers[0]; run.fare.stops[0].destination = waiting;
   Object.assign(car, { s: waiting.s, u: waiting.u }); run.update(.5, car);
-  run.update(1, car);
   assert.equal(run.delivered, 1); assert.equal(run.status, 'pickup');
-  assert.equal(run.target, null); assert.equal(run.hold, 0);
-  car.s += 20; car.speed = 12; run.update(.1, car);
-  Object.assign(car, { s: waiting.s, u: waiting.u, speed: 0 }); run.update(.5, car);
-  assert.equal(run.status, 'driving'); assert.equal(run.fare.id, waiting.id);
+  assert.ok(run.customers.length > 3, 'the rest of the neighbourhood still offers fares');
+  for (const customer of run.customers) assert.ok(Math.hypot(customer.s - waiting.s, customer.u - waiting.u) >= DROP_OFF_CLEARANCE);
+  run.update(1, car); assert.equal(run.status, 'pickup'); assert.equal(run.hold, 0);
+  // Driving on refreshes the neighbourhood without bringing the ring back.
+  car.s += 70; run.update(1.1, car);
+  assert.ok(run.customers.every(c => Math.hypot(c.s - waiting.s, c.u - waiting.u) >= DROP_OFF_CLEARANCE));
 });
 
 test('starting inside a pickup ring waits for the driver to leave and return', () => {
@@ -255,15 +257,36 @@ test('boost drains, requires throttle, recharges on release, and stops when the 
   run.finish(); assert.equal(run.controls(.1, { boost: true, forward: 1 }).boost, false);
 });
 
+// Move the cab a little way along its route to the drop-off.
+function advance(run, car, meters) {
+  const points = taxiRoute(car, run.target);
+  for (let i = 1; i < points.length; i++) {
+    const a = points[i - 1], b = points[i], step = Math.hypot(b.s - a.s, b.u - a.u);
+    if (step >= meters) { Object.assign(car, { s: a.s + (b.s - a.s) * meters / step, u: a.u + (b.u - a.u) * meters / step }); return; }
+    meters -= step;
+  }
+}
+
 test('near misses score once per car; drifts build tips and crashes break the combo', () => {
-  const run = new TaxiRun(), car = player(); run.start(car); pickup(run, car);
+  const run = new TaxiRun(), car = player(); run.start(car); pickup(run, car, run.customers.find(c => c.passengers === 1));
   car.speed = 25; const other = { s: car.s, u: car.u + 3.5, speed: 10, direction: 1, axis: 'north' };
   run.update(1 / 60, car, [other]); assert.equal(run.tips, 10); assert.equal(run.combo, 2);
   run.update(1 / 60, car, [other]); assert.equal(run.tips, 10);
-  car.drifting = true; run.update(1, car); assert.equal(run.tips, 20); assert.equal(run.combo, 3);
+  advance(run, car, 20); car.drifting = true; run.update(1, car); assert.equal(run.tips, 20); assert.equal(run.combo, 3);
   car.audioTelemetry.impactSerial++; car.audioTelemetry.impact = 15; car.drifting = false;
   run.update(1 / 60, car, [{ ...other }]); assert.equal(run.tips, 10); assert.equal(run.combo, 1);
   run.combo = 3; run.comboTime = .1; run.update(.2, car); assert.equal(run.combo, 1);
+});
+
+test('stunts only tip on the way: circling for drift tips earns nothing', () => {
+  const run = new TaxiRun(), car = player(); run.start(car); pickup(run, car, run.customers.find(c => c.passengers === 1));
+  car.speed = 20; car.drifting = true;
+  run.update(.7, car); assert.equal(run.tips, 5, 'the first drift on the way tips');
+  // Holding a drift in place, as when circling, pays nothing more.
+  for (let i = 0; i < 20; i++) run.update(.7, car);
+  assert.equal(run.tips, 5);
+  // Carrying on toward the drop-off tips again.
+  advance(run, car, 30); run.update(.7, car); assert.ok(run.tips > 5);
 });
 
 test('the cab has a roof sign, boost adds speed, and drifting creates recoverable slip', () => {
@@ -402,8 +425,8 @@ test('long fares return more time than short fares and the shift still has a cei
     return run;
   };
   const short = complete(300), long = complete(1000);
-  assert.equal(short.timeLeft, 47.5, 'short fares keep the original time reward');
+  assert.equal(short.timeLeft, 42.5, 'a short fare delivered at once is Speedy: 8 s plus 5 s');
   assert.ok(long.timeLeft >= short.timeLeft + 8 && long.timeLeft <= short.timeLeft + 12);
-  assert.match(long.drainEvents().find(e => e.kind === 'paid').text, /\+28s/);
+  assert.match(long.drainEvents().find(e => e.kind === 'paid').text, /^Speedy! .*\+23s/);
   assert.equal(complete(1100, MAX_SHIFT_SECONDS - 1).timeLeft, MAX_SHIFT_SECONDS);
 });

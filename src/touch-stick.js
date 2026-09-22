@@ -1,42 +1,50 @@
 import * as THREE from 'three';
 
+// The stick stays hidden until a thumb lands on the scene, then anchors right
+// there: the knob follows the thumb up to the rim and lifting hides it again.
 export class TouchStick {
-  constructor(element, onDrive) {
-    this.element = element; this.onDrive = onDrive;
+  constructor(element, onDrive, zone) {
+    this.element = element; this.onDrive = onDrive; this.zone = zone;
     this.pointer = null; this.engaged = false; this.vector = { x: 0, y: 0 };
-    element.addEventListener('pointerdown', event => {
-      if (this.pointer !== null || (event.pointerType === 'mouse' && event.button !== 0)) return;
-      event.preventDefault();
-      const rect = element.getBoundingClientRect();
-      this.center = { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
-      this.radius = rect.width * .3;
-      this.pointer = event.pointerId; this.engaged = true;
-      element.setPointerCapture(event.pointerId); element.classList.add('active');
-      this.move(event);
-    });
-    element.addEventListener('pointermove', event => this.move(event));
-    for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) element.addEventListener(type, event => {
+    zone.addEventListener('pointerdown', event => this.start(event));
+    zone.addEventListener('pointermove', event => this.move(event));
+    for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) zone.addEventListener(type, event => {
       if (event.pointerId === this.pointer) this.release();
     });
-    element.addEventListener('contextmenu', event => event.preventDefault());
     window.addEventListener('resize', () => this.release());
+  }
+  // Only while the touch controls are on screen: not in menus, pauses or with a controller.
+  available() {
+    const controls = this.element.parentElement, style = getComputedStyle(controls);
+    return style.display !== 'none' && style.visibility === 'visible' && !controls.closest('[inert]');
+  }
+  start(event) {
+    if (this.pointer !== null || event.pointerType === 'mouse' || !this.available()) return;
+    event.preventDefault();
+    this.pointer = event.pointerId; this.origin = { x: event.clientX, y: event.clientY };
+    this.zone.setPointerCapture(event.pointerId);
+    const style = this.element.style;
+    style.left = `${event.clientX}px`; style.top = `${event.clientY}px`;
+    style.setProperty('--stick-x', '0px'); style.setProperty('--stick-y', '0px');
+    this.element.classList.add('active');
+    this.radius = this.element.offsetWidth * .3;
   }
   move(event) {
     if (event.pointerId !== this.pointer) return;
     event.preventDefault();
-    const x = (event.clientX - this.center.x) / this.radius, y = (this.center.y - event.clientY) / this.radius;
+    const x = (event.clientX - this.origin.x) / this.radius, y = (this.origin.y - event.clientY) / this.radius;
     const length = Math.hypot(x, y), amount = Math.min(1, length);
     const strength = amount <= .12 ? 0 : (amount - .12) / .88;
     this.vector = { x: length ? x / length * strength : 0, y: length ? y / length * strength : 0 };
     this.element.style.setProperty('--stick-x', `${length ? x / length * amount * this.radius : 0}px`);
     this.element.style.setProperty('--stick-y', `${length ? -y / length * amount * this.radius : 0}px`);
-    if (strength) this.onDrive();
+    // A tap is not a drive: only a drag past the dead zone takes control.
+    if (strength) { this.engaged = true; this.onDrive(); }
   }
   release() {
     const pointer = this.pointer; this.pointer = null; this.vector = { x: 0, y: 0 };
     this.element.classList.remove('active');
-    this.element.style.setProperty('--stick-x', '0px'); this.element.style.setProperty('--stick-y', '0px');
-    if (pointer !== null && this.element.hasPointerCapture(pointer)) this.element.releasePointerCapture(pointer);
+    if (pointer !== null && this.zone.hasPointerCapture(pointer)) this.zone.releasePointerCapture(pointer);
   }
   clear() { if (this.engaged || this.pointer !== null) this.release(); this.engaged = false; }
 }

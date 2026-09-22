@@ -54,7 +54,6 @@ body[data-controller=true] #app :is(button, input, select):focus {
 #app .taxi-score { background: var(--city-glass); color: var(--city-text); }
 #app #taxi-stage { color: var(--city-accent); }
 #app .taxi-task[data-arriving=true] #taxi-task-detail { color: #c3f4bb; }
-#app .taxi-task[data-urgent=true] #taxi-fare-status { color: #ffb5a6; }
 #app .city-guide-header { background: var(--city-panel); }
 #app .city-guide[data-expanded=false] .city-guide-header { background: transparent; }
 #app #city-map-toggle { color: var(--city-text); border-radius: var(--city-control-radius); }

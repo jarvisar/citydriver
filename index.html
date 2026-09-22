@@ -58,12 +58,13 @@
           <span id="taxi-nav-distance">0 m</span>
         </div>
         <div class="taxi-task-copy">
-          <div class="taxi-task-heading"><span id="taxi-stage">Pick up</span><span id="taxi-fare-status"></span></div>
+          <div class="taxi-task-heading"><span id="taxi-stage">Pick up</span><span id="taxi-timer" hidden></span><span id="taxi-fare-status"></span></div>
           <strong id="taxi-task-title">Find a passenger</strong>
           <span id="taxi-party"></span>
           <span id="taxi-next-stop"></span>
           <span id="taxi-task-detail" role="status"></span>
         </div>
+        <div class="taxi-timer-track" hidden aria-hidden="true"><span id="taxi-timer-fill"></span></div>
         <div class="taxi-stop-track" hidden role="progressbar" aria-label="Passenger boarding" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="taxi-stop-progress"></span></div>
       </section>
       <div id="taxi-dash" class="taxi-dash" hidden><span><b id="taxi-speed">0</b> mph</span><span id="taxi-combo"></span><span class="taxi-controller-charge">Boost<progress id="taxi-controller-boost" max="1" value="1" aria-label="Boost available"></progress></span></div>
@@ -72,7 +73,7 @@
         <button type="button" data-drive-button="handbrake"><kbd>SPACE</kbd><span>Drift</span><small>Tap + steer</small></button>
       </div>
       <section id="taxi-results" class="taxi-results" hidden role="dialog" aria-modal="true" aria-labelledby="taxi-result-title">
-        <div class="taxi-result-card"><h2 id="taxi-result-title">TIME UP</h2><strong id="taxi-result-cash">$0</strong><p id="taxi-result-fares">0 fares</p><p id="taxi-result-best">Best $0</p><p id="taxi-result-bank"></p><button type="button" id="taxi-retry">Play again</button><button type="button" id="taxi-fleet-results" data-open-fleet>Taxi fleet</button><button type="button" id="taxi-free">Free drive</button></div>
+        <div class="taxi-result-card"><h2 id="taxi-result-title">TIME UP</h2><strong id="taxi-result-cash">$0</strong><div id="taxi-result-license" class="taxi-license"><span id="taxi-license-badge" class="taxi-license-badge" aria-hidden="true">–</span><span class="taxi-license-copy"><strong id="taxi-license-name">No license</strong><small id="taxi-license-next"></small></span></div><p id="taxi-result-fares">0 fares</p><p id="taxi-result-ratings"></p><p id="taxi-result-best">Best $0</p><p id="taxi-result-bank"></p><button type="button" id="taxi-retry">Play again</button><button type="button" id="taxi-fleet-results" data-open-fleet>Taxi fleet</button><button type="button" id="taxi-free">Free drive</button></div>
       </section>
       <aside id="city-guide" class="city-guide" aria-label="Landmarks">
         <div class="city-guide-header"><span>MAP <b id="city-stamps">0 / 5</b></span><button type="button" id="city-map-toggle" aria-expanded="true" aria-controls="city-map">Hide map</button></div>
@@ -155,7 +156,7 @@
       <footer class="bottom-bar">
         <div class="controls"><span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> <span class="control-label">drive</span></span><button id="next-journey" hidden title="Next scene (N / RB / R1)" aria-label="Next scene"><kbd>N</kbd><svg class="touch-utility-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m6 5 10 7-10 7V5ZM18 5v14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg> <span class="control-label">next</span></button></div>
       </footer>
-      <div class="touch-controls" role="group" aria-label="Touch driving controls"><div id="touch-stick" role="group" aria-label="Virtual joystick" aria-describedby="stick-help"><span class="stick-guide" aria-hidden="true"></span><span class="stick-thumb" aria-hidden="true"></span></div><span id="stick-help"><span class="stick-help-copy">Drag to drive<br><span class="stick-help-line">Release to stop</span></span></span></div>
+      <div class="touch-controls" role="group" aria-label="Touch driving controls"><div id="touch-stick" role="group" aria-label="Virtual joystick" aria-describedby="stick-help"><span class="stick-guide" aria-hidden="true"></span><span class="stick-thumb" aria-hidden="true"></span></div><span id="stick-help"><span class="stick-help-copy">Drag anywhere to drive<br><span class="stick-help-line">Release to stop</span></span></span></div>
       <div id="toast" role="status"></div>
       <dialog id="journey-dialog" class="chooser" aria-labelledby="journey-heading" aria-describedby="journey-description">
         <div class="chooser-heading"><span class="eyebrow">CITYDRIVER</span><button id="close-journeys" class="icon-button" aria-label="Close city information"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button></div>

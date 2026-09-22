@@ -51,14 +51,15 @@ async function checkGroupFare(page, size, label) {
       v.knock.x = v.knock.z = v.knock.spin = 0; v.update(0, {}); a.world.update(v.s, v.u);
       v.render(1, a.world.origin); a.rendering.snap(); a.rendering.update(v.car, 1, a.world.origin);
       run.update(.1, v); a.taxiView.render(run, v, a.world.origin, 0); a.taxiView.hud(run, v);
-      return { id: group.id, passengers: group.passengers, fare: group.fare + group.groupBonus, stops: group.stops.length,
+      return { id: group.id, passengers: group.passengers, fare: group.fare, groupBonus: group.groupBonus, stops: group.stops.length,
         names: group.stops.map(s => s.destination.name), bank: run.fleet.balance,
         rendered: a.taxiView.markers.find(m => m.stop.id === group.id).person.count };
     }
     throw new Error('No suitable group offer found');
   }, size);
   assert.equal(offer.rendered, offer.passengers); assert.equal(offer.stops, offer.passengers);
-  assert.match(await page.locator('#taxi-party').textContent(), new RegExp(`${offer.passengers} riders`));
+  assert.match(await page.locator('#taxi-next-stop').textContent(), new RegExp(`^${offer.passengers} riders · ${offer.passengers} stops · then `));
+  assert.match(await page.locator('#taxi-party').textContent(), /^(Quick hop|Short ride|Medium ride|Long ride) · [\d.]+ k?m$/);
   assert.equal(await page.evaluate(() => window.__citydriver.taxi.target), null);
   await page.click('#resume');
   await page.screenshot({ path: `.artifacts/taxi/${label}-pickup.png` });
@@ -86,7 +87,8 @@ async function checkGroupFare(page, size, label) {
       await page.waitForFunction(next => window.__citydriver.taxi.stopIndex === next, i + 1);
       assert.equal(await page.evaluate(() => window.__citydriver.taxi.status), 'driving');
       assert.equal(await page.evaluate(() => window.__citydriver.taxi.delivered), 0);
-      assert.ok(await page.evaluate(() => window.__citydriver.taxi.cash > 0));
+      assert.equal(await page.evaluate(() => window.__citydriver.taxi.cash), 0, 'a group pays only when everyone arrives');
+      assert.ok(await page.evaluate(() => window.__citydriver.taxi.held > 0));
       await page.waitForFunction(stage => document.querySelector('#taxi-stage').textContent === stage, `Stop ${i + 2} of ${offer.stops}`);
       if (i === 0) await page.screenshot({ path: `.artifacts/taxi/${label}-next-stop.png` });
     }
@@ -97,7 +99,7 @@ async function checkGroupFare(page, size, label) {
     return { cash: run.cash, riders: run.deliveredPassengers, bank: run.fleet.balance, target: run.target, onboard: run.onboard };
   });
   assert.equal(result.riders, offer.passengers); assert.equal(result.onboard, 0); assert.equal(result.target, null);
-  assert.ok(result.cash >= offer.fare); assert.equal(result.bank - offer.bank, result.cash);
+  assert.ok(result.cash >= offer.fare + offer.groupBonus); assert.equal(result.bank - offer.bank, result.cash);
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
 }
 try {
@@ -113,6 +115,12 @@ try {
       arrows: a.taxiView.markers.filter(marker => marker.arrow.visible).length,
       beams: a.taxiView.markers.filter(marker => marker.beam.visible).length, target: a.taxi.target };
   });
+  // Ring, beam, arrow and map dot all wear the fare's distance colour.
+  assert.ok(await page.evaluate(async () => {
+    const { fareBand } = await import('/src/taxi-run.js');
+    return window.__citydriver.taxiView.markers.every(marker => marker.stop.color === fareBand(marker.stop.length).color
+      && `#${marker.ring.material.color.getHexString()}` === marker.stop.color);
+  }));
   assert.ok(customers.offers > 3); assert.equal(customers.markers, customers.offers); assert.equal(customers.arrows, customers.offers); assert.equal(customers.beams, 0); assert.equal(customers.target, null);
   assert.equal(await page.locator('#next-city-stop').count(), 0);
   assert.equal(await page.evaluate(() => window.__citydriver.taxiView.navigation.group.visible), false);
@@ -165,6 +173,7 @@ try {
   await page.waitForFunction(() => window.__citydriver.taxi.delivered === 1);
   await page.waitForFunction(type => window.__citydriver.cityGuide.exploration.found.has(type), deliveredType);
   const cash = await page.evaluate(() => window.__citydriver.taxi.cash); assert.ok(cash > 0);
+  assert.equal(await page.evaluate(() => window.__citydriver.taxi.ratings.speedy), 1, 'an instant arrival is Speedy');
   assert.equal(await page.evaluate(() => window.__citydriver.taxi.target), null);
   await page.waitForFunction(() => document.querySelector('#taxi-nav').hidden);
   assert.equal(await page.evaluate(() => window.__citydriver.taxiView.navigation.group.visible), false);
@@ -180,6 +189,12 @@ try {
   assert.equal(await page.evaluate(() => window.__citydriver.paused), true);
   assert.equal(await page.locator('#taxi-results').isVisible(), true);
   assert.equal(await page.evaluate(() => Number(localStorage.getItem('citydriver-taxi-best'))), cash);
+  const license = await page.evaluate(async () => (await import('/src/taxi-license.js')).taxiLicense(window.__citydriver.taxi.cash));
+  assert.equal(await page.locator('#taxi-license-badge').textContent(), license.badge);
+  assert.equal(await page.locator('#taxi-license-name').textContent(), license.id === 'none' ? 'No license' : `${license.name} license`);
+  assert.match(await page.locator('#taxi-license-next').textContent(), new RegExp(`more for ${license.next.name}$`));
+  assert.equal(await page.locator('#taxi-result-ratings').textContent(), 'Speedy 1');
+  assert.match(await page.locator('#taxi-result-best').textContent(), new RegExp(` · ${license.name}$`));
   await page.screenshot({ path: '.artifacts/taxi/results.png' });
   await page.click('#taxi-retry'); assert.equal(await page.evaluate(() => window.__citydriver.taxi.cash), 0);
   assert.equal(await page.evaluate(() => window.__citydriver.taxi.best), cash);
@@ -198,13 +213,17 @@ try {
   await mobile.waitForFunction(() => getComputedStyle(document.querySelector('#welcome')).visibility === 'hidden');
   await checkMapDoesNotSelectCustomer(mobile, true);
   assert.ok(await mobile.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
-  const boost = await mobile.locator('[data-drive-button=boost]').boundingBox(), stick = await mobile.locator('#touch-stick').boundingBox();
-  assert.ok(boost.x + boost.width < stick.x || boost.y + boost.height < stick.y, 'boost and joystick must not overlap');
+  // The stick has no fixed home: it appears wherever a thumb lands on the scene.
+  const boost = await mobile.locator('[data-drive-button=boost]').boundingBox(), stick = { x: 252, y: 706, width: 120, height: 120 };
+  assert.equal(await mobile.locator('#touch-stick').isVisible(), false, 'the joystick hides until a thumb lands');
+  assert.equal(await mobile.evaluate(() => document.elementFromPoint(312, 766).id), 'scene', 'the lower-right thumb area is open scene');
   // Send real simultaneous touches: boost must not cancel the steering stick.
   const touch = await mobile.context().newCDPSession(mobile);
   const fingers = [{ x: boost.x + boost.width / 2, y: boost.y + boost.height / 2, id: 1 }, { x: stick.x + stick.width / 2, y: stick.y + stick.height / 2, id: 2 }];
   await touch.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: fingers });
   assert.equal(await mobile.evaluate(() => window.__citydriver.input.state.boost), true);
+  const anchored = await mobile.locator('#touch-stick').boundingBox();
+  assert.ok(Math.abs(anchored.x + anchored.width / 2 - fingers[1].x) < 1 && Math.abs(anchored.y + anchored.height / 2 - fingers[1].y) < 1, 'the joystick anchors under the thumb');
   fingers[1].y -= 45;
   await touch.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: fingers });
   await mobile.waitForFunction(() => window.__citydriver.taxi.boostActive && window.__citydriver.vehicle.speed > 0);

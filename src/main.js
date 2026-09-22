@@ -25,6 +25,7 @@ import { CITY_BLOCK, cityCell, cityDistrict, nearestCityStreet, cityStreetProfil
 import { cityLanePose } from './world/city-layout.js';
 import { CityGuide } from './city-guide.js';
 import { TaxiRun } from './taxi-run.js';
+import { taxiLicense } from './taxi-license.js';
 import { TaxiView } from './taxi-view.js';
 import { setResidentWindow } from './world/resident.js';
 import { DrivingController } from './vehicle.js';
@@ -67,12 +68,13 @@ try { const saved = localStorage.getItem(carStorageKey); if (saved && CARS[saved
 // It lasts the visit and is not stored: the fleet's own finishes are the thing
 // worth keeping, and Default hands them straight back.
 let paint = null;
-const toast = message => {
+const toast = (message, tone = '') => {
   const element = $('#toast');
   // Taxi feedback shares the instruction slot, keeping notifications off the road.
   const parent = gameMode === 'taxi' && started && !paused ? $('.taxi-task-copy') : $('#app');
   if (element.parentElement !== parent) parent.append(element);
-  element.textContent = message; element.classList.add('show'); clearTimeout(toastTimer);
+  // Taxi arrivals take their rating's colour: Speedy green, Normal yellow, Slow red.
+  element.textContent = message; element.dataset.tone = tone; element.classList.add('show'); clearTimeout(toastTimer);
   toastTimer = setTimeout(() => element.classList.remove('show'), 2200);
 };
 
@@ -751,7 +753,7 @@ async function boot() {
       $('#view').title = `${rendering.viewLabel} · Change camera (V)`;
       $('#view').setAttribute('aria-label', `${rendering.viewLabel}. Change camera`);
       const thirdPerson = rendering.camera.isPerspectiveCamera;
-      $('.stick-help-copy').firstChild.textContent = thirdPerson ? '↑ Drive · ↔ Steer' : 'Drag to drive';
+      $('.stick-help-copy').firstChild.textContent = thirdPerson ? 'Touch anywhere · ↑ Drive · ↔ Steer' : 'Drag anywhere to drive';
       $('.stick-help-line').textContent = thirdPerson ? '↓ Brake · Release to stop' : 'Release to stop';
       $('#touch-stick').setAttribute('aria-label', thirdPerson ? 'Virtual joystick: up to accelerate, left and right to steer, down to brake or reverse, release to stop' : 'Virtual joystick');
     }
@@ -772,7 +774,7 @@ async function boot() {
           })),
         ] };
       }
-      if (taxi.status === 'over') return { id: 'taxi-results', title: `Time up · $${taxi.cash}`, items: [
+      if (taxi.status === 'over') return { id: 'taxi-results', title: `Time up · $${taxi.cash} · ${taxiLicense(taxi.cash).name}`, items: [
         { label: 'Play again', activate: beginTaxi }, { label: 'Taxi fleet', activate: openFleet }, { label: 'Free drive', activate: beginFree }, item('Exit VR', 'exitVR'),
       ] };
       if (!paused) return { id: 'driving', title: taxi.running ? `${Math.ceil(taxi.timeLeft)}s · $${taxi.cash} · ${taxi.status === 'pickup' ? 'Pick up' : taxi.target.name}` : '', items: [item('Pause', 'pause')] };
@@ -816,7 +818,7 @@ async function boot() {
           if (event.kind === 'over') {
             vehicle.speed = 0; vehicle.knock.x = vehicle.knock.z = vehicle.knock.spin = 0; vehicle.update(0, {});
             setPaused(true); pauseOverlay.hidden = true; taxiView.hud(taxi, vehicle); taxiView.results(taxi); fleetView.render(); $('#taxi-retry').focus();
-          } else if (event.kind !== 'pickup') toast(event.text);
+          } else toast(event.text, event.rating ?? (event.kind === 'missed' ? 'slow' : ''));
         }
       }
     };

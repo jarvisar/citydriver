@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { TaxiRun, STOP_SECONDS, GROUP_MAX_LEG, GROUP_MAX_DETOUR, GROUP_MAX_ROUTE, GROUP_MIN_TURN, MAX_SHIFT_SECONDS,
-  taxiRoute, turnCosine, deliverySeconds, partySize } from '../src/taxi-run.js';
+  RATINGS, taxiRoute, turnCosine, deliverySeconds, partySize } from '../src/taxi-run.js';
 import { TaxiView } from '../src/taxi-view.js';
 import { routeDistance } from '../src/city-exploration.js';
 import { cityLayout } from '../src/world/city-layout.js';
@@ -81,59 +81,85 @@ test('a solo rider pays out in one stop with no group bonus', () => {
   assert.equal(run.status, 'pickup'); assert.equal(run.delivered, 1); assert.equal(run.onboard, 0);
   const events = run.drainEvents(); assert.equal(events.length, 1);
   assert.equal(events[0].groupComplete, false); assert.equal(events[0].bonus, 0);
-  assert.equal(events[0].seconds, deliverySeconds(group.length));
+  assert.equal(events[0].rating, 'speedy'); assert.match(events[0].text, /^Speedy! /);
+  assert.equal(events[0].seconds, deliverySeconds(group.length, RATINGS[0]));
   assert.equal(run.boost, .1, 'only shared rides refill boost');
   run.update(.5, car); assert.equal(run.cash, events[0].paid, 'no repeat payout while parked');
 });
 
-test('every drop-off advances, keeps momentum and adds its own time bonus', () => {
+test('a group shares one clock, is rated at every stop and is paid in full at the last', () => {
   const { run, car, group } = groupRun(4);
   const offer = structuredClone(group); run.update(STOP_SECONDS, car); run.drainEvents();
-  run.boost = .1; run.timeLeft = 30;
-  const limit = run.fareLeft;
+  run.boost = .1; run.timeLeft = 30; run.tips = 17; run.combo = 3; run.comboTime = 3;
+  assert.equal(run.fareLeft, group.stops[0].limit); assert.equal(run.legElapsed, 0);
   // Going to a future stop first must not cash in or scramble the route.
   Object.assign(car, group.stops[2].destination); run.update(.5, car);
   assert.equal(run.cash, 0); assert.equal(run.stopIndex, 0);
-  let cash = 0, clock = run.timeLeft;
+  // Arrive with the clock in a different colour each time: green, yellow, red, green.
+  const arrivals = [.9, .4, .1, .6], expected = ['speedy', 'normal', 'slow', 'speedy'];
+  let held = 0, clock = run.timeLeft;
   for (const [index, stop] of group.stops.entries()) {
     const last = index === group.stops.length - 1;
-    run.tips = 17; run.combo = 3; run.comboTime = 3;
+    run.legElapsed = stop.limit * (1 - arrivals[index]) - STOP_SECONDS;
+    const left = run.fareLeft - STOP_SECONDS;
     dropOff(run, car);
-    const event = run.drainEvents()[0];
-    assert.equal(event.seconds, deliverySeconds(stop.length), 'each drop-off is its own time bonus');
-    assert.ok(event.seconds >= 18, 'every rider buys real time back');
+    const event = run.drainEvents()[0], rating = RATINGS.find(r => r.id === expected[index]);
+    held += stop.fare + Math.round(stop.fare * .5 * arrivals[index]);
+    assert.equal(event.rating, rating.id);
+    assert.equal(event.seconds, deliverySeconds(stop.length, rating), 'each drop-off is its own time bonus');
     clock = Math.min(MAX_SHIFT_SECONDS, clock - STOP_SECONDS + event.seconds); assert.ok(Math.abs(run.timeLeft - clock) < 1e-9);
-    assert.equal(event.bonus, last ? group.groupBonus : 0); assert.equal(event.groupComplete, last);
-    cash += event.paid; assert.equal(run.cash, cash);
     assert.equal(run.deliveredPassengers, index + 1);
-    if (last) break;
+    if (last) {
+      assert.equal(event.kind, 'paid'); assert.equal(event.groupComplete, true); assert.equal(event.bonus, group.groupBonus);
+      assert.equal(event.paid, held + 17 + group.groupBonus, 'every share, time bonus fare and tip arrives together');
+      assert.equal(run.cash, event.paid); assert.match(event.text, new RegExp(`^Group complete · Speedy! \\+\\$${event.paid} · \\+${event.seconds}s$`));
+      break;
+    }
+    assert.equal(event.kind, 'dropoff'); assert.equal(event.paid, 0); assert.equal(run.cash, 0, 'nothing is paid until everyone arrives');
+    assert.equal(run.held, held); assert.match(event.text, new RegExp(`^Rider ${index + 1} of 4 · `));
     assert.equal(run.status, 'driving'); assert.equal(run.stopIndex, index + 1);
     assert.equal(run.target, group.stops[index + 1].destination); assert.equal(run.onboard, group.passengers - index - 1);
-    assert.equal(run.delivered, 0); assert.equal(run.tips, 0); assert.equal(run.combo, 3); assert.equal(run.comboTime, 4);
-    assert.equal(event.paid, stop.fare + 17 + Math.round(stop.fare * .5 * run.fareLeft / group.limit));
-    assert.equal(run.remainingFare, group.stops.slice(index + 1).reduce((sum, s) => sum + s.fare, 0) + group.groupBonus);
-    run.update(.5, car); assert.equal(run.cash, cash, 'no repeat payout while parked'); assert.equal(run.hold, 0);
-    run.timeLeft = clock;
+    assert.ok(Math.abs(run.fareLeft - (left + group.stops[index + 1].limit)) < 1e-9, 'time left over carries to the next rider');
+    assert.equal(run.legElapsed, 0, "the next rider's rating starts fresh");
+    assert.equal(run.tips, 17, 'tips ride along until the group pays'); assert.equal(run.combo, 3); assert.equal(run.comboTime, 4);
+    assert.equal(run.remainingFare, held + group.stops.slice(index + 1).reduce((sum, s) => sum + s.fare, 0) + group.groupBonus);
+    run.update(.5, car); assert.equal(run.cash, 0, 'no payout while parked'); assert.equal(run.hold, 0);
+    run.timeLeft = clock; run.comboTime = 3;
   }
-  assert.ok(run.fareLeft < limit, 'the party timer never resets');
+  assert.deepEqual(run.ratings, { speedy: 2, normal: 1, slow: 1 });
   assert.equal(run.boost, 1, 'each group drop-off refills a quarter of the boost');
-  assert.equal(run.delivered, 1); assert.equal(run.deliveredPassengers, group.passengers);
+  assert.equal(run.delivered, 1); assert.equal(run.deliveredPassengers, group.passengers); assert.equal(run.held, 0);
   assert.equal(run.fleet.balance, run.cash); assert.equal(run.target, null); assert.equal(run.onboard, 0);
   assert.deepEqual(group, offer, 'progress never mutates the seeded offer');
 });
 
-test('partial group earnings survive failure, shift expiry, restart and reload without a completion bonus', () => {
+test('stunt tips multiply by every rider aboard', () => {
+  const { run, car, group } = groupRun(3);
+  run.update(STOP_SECONDS, car); run.drainEvents(); run.tips = 0;
+  run.combo = 2; run.reward('Drift', 5);
+  assert.equal(run.tips, 5 * 2 * group.passengers); assert.equal(run.tipMultiplier, 3 * group.passengers);
+  assert.deepEqual(run.drainEvents().map(e => e.text), [`Drift +$${5 * 2 * group.passengers}`]);
+  dropOff(run, car); run.drainEvents(); run.combo = 1;
+  const before = run.tips; run.reward('Near miss', 10);
+  assert.equal(run.tips - before, 10 * (group.passengers - 1), 'fewer riders, smaller tips');
+});
+
+test('a group pays nothing unless every rider arrives, whatever ends the ride', () => {
   for (const ending of ['late', 'expiry', 'restart', 'stop']) {
     const saved = new Map(), storage = { getItem: k => saved.get(k), setItem: (k, v) => saved.set(k, v) };
     const { run, car } = groupRun(2, storage);
     run.update(STOP_SECONDS, car); dropOff(run, car); run.drainEvents();
-    const cash = run.cash, riders = run.deliveredPassengers;
-    if (ending === 'late') { run.fareLeft = .01; run.update(.02, car); assert.equal(run.failed, 1); assert.equal(run.deliveredPassengers, riders); }
+    assert.equal(run.cash, 0); assert.ok(run.held > 0);
+    const owed = run.remainingFare + run.tips, riders = run.deliveredPassengers;
+    if (ending === 'late') {
+      run.fareLeft = .01; run.update(.02, car); assert.equal(run.failed, 1); assert.equal(run.deliveredPassengers, riders);
+      assert.deepEqual(run.drainEvents().map(e => e.text), [`Too slow · Rider jumped out · $${owed} lost`]);
+    }
     if (ending === 'expiry') { run.timeLeft = .01; run.update(.02, car); assert.equal(run.status, 'over'); }
     if (ending === 'restart') { run.start(car); assert.equal(run.deliveredPassengers, 0); assert.equal(run.stopIndex, 0); }
     if (ending === 'stop') run.stop();
     assert.equal(run.onboard, 0); assert.equal(run.target, null); assert.equal(run.delivered, 0);
-    assert.equal(run.fleet.balance, cash); assert.equal(new TaxiRun(storage).fleet.balance, cash);
+    assert.equal(run.cash, 0); assert.equal(run.fleet.balance, 0); assert.equal(new TaxiRun(storage).fleet.balance, 0);
     assert.equal(run.drainEvents().filter(e => e.kind === 'paid').length, 0);
   }
 });

@@ -150,9 +150,8 @@ try {
   assert.equal(await mobile.locator('#city-map').isVisible(), true);
   assert.equal(await mobile.locator('#next-city-stop').isVisible(), false);
   assert.equal(await mobile.locator('.city-guide-stop').isVisible(), false);
-  const guideBounds = await mobile.locator('#city-guide').boundingBox(), stickBounds = await mobile.locator('#touch-stick').boundingBox();
-  assert.ok(guideBounds.x + guideBounds.width < stickBounds.x || guideBounds.y + guideBounds.height < stickBounds.y,
-    'the field guide leaves the touch joystick clear, beside or above it');
+  assert.equal(await mobile.evaluate(() => document.elementFromPoint(innerWidth - 78, innerHeight - 78).id), 'scene',
+    'the field guide leaves the lower-right thumb area open for the joystick');
   await mobile.screenshot({ path: '.artifacts/citydriver/mobile-field-guide.png' });
   await mobile.tap('#pause');
   await mobile.selectOption('#city-weather', 'night');

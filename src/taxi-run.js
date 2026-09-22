@@ -22,10 +22,43 @@ export const GROUP_MIN_TURN = -.25;
 // for every waiting ring, so the route tracing has to stay cheap.
 const GROUP_CANDIDATES = 6;
 const CUSTOMER_RANGE = B * 3;
-const CUSTOMER_COLORS = ['#a4f264', '#54dfe0', '#f8ba55', '#d6adff', '#ffaaa1', '#9dcaff'];
-// Long trips should earn back more of their travel time, without making the
-// shift self-sustaining simply by completing every fare before its deadline.
-export const deliverySeconds = length => 18 + Math.min(12, Math.round(Math.max(0, length - 400) / 60));
+// A new pickup never waits where the last rider got out. Pickup sites and
+// destinations are laid out independently, so without this about one drop-off
+// in four ended beside, or inside, a fresh ring.
+export const DROP_OFF_CLEARANCE = 60;
+// As in Crazy Taxi, a waiting fare's colour says how far the whole job goes:
+// red is a hop around the corner, green a long haul that pays the most.
+export const FARE_BANDS = [
+  { id: 'hop', label: 'Quick hop', color: '#ff5a4a', below: 550 },
+  { id: 'short', label: 'Short ride', color: '#ff9c33', below: 800 },
+  { id: 'medium', label: 'Medium ride', color: '#ffe03d', below: 1100 },
+  { id: 'long', label: 'Long ride', color: '#5fe06a', below: Infinity },
+];
+export const fareBand = length => FARE_BANDS.find(band => length < band.below);
+// Crazy Taxi's arrival ratings. Every rider has their own clock, and its
+// colour on arrival sets the bonus: green is Speedy, yellow Normal, red Slow.
+export const RATINGS = [
+  { id: 'speedy', label: 'Speedy', remaining: .5, seconds: 5 },
+  { id: 'normal', label: 'Normal', remaining: .25, seconds: 2 },
+  { id: 'slow', label: 'Slow', remaining: 0, seconds: 0 },
+];
+export const arrivalRating = remaining => RATINGS.find(rating => remaining >= rating.remaining);
+export const legLimit = length => Math.ceil(18 + length / 14);
+// As in Crazy Taxi 2, boarding adds time. It is part of each rider's reward
+// paid up front, so a big group's long route is funded before it drains the
+// shift clock, rather than only after every stop.
+export const PICKUP_SECONDS = 6;
+// Long trips earn back more of their travel time, and fast arrivals more
+// again, without the shift sustaining itself on every on-time delivery.
+export const deliverySeconds = (length, rating = RATINGS.at(-1)) =>
+  8 + Math.min(12, Math.round(Math.max(0, length - 400) / 60)) + rating.seconds;
+// Stunts tip only on the way: a rider pays to get somewhere, so circling a
+// block to drift for tips earns nothing once the cab stops closing in.
+export const TIP_PROGRESS = 6;
+// The steady pace fare clocks are set for. The pickup preview warns when the
+// shift clock would run dry before a fare ends at this pace, since a group
+// pays nothing if the shift ends with riders still aboard.
+export const EASY_PACE = 14;
 const distance = (a, b) => Math.hypot(a.s - b.s, a.u - b.u);
 export const turnCosine = (from, via, to) => {
   const ax = via.s - from.s, ay = via.u - from.u, bx = to.s - via.s, by = to.u - via.u;
@@ -88,10 +121,11 @@ function partyOffer(stop, destination, length, wanted) {
   for (const [index, leg] of stops.entries()) {
     leg.fare = index === stops.length - 1 ? fare - allocated : Math.round(fare / passengers);
     allocated += leg.fare;
+    leg.limit = legLimit(leg.length);
   }
+  const band = fareBand(totalLength);
   return { passengers, stops, destination: stops[0].destination, length: totalLength, fare,
-    limit: Math.ceil(18 + totalLength / 14 + (stops.length - 1) * 10),
-    groupBonus: (passengers - 1) * 25 };
+    band: band.id, color: band.color, groupBonus: (passengers - 1) * 25 };
 }
 
 export function taxiRoute(player, target) {
@@ -163,14 +197,21 @@ export class TaxiRun {
   get running() { return this.status === 'pickup' || this.status === 'driving'; }
   get currentStop() { return this.status === 'driving' ? this.fare.stops[this.stopIndex] : null; }
   get target() { return this.currentStop?.destination ?? null; }
-  get remainingFare() { return this.status === 'driving' ? this.fare.stops.slice(this.stopIndex).reduce((sum, stop) => sum + stop.fare, 0) + this.fare.groupBonus : 0; }
+  // What the cab collects if everyone aboard arrives: a group's fare is held
+  // until the last rider is out, as in Crazy Taxi 2.
+  // How much of the current rider's own window is left. Ratings and the time
+  // bonus fare judge each leg on its own, so time carried over from a fast
+  // earlier stop protects the group without inflating later ratings.
+  get legRemaining() { return this.status === 'driving' ? Math.max(0, 1 - this.legElapsed / this.currentStop.limit) : 0; }
+  get remainingFare() { return this.status === 'driving' ? this.held + this.fare.stops.slice(this.stopIndex).reduce((sum, stop) => sum + stop.fare, 0) + this.fare.groupBonus : 0; }
   start(player) {
     this.status = 'pickup'; this.timeLeft = SHIFT_SECONDS; this.cash = 0; this.delivered = 0; this.failed = 0;
     this.boost = 1; this.boostActive = false; this.elapsed = 0; this.combo = 1; this.comboTime = 0;
     this.tips = 0; this.hold = 0; this.fare = null; this.events = []; this.driftTime = 0; this.crashCooldown = 0;
     this.recentDestinations = []; this.customers = []; this.boarding = null; this.blockedPickup = null;
     this.servedCustomers = new Map();
-    this.stopIndex = 0; this.onboard = 0; this.deliveredPassengers = 0;
+    this.stopIndex = 0; this.onboard = 0; this.deliveredPassengers = 0; this.held = 0; this.lastDropOff = null;
+    this.ratings = Object.fromEntries(RATINGS.map(rating => [rating.id, 0])); this.previousBest = this.best;
     this.lastImpact = player.audioTelemetry?.impactSerial ?? 0; this.makeCustomers(player);
     // Starting inside a ring must not choose the first fare for the driver.
     this.blockedPickup = this.customers.find(p => distance(p, player) < STOP_RADIUS) ?? null;
@@ -180,7 +221,8 @@ export class TaxiRun {
     const previous = this.customers;
     for (const [id, until] of this.servedCustomers) if (until <= this.elapsed) this.servedCustomers.delete(id);
     const waiting = new Map(previous.map(customer => [customer.id, customer]));
-    const stops = nearbyCustomerStops(player).filter(stop => !this.servedCustomers.has(stop.id))
+    const stops = nearbyCustomerStops(player).filter(stop => !this.servedCustomers.has(stop.id)
+      && !(this.lastDropOff && distance(stop, this.lastDropOff) < DROP_OFF_CLEARANCE))
       .map(stop => waiting.get(stop.id) ?? stop);
     this.customers = stops.map(stop => {
       if (stop.destination) return stop;
@@ -207,8 +249,7 @@ export class TaxiRun {
       const destination = route?.destination ?? placeStop({ ...cityLayout(Math.round(address.s / B) * B + B / 2, Math.round(address.u / B) * B + 3.5 * B), name: 'Downtown' });
       const length = route?.length ?? routeDistance(taxiRoute(stop, destination));
       const party = partyOffer(stop, destination, length, wanted);
-      return { ...stop, name: PASSENGERS[party.destination.type] ?? 'Passenger', ...party,
-        color: CUSTOMER_COLORS[Math.floor(randomAt(stop.fareSeed, 19910) * CUSTOMER_COLORS.length)] };
+      return { ...stop, name: PASSENGERS[party.destination.type] ?? 'Passenger', ...party };
     });
     this.customerCenter = { s: player.s, u: player.u };
     this.nextCustomerRefresh = this.elapsed + 1;
@@ -220,14 +261,32 @@ export class TaxiRun {
     if (this.running) this.boost = Math.max(0, Math.min(1, this.boost + dt * (this.boostActive ? -.44 : input.boost ? 0 : .16)));
     return { ...input, boost: this.boostActive };
   }
+  // Crazy Taxi 2 multiplies every stunt tip by the riders aboard, so a full
+  // cab is the moment to drive wild.
+  get tipMultiplier() { return this.combo * Math.max(1, this.onboard); }
+  // The lowest the shift clock would fall while carrying this fare at an easy
+  // pace, counting the time boarding and each Normal drop-off add back.
+  shiftAfter(offer) {
+    let clock = this.timeLeft + PICKUP_SECONDS * offer.passengers, lowest = clock;
+    for (const leg of offer.stops) {
+      clock -= leg.length / EASY_PACE + 3; lowest = Math.min(lowest, clock);
+      clock += deliverySeconds(leg.length, RATINGS[1]);
+    }
+    return lowest;
+  }
+  onTheWay(player) {
+    const left = routeDistance(taxiRoute(player, this.target));
+    if (left > this.tipMark - TIP_PROGRESS) return false;
+    this.tipMark = left; return true;
+  }
   reward(kind, amount) {
-    const tip = amount * this.combo; this.tips += tip;
-    this.events.push({ kind: 'tip', text: `${kind} +$${tip}`, combo: this.combo });
+    const tip = amount * this.tipMultiplier; this.tips += tip;
+    this.events.push({ kind: 'tip', text: `${kind} +$${tip}`, combo: this.combo, riders: this.onboard });
     this.combo = Math.min(3, this.combo + 1); this.comboTime = 4;
   }
   finish() {
     this.status = 'over'; this.boostActive = false; this.boarding = null; this.hold = 0; this.onboard = 0; this.revision++;
-    this.best = Math.max(this.best, this.cash);
+    this.previousBest = this.best; this.best = Math.max(this.best, this.cash);
     try { this.storage?.setItem('citydriver-taxi-best', String(this.best)); } catch { /* Optional storage. */ }
     this.events.push({ kind: 'over' });
   }
@@ -265,25 +324,30 @@ export class TaxiRun {
       this.boarding = passenger;
       this.hold = passenger ? this.hold + dt : 0;
       if (this.hold >= STOP_SECONDS) {
-        this.fare = passenger; this.fareLeft = passenger.limit; this.status = 'driving'; this.boarding = null;
+        this.fare = passenger; this.fareLeft = passenger.stops[0].limit; this.legElapsed = 0; this.tipMark = Infinity; this.held = 0; this.status = 'driving'; this.boarding = null;
+        const seconds = PICKUP_SECONDS * passenger.passengers;
+        this.timeLeft = Math.min(MAX_SHIFT_SECONDS, this.timeLeft + seconds);
         this.stopIndex = 0; this.onboard = passenger.passengers;
         this.customers = this.customers.filter(customer => customer !== passenger);
         this.servedCustomers.set(passenger.id, this.elapsed + 60);
         this.hold = 0; this.tips = 0; this.combo = 1; this.driftTime = 0; this.passed = new WeakSet(); this.revision++;
-        this.events.push({ kind: 'pickup', text: passenger.destination.name });
+        this.events.push({ kind: 'pickup', seconds, text: `${passenger.passengers > 1 ? `${passenger.passengers} riders aboard` : 'Rider aboard'} · +${seconds}s` });
       }
       return;
     }
-    this.fareLeft = Math.max(0, this.fareLeft - dt);
+    this.fareLeft = Math.max(0, this.fareLeft - dt); this.legElapsed += dt;
     if (this.fareLeft <= 0) {
-      const partial = this.stopIndex > 0;
-      this.failed++; this.status = 'pickup'; this.fare = null; this.hold = 0; this.onboard = 0; this.stopIndex = 0; this.tips = 0; this.combo = 1; this.revision++; this.makeCustomers(player);
+      // All or nothing: riders already dropped off paid into the group fare,
+      // and it leaves with whoever is still aboard.
+      const riders = this.onboard, lost = this.remainingFare + this.tips;
+      this.failed++; this.status = 'pickup'; this.fare = null; this.hold = 0; this.onboard = 0; this.stopIndex = 0; this.tips = 0; this.held = 0; this.combo = 1; this.revision++; this.makeCustomers(player);
       this.blockedPickup = this.customers.find(p => distance(p, player) < STOP_RADIUS) ?? null;
-      this.events.push({ kind: 'missed', text: partial ? 'Group unfinished · earned cash kept' : 'Fare lost' }); return;
+      const who = riders === 1 ? 'Rider' : `${riders} riders`;
+      this.events.push({ kind: 'missed', text: `Too slow · ${who} jumped out · $${lost} lost`, lost }); return;
     }
     if (player.drifting && Math.abs(player.speed) > 10 && this.crashCooldown === 0) {
       this.driftTime += dt;
-      if (this.driftTime >= .65) { this.driftTime -= .65; this.reward('Drift', 5); }
+      if (this.driftTime >= .65) { this.driftTime -= .65; if (this.onTheWay(player)) this.reward('Drift', 5); }
     } else this.driftTime = 0;
     if (Math.abs(player.speed) > 14 && !collided && this.crashCooldown === 0) {
       for (const car of traffic) {
@@ -294,33 +358,44 @@ export class TaxiRun {
         const across = Math.abs(du * Math.cos(player.heading) - ds * Math.sin(player.heading));
         const clearance = (player.spec?.width ?? 2) / 2 + (car.spec?.width ?? 2) / 2 + .4;
         if (Math.abs(along) < 2.5 && across > clearance && across < clearance + 2.5) {
-          this.passed.add(car); this.reward('Near miss', 10);
+          this.passed.add(car); if (this.onTheWay(player)) this.reward('Near miss', 10);
         }
       }
     }
     this.hold = distance(this.target, player) < STOP_RADIUS && Math.abs(player.speed) < 2.5 ? this.hold + dt : 0;
     if (this.hold >= STOP_SECONDS) {
       const stop = this.currentStop, last = this.stopIndex === this.fare.stops.length - 1;
-      const speedBonus = Math.round(stop.fare * .5 * this.fareLeft / this.fare.limit);
-      const bonus = last ? this.fare.groupBonus : 0;
-      const paid = stop.fare + this.tips + speedBonus + bonus;
-      // Every rider delivered is their own time bonus, as in Crazy Taxi 2: a
-      // full cab is the fastest way to keep the shift clock alive.
-      const seconds = deliverySeconds(stop.length);
-      this.cash += paid; this.deliveredPassengers += stop.passengers; this.onboard -= stop.passengers;
+      const remaining = this.legRemaining, rating = arrivalRating(remaining);
+      // Crazy Taxi's three kinds of money: the base fare for the distance, a
+      // time bonus fare for the clock left, and tips. A group's fare is held
+      // until the last rider is out, then paid in full, as in Crazy Taxi 2.
+      this.held += stop.fare + Math.round(stop.fare * .5 * remaining);
+      const bonus = last ? this.fare.groupBonus : 0, paid = last ? this.held + this.tips + bonus : 0;
+      // Every rider delivered is their own time bonus: a full cab is the
+      // fastest way to keep the shift clock alive.
+      const seconds = deliverySeconds(stop.length, rating);
+      this.ratings[rating.id]++;
+      this.deliveredPassengers += stop.passengers; this.onboard -= stop.passengers;
       this.timeLeft = Math.min(MAX_SHIFT_SECONDS, this.timeLeft + seconds);
-      this.fleet.credit(paid);
+      if (paid) { this.cash += paid; this.fleet.credit(paid); }
       this.recentDestinations = [...this.recentDestinations, stop.destination.type].slice(-3);
-      const celebration = bonus ? 'Group complete! ' : !last ? `Rider ${this.stopIndex + 1} of ${this.fare.passengers} · ` : '';
-      this.events.push({ kind: 'paid', text: `${celebration}+$${paid} · +${seconds}s`, paid, bonus, seconds, passengers: stop.passengers, destination: stop.destination, groupComplete: last && this.fare.passengers > 1 });
-      if (this.fare.passengers > 1) this.boost = Math.min(1, this.boost + .25);
+      const group = this.fare.passengers > 1;
+      const lead = !group ? '' : last ? 'Group complete · ' : `Rider ${this.stopIndex + 1} of ${this.fare.passengers} · `;
+      const verdict = rating.id === 'speedy' ? `${rating.label}!` : `${rating.label} ·`;
+      this.events.push({ kind: last ? 'paid' : 'dropoff', text: `${lead}${verdict}${paid ? ` +$${paid} ·` : ''} +${seconds}s`, paid, bonus, seconds,
+        rating: rating.id, passengers: stop.passengers, destination: stop.destination, groupComplete: last && group });
+      if (group) this.boost = Math.min(1, this.boost + .25);
       if (!last) {
-        this.stopIndex++; this.tips = 0; this.hold = 0; this.driftTime = 0; this.revision++;
-        // Preserve the stunt combo and timer, with enough grace to pull away.
+        // The group shares one clock, as in Crazy Taxi 2. Each rider adds
+        // their own allowance as the one before steps out, so time saved on an
+        // early stop carries forward.
+        this.stopIndex++; this.fareLeft += this.currentStop.limit; this.legElapsed = 0; this.tipMark = Infinity;
+        this.hold = 0; this.driftTime = 0; this.revision++;
+        // Preserve the stunt combo, with enough grace to pull away.
         this.comboTime = Math.max(this.comboTime, 4);
         return;
       }
-      this.delivered++; this.stopIndex = 0;
+      this.delivered++; this.stopIndex = 0; this.held = 0; this.lastDropOff = { s: stop.destination.s, u: stop.destination.u };
       this.status = 'pickup'; this.fare = null; this.tips = 0; this.combo = 1; this.hold = 0;
       this.revision++; this.makeCustomers(player);
       // Overlapping pickups wait until the driver leaves the ring.
