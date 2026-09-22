@@ -39,7 +39,9 @@ Buy the GT Taxi ($1,500) or Formula Taxi ($4,500) from **Pause → Taxi fleet** 
 | Fullscreen | F | LB / L1 |
 | Sound | M | Pause menu |
 
-On touch screens, use the stick to drive and hold Boost or Drift. Release the stick to stop.
+On touch screens, use the stick to drive, hold Boost, and tap Drift while steering in chase view. Release the stick to stop.
+
+Slow down for tight turns. Tap Drift while steering, then keep accelerating and steering to carry the slide. Straighten, countersteer, lift off, or brake to regain grip. Faster driving gives wider turns and finer steering corrections.
 
 In taxi mode, holding brake briefly stops the cab before reversing so passengers can board or exit. Release and press brake again to reverse immediately.
 

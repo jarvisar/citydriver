@@ -25,7 +25,8 @@ export const ROUTE_PAINT = { coast: '#d96143', desert: '#78977b', snow: '#9fc4d5
 //                       and the car eases down to it rather than snapping
 //   acceleration        metres per second squared under full throttle
 //   braking             metres per second squared on the brakes
-//   grip                steering rate against the coastal wagon's
+//   grip                cornering capacity and tire recovery relative to the wagon
+//   turnRadius          optional low-speed full-lock radius in metres
 //
 // A car weighs what its footprint covers (see impact.js) unless it gives its
 // own `mass` in tonnes, which decides how a collision with traffic is shared.
@@ -43,7 +44,7 @@ export const CARS = {
   taxiFormula: {
     name: 'Formula Taxi', mass: .95, kind: 'formula', taxi: true, paint: '#f5c42e',
     shape: { ...FORMULA_SHAPE, name: 'taxi-formula', cabin: [1.12, .34, 1.1], eye: [-.28, .88, -.76] },
-    stats: { topSpeed: 50, acceleration: 40, braking: 36, grip: 1.7, offRoad: 28 },
+    stats: { topSpeed: 50, acceleration: 40, braking: 36, grip: 2.2, offRoad: 28, turnRadius: 3.6 },
   },
   auto: {
     name: 'Default',
@@ -115,17 +116,17 @@ export const CARS = {
   // Eight tonnes of tractor unit. It gets there, and it needs the room to stop.
   rig: {
     name: 'Truck', mass: 8, kind: 'special', paint: '#a3312c', shape: SPECIAL_SHAPES.rig,
-    stats: { topSpeed: 27, acceleration: 8.6, braking: 15.5, grip: .78, offRoad: 16.2 },
+    stats: { topSpeed: 27, acceleration: 8.6, braking: 15.5, grip: .78, offRoad: 16.2, turnRadius: 5.4 },
   },
   // Out of breath by 48 mph, but it changes lanes like a thought.
   micro: {
     name: 'Micro', kind: 'special', paint: '#8fcfc0', shape: SPECIAL_SHAPES.micro,
-    stats: { topSpeed: 21.5, acceleration: 12.6, braking: 22, grip: 1.26, offRoad: 13.2 },
+    stats: { topSpeed: 21.5, acceleration: 12.6, braking: 22, grip: 1.26, offRoad: 13.2, turnRadius: 3.2 },
   },
   formula: {
     name: 'Formula', mass: .8, kind: 'formula', paint: '#d8452f', shape: FORMULA_SHAPE,
     // 112 mph, with enough power to overcome air drag at that speed.
-    stats: { topSpeed: 50, acceleration: 40, braking: 30, grip: 1.32, offRoad: 20 },
+    stats: { topSpeed: 50, acceleration: 40, braking: 30, grip: 2.25, offRoad: 20, turnRadius: 3.6 },
   },
 };
 
@@ -137,15 +138,18 @@ export const carEntry = id => CARS[id] ?? CARS[DEFAULT_CAR];
 // sized against them, so how a car slows and what the verge costs stay in step.
 export const DRAG = { rolling: .7, air: .0095 };
 
-// One acceleration figure drives the whole throttle and brake feel, so a car is
-// described by four numbers and the rest follows the original car's proportions.
+// Keep low-speed lock separate from cornering capacity: a long Formula car
+// needs room to maneuver, but its slicks hold a much tighter line at speed.
 export function carStats(id) {
-  const { topSpeed, acceleration, braking, grip, offRoad } = carEntry(id).stats;
+  const { topSpeed, acceleration, braking, grip, offRoad, turnRadius = 4.6 / Math.sqrt(grip) } = carEntry(id).stats;
   return {
     topSpeed, acceleration, braking, grip, offRoad,
     // Full-lock radius in metres at city-corner speeds. Keep the heavy cars
     // less nimble, but give every car enough lock for a small intersection.
-    turnRadius: 3.8 / Math.sqrt(grip),
+    turnRadius,
+    // Arcade lateral acceleration budget, tuned for the city's 13 m side
+    // streets. Formula cars can take the same corner faster without sliding.
+    cornering: 32 * grip,
     reverseSpeed: topSpeed * .25,
     launch: acceleration * 1.68,   // Pulling out of a reverse roll.
     creep: braking * .325,         // Brake pedal used as reverse throttle.

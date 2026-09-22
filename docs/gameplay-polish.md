@@ -12,7 +12,7 @@ Taxi runs start at 90 seconds and cap at 120 seconds.
 
 ## Handling measurements
 
-Measured on flat road at 120 Hz, starting at 25 m/s, before and after the handling changes:
+Historical measurements from the taxi scoring update, on flat road at 120 Hz starting at 25 m/s. See [Driving feel](handling.md) for the current steering and traction system.
 
 | Measurement | Before | After |
 | --- | ---: | ---: |

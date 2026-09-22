@@ -1,5 +1,7 @@
 // Rendering follows requestAnimationFrame; only the driving simulation is fixed-rate.
-export const PHYSICS_STEP = 1 / 60;
+// 120 Hz halves both the wait for a simulation tick and interpolation delay
+// (8.3 ms instead of 16.7 ms), while retaining smooth, reproducible movement.
+export const PHYSICS_STEP = 1 / 120;
 
 export class FrameClock {
   constructor() { this.reset(); }

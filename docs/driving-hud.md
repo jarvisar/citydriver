@@ -11,7 +11,7 @@ The top left shows shift time and earnings. Camera, reset, and pause sit at the 
 - Brake and boarding prompts appear on arrival. Progress appears while stopping. Screen-reader announcements follow state changes, not countdown ticks.
 - Scoring notifications share the instruction slot; arrival prompts take priority. Boarding does not show a redundant drive-to-drop-off message.
 - Expanded maps use the card's measured height to avoid wrapped text. On short screens, map content scrolls and Close map stays accessible.
-- Boost charge sits with Boost. Boost and Drift show hold instructions and active feedback. Speed stays clear of touch controls.
+- Boost charge sits with Boost. Boost shows a hold instruction; Drift shows tap-and-steer. Both show active feedback. Speed stays clear of touch controls.
 
 Phone text sizes are 14px for instructions, 17px for destinations, and 12px for supporting navigation. Minimum touch targets are 44px for map/pause and 64px for driving actions. The steering stick stays on the right.
 

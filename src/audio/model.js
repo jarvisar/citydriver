@@ -33,10 +33,11 @@ export class DriveSoundModel {
     this.load = damp(this.load, throttle * (1 - brake) * clutch, dt, .16);
     const motion = clamp(speed / 28, 0, 1);
     const offRoad = clamp(finite(telemetry.offRoad), 0, 1);
-    // A restrained scrub follows steering load. The arcade physics has no tire
-    // slip solver, so this is feedback, not a claim of simulated wheel slip.
+    // Corner scrub plus actual chassis/travel slip keep a powerslide audible
+    // after the handbrake is released, fading as the tires catch.
     const corner = Math.abs(clamp(finite(telemetry.steer), -1, 1)) * motion;
-    const skid = clamp((corner - .38) * 1.5 + brake * Math.max(0, motion - .28) * .6 + finite(telemetry.handbrake) * motion * .7, 0, 1);
+    const slide = clamp(finite(telemetry.slip) / .4, 0, 1) * motion;
+    const skid = clamp((corner - .38) * 1.5 + brake * Math.max(0, motion - .28) * .6 + Math.max(slide, finite(telemetry.handbrake) * motion * .7), 0, 1);
     return {
       rpm: this.rpm, load: this.load, gear: reverse ? -1 : this.gear + 1, motion,
       shiftSerial: this.shiftSerial, clutch,

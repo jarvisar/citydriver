@@ -19,7 +19,9 @@ export class ThirdPersonCamera {
   }
   snap() { this.initialized = false; }
   update(car, dt) {
-    const heading = -car.rotation.y;
+    // Look partly along travel during a slide so the exit stays in view and
+    // the player can see the car's angle. The pose supplies interpolated slip.
+    const heading = -car.rotation.y - (car.userData.slip ?? 0) * .65;
     // Let the horizon suggest the slope without copying every chassis movement.
     const pitch = THREE.MathUtils.clamp(car.rotation.x * .45, -.18, .18);
     if (!this.initialized) {
@@ -32,7 +34,7 @@ export class ThirdPersonCamera {
       for (let remaining = dt; remaining > 1e-8;) {
         const step = Math.min(remaining, 1 / 120);
         const difference = Math.atan2(Math.sin(heading - this.heading), Math.cos(heading - this.heading));
-        const frequency = 7, change = THREE.MathUtils.clamp(difference, -.62, .62);
+        const frequency = 10, change = THREE.MathUtils.clamp(difference, -.43, .43);
         const spring = this.headingVelocity - frequency * change;
         const decay = Math.exp(-frequency * step);
         this.heading += change + (-change + spring * step) * decay;

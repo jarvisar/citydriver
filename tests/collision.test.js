@@ -68,6 +68,16 @@ test('a wall met head-on stops the car outside it and reports the impact', () =>
   car.disposeModel();
 });
 
+test('a sideways slide into a wall loses speed even when the body faces along it', () => {
+  const car = new DrivingController(straightRoute);
+  try {
+    car.speed = 15; car.heading = 0; car.slideHeading = .4;
+    car.resolveSceneryCollision(-1, 0, .1, 1 / 120);
+    assert.ok(car.speed < 15 && car.speed > 10, 'wall removes the sideways part of travel');
+    assert.ok(car.audioTelemetry.impact > 5, 'the sliding contact reports its impact');
+  } finally { car.disposeModel(); }
+});
+
 test('a glancing blow slides along a wall instead of stopping against it', () => {
   // A long wall beside the road, approached at twenty degrees.
   const chunks = scenery(chunk => solidSpan(chunk, { x: 12, z: -20 }, { x: 12, z: -120 + CHUNK_LENGTH }, 1));

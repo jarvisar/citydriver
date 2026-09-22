@@ -140,13 +140,19 @@ try {
   await mobile.tap('#free-drive');
   await mobile.waitForFunction(() => getComputedStyle(document.querySelector('#welcome')).visibility === 'hidden');
   assert.equal(await mobile.locator('#city-guide').isVisible(), true);
+  // Compact screens start collapsed; exercise both directions from that state.
+  assert.equal(await mobile.locator('#city-map').isVisible(), false);
+  await mobile.tap('#city-map-toggle');
+  assert.equal(await mobile.locator('#city-map').isVisible(), true);
   await mobile.tap('#city-map-toggle');
   assert.equal(await mobile.locator('#city-map').isVisible(), false);
   await mobile.tap('#city-map-toggle');
+  assert.equal(await mobile.locator('#city-map').isVisible(), true);
   assert.equal(await mobile.locator('#next-city-stop').isVisible(), false);
   assert.equal(await mobile.locator('.city-guide-stop').isVisible(), false);
   const guideBounds = await mobile.locator('#city-guide').boundingBox(), stickBounds = await mobile.locator('#touch-stick').boundingBox();
-  assert.ok(guideBounds.y + guideBounds.height < stickBounds.y, 'the field guide leaves the touch joystick clear');
+  assert.ok(guideBounds.x + guideBounds.width < stickBounds.x || guideBounds.y + guideBounds.height < stickBounds.y,
+    'the field guide leaves the touch joystick clear, beside or above it');
   await mobile.screenshot({ path: '.artifacts/citydriver/mobile-field-guide.png' });
   await mobile.tap('#pause');
   await mobile.selectOption('#city-weather', 'night');

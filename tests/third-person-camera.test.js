@@ -127,6 +127,19 @@ test('third-person camera softens terrain bumps and keeps the horizon level', ()
   assert.ok(Math.abs(rig.camera.matrixWorld.elements[1]) < 1e-9, 'car roll does not tilt the horizon');
 });
 
+test('chase view responds to small corrections quickly and shows the travel direction in a slide', () => {
+  const car = new THREE.Object3D(), rig = new ThirdPersonCamera();
+  rig.update(car, 0); car.rotation.y = -.3;
+  for (let i = 0; i < 24; i++) rig.update(car, 1 / 120);
+  assert.ok(rig.heading > .17, 'camera should follow over half a small turn within 200 ms');
+  car.rotation.y = -1; car.userData.slip = .4;
+  for (let i = 0; i < 240; i++) rig.update(car, 1 / 120);
+  assert.ok(rig.heading > .6 && rig.heading < .85, 'view points between chassis and travel heading');
+  car.userData.slip = 0;
+  for (let i = 0; i < 120; i++) rig.update(car, 1 / 120);
+  assert.ok(Math.abs(rig.heading - 1) < .002, 'recovery returns the view behind the car');
+});
+
 test('perspective shadows cover nearby receivers without changing the camera projection', () => {
   for (const aspect of [390 / 844, 844 / 390]) {
     const rig = new ThirdPersonCamera(), car = new DrivingController();

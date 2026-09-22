@@ -10,6 +10,7 @@
     "preview": "vite preview --host",
     "test": "node --import ./tests/world-seed.js --test tests/*.test.js",
     "test:browser": "node scripts/citydriver-test.mjs",
+    "test:handling": "node scripts/handling-test.mjs",
     "test:taxi": "node scripts/taxi-test.mjs",
     "test:fleet": "node scripts/taxi-fleet-test.mjs",
     "test:city": "node scripts/citydriver-test.mjs",

@@ -17,7 +17,7 @@ export class Input {
       button.addEventListener('pointerdown', event => { event.preventDefault(); button.setPointerCapture(event.pointerId); this.touchButtons[action] = true; });
       for (const event of ['pointerup', 'pointercancel', 'lostpointercapture']) button.addEventListener(event, () => { this.touchButtons[action] = false; });
     }
-    // The driving simulation reads this up to six times per displayed frame, so
+    // The driving simulation reads this up to twelve times per displayed frame, so
     // it fills one reused record rather than building a fresh object each step.
     this.actions = Object.keys(this.codes);
     this.driving = Object.fromEntries([...this.actions.map(action => [action, false]), ['touchStick', null], ['touchDrive', null]]);
@@ -76,6 +76,16 @@ export class Input {
       const value = this.xrActive ? this.xr.state[action] || false : this.codes[action].some(code => this.keys.has(code)) || this.gamepad.state[action] || this.touchButtons[action] || false;
       state[action] = value;
       if (value && action !== 'boost' && action !== 'handbrake') held = true;
+    }
+    // Set iteration preserves press order. Overlapping A/D presses select the
+    // newest direction immediately; releasing it restores the still-held key.
+    if (!this.xrActive) {
+      let steering = 0;
+      for (const code of this.keys) {
+        if (this.codes.left.includes(code)) steering = -1;
+        if (this.codes.right.includes(code)) steering = 1;
+      }
+      if (steering) { state.left = steering < 0; state.right = steering > 0; }
     }
     state.touchStick = null; state.touchDrive = null;
     if (held || this.gamepad.connected || this.xrActive) this.touchStick.clear();

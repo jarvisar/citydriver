@@ -75,7 +75,7 @@ test('stick deadzone, analog triggers, D-pad and face-button fallbacks', () => {
   const { input, device, actions } = fixture();
   device.axes[0] = .12; hold(device, 7, .04); input.update();
   assert.equal(input.state.right, 0); assert.equal(input.state.forward, 0); assert.deepEqual(actions, []);
-  device.axes[0] = -.59; hold(device, 7, .75); input.update();
+  device.axes[0] = -.56; hold(device, 7, .75); input.update();
   assert.ok(Math.abs(input.state.left - .5) < 1e-10);
   assert.ok(input.state.forward > .7 && input.state.forward < .8);
   hold(device, 7, 0); hold(device, 6, .54); hold(device, 15); input.update();

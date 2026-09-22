@@ -1,7 +1,7 @@
 import { KonamiCode } from './konami-code.js';
 
 const CODE_BUTTONS = { 12: 'ArrowUp', 13: 'ArrowDown', 14: 'ArrowLeft', 15: 'ArrowRight', 1: 'KeyB', 0: 'KeyA' };
-const deadzone = (value = 0, threshold = .18) => Math.abs(value) <= threshold ? 0 : Math.sign(value) * Math.min(1, (Math.abs(value) - threshold) / (1 - threshold));
+const deadzone = (value = 0, threshold = .12) => Math.abs(value) <= threshold ? 0 : Math.sign(value) * Math.min(1, (Math.abs(value) - threshold) / (1 - threshold));
 const buttonValue = (pad, index) => {
   const button = pad.buttons[index];
   return button ? Math.min(1, Math.max(0, button.value ?? Number(button.pressed))) : 0;

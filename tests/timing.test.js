@@ -21,7 +21,7 @@ for (const hz of [30, 60, 75, 120, 144, 165, 240]) {
       if (i > hz / 2) assert.ok(Math.abs(previousZ - car.car.position.z - 28 / hz) < 1e-9, `uneven movement at frame ${i}`);
       previousZ = car.car.position.z;
     }
-    assert.equal(steps, 180);
+    assert.equal(steps, 360);
     assert.ok(Math.abs(car.s - 108) < 1e-9);
     assert.ok(Math.abs(car.car.position.z + (108 - 28 * PHYSICS_STEP)) < 1e-9);
   });
@@ -71,11 +71,24 @@ test('pause and resume retain the displayed pose without catching up hidden time
   clock.tick(0, true, step); clock.tick(25, true, step);
   const alpha = clock.alpha;
   clock.suspend(); clock.tick(50000, false, step);
-  assert.equal(clock.alpha, alpha); assert.equal(steps, 1);
+  assert.equal(clock.alpha, alpha); assert.equal(steps, 3);
   clock.suspend(); clock.tick(60000, true, step);
-  assert.equal(clock.alpha, alpha); assert.equal(steps, 1);
+  assert.equal(clock.alpha, alpha); assert.equal(steps, 3);
   clock.tick(60005, true, step); assert.ok(clock.alpha > alpha);
-  clock.tick(90000, true, step); assert.equal(steps, 7); // Catch-up is bounded after a stall.
+  clock.tick(90000, true, step); assert.equal(steps, 15); // Catch-up is bounded after a stall.
   clock.reset(); clock.tick(100000, true, step);
   assert.equal(clock.alpha, 0); assert.equal(clock.dt, 0);
+});
+
+test('new steering is visible on the next 60 Hz frame without waiting an extra frame', () => {
+  const car = new DrivingController({ ...straightRoute, laneAssist: false }), clock = new FrameClock();
+  try {
+    car.speed = 15;
+    clock.tick(0, true, () => {});
+    const before = car.car.quaternion.clone();
+    clock.tick(1000 / 60, true, dt => car.update(dt, { right: 1 }));
+    car.render(clock.alpha);
+    assert.ok(before.angleTo(car.car.quaternion) > .001, 'steering should already be visible');
+    assert.ok(PHYSICS_STEP <= 1 / 120, 'interpolation delay must not exceed 8.33 ms');
+  } finally { car.disposeModel(); }
 });
