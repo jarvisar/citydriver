@@ -54,7 +54,7 @@ export function buildRivers(c) {
       const heading = axis === 'north' ? Math.atan2(a.s - d.s, d.u - a.u) : Math.atan2(a.u - d.u, a.s - d.s);
       const stretch = Math.hypot(d.s - a.s, d.u - a.u) / 56.8;
       const frame = { ...cityRigidFrame(address.s, address.u, heading), s: (a.s + d.s) / 2, u: (a.u + d.u) / 2 };
-      c.rigid(x, s, () => {
+      c.structure(x, s, () => {
         b.box(56, 24.8, railS, 56.8 * stretch, 1.1, .45, '#c9bd9f'); b.solid(56, railS, 56.8 * stretch, .45);
         b.box(56, 30.7, railS, 47 * stretch, .48, .5, '#7d6657');
         for (const offset of [-23, -11.5, 0, 11.5, 23]) {

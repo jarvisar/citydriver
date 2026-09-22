@@ -29,7 +29,7 @@ function capture() {
     },
     box(x, y, s, w, h, d, color, kind = 'solid', yaw = 0, roll = 0) { this.item(kind, box, material, [x, y, -s], [w, h, d], color, yaw, roll); },
   };
-  return { c, height(x, s = 0) {
+  return { c, meshes, height(x, s = 0) {
     const ray = new THREE.Raycaster(new THREE.Vector3(x, 100, -s), new THREE.Vector3(0, -1, 0));
     return ray.intersectObjects(meshes, false)[0]?.point.y;
   }, dispose() { box.dispose(); material.dispose(); } };
@@ -47,6 +47,31 @@ test('butterfly wings meet a lower gutter without holes or clipping into roofs a
         const x = -width / 2 + i / 100 * width, h = view.height(x, s);
         assert.ok(Number.isFinite(h) && h > .8, `continuous cover above the building at ${width}, ${x}, ${s}`);
         assert.ok(Math.abs(h - view.height(-x, s)) < 1e-4, 'opposing wings join symmetrically');
+      }
+    } finally { view.dispose(); }
+  }
+});
+
+test('butterfly roof end infills and side walls have no competing exterior faces', () => {
+  for (const distant of [false, true]) for (const width of [8, 16, 27, 45, 80]) {
+    const view = capture(), depth = 24, roof = 32;
+    view.c.distant = distant;
+    try {
+      butterflyRoof(view.c, { x: 0, s: 0, width, depth, wall: '#ffffff', accent: '#ffffff' }, roof);
+      const check = (origin, direction) => {
+        const hits = new THREE.Raycaster(origin, direction).intersectObjects(view.meshes, false);
+        assert.ok(hits.length, `the roof enclosure has no holes at ${origin.toArray()}`);
+        const front = hits[0];
+        assert.ok(!hits.some(hit => hit.object !== front.object && Math.abs(hit.distance - front.distance) < 1e-5),
+          `overlapping exterior faces at ${origin.toArray()} facing ${direction.toArray()} (width ${width}, distant ${distant})`);
+      };
+      for (const side of [-1, 1]) for (const height of [.2, .6, .95]) {
+        for (const x of [0, width * .13, -width * .13, width / 2 - .07, -width / 2 + .07]) {
+          check(new THREE.Vector3(x, roof + height, side * (depth / 2 + 10)), new THREE.Vector3(0, 0, -side));
+        }
+        for (const z of [0, depth / 2 - .07, -depth / 2 + .07]) {
+          check(new THREE.Vector3(side * (width / 2 + 10), roof + height, z), new THREE.Vector3(-side, 0, 0));
+        }
       }
     } finally { view.dispose(); }
   }

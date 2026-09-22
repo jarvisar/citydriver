@@ -131,7 +131,7 @@ export function ribbonBed(c, points, width, color, stone = '#c8bda6') {
 }
 export function pergola(c, x, s, w, d, color = '#cbb593') {
   reserve(c, rectanglePolygon(x, s, w + 1.5, d + 1.5));
-  c.rigid(x, s, () => {
+  c.structure(x, s, () => {
     c.surface(x, G + .065, s, w + 1.5, .045, d + 1.5, '#c7b99b');
     for (const dx of [-w / 2 + .5, w / 2 - .5]) for (const ds of [-d / 2 + .5, d / 2 - .5]) {
       c.box(x + dx, G + 2.5, s + ds, .5, 5, .5, color); c.post(x + dx, s + ds, .4);

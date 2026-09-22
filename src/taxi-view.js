@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { cityWalker } from './world/city-life.js';
 import { ROAD_LEVEL, PAVEMENT_LEVEL, cityStreetProfile, nearestCityStreet } from './world/city-grid.js';
-import { STOP_SECONDS, taxiRoute } from './taxi-run.js';
+import { STOP_RADIUS, STOP_SECONDS, deliverySeconds, taxiRoute } from './taxi-run.js';
 import { routeDistance } from './city-exploration.js';
 
 const $ = id => document.getElementById(id);
@@ -90,7 +90,13 @@ export class TaxiView {
     const length = routeDistance(taxiRoute(vehicle, stop));
     $('taxi-nav-distance').textContent = `${Math.round(length / 10) * 10} m`;
     $('taxi-task-title').textContent = run.status === 'pickup' ? 'PICK UP' : stop.name;
-    $('taxi-task-detail').textContent = run.status === 'pickup' ? `${stop.name} → ${stop.destination.name} · Stop in the ring` : `${Math.ceil(run.fareLeft)}s · ${money(run.fare.fare + run.tips)} · Stop in the yellow ring`;
+    const pickup = run.status === 'pickup', nearStop = Math.hypot(stop.s - vehicle.s, stop.u - vehicle.u) < STOP_RADIUS;
+    const instruction = nearStop
+      ? Math.abs(vehicle.speed) >= 2.5 ? 'Brake to stop' : pickup ? 'Boarding…' : 'Dropping off…'
+      : pickup ? 'Stop in the ring' : 'Stop in the yellow ring';
+    $('taxi-task-detail').textContent = pickup
+      ? `${stop.name} → ${stop.destination.name} · ${money(stop.fare)} · +${deliverySeconds(stop.length)}s · ${instruction}`
+      : `${Math.ceil(run.fareLeft)}s · ${money(run.fare.fare + run.tips)} · ${instruction}`;
     $('taxi-stop-progress').style.width = `${Math.min(1, run.hold / STOP_SECONDS) * 100}%`;
     $('taxi-combo').textContent = run.status === 'driving' && run.combo > 1 ? `TIP ×${run.combo}` : '';
     $('taxi-task').dataset.stage = run.status;

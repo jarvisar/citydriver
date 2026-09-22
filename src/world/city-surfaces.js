@@ -81,6 +81,7 @@ export function addSurfacePolygon(c, points, y, height, color, kind = 'solid') {
       const [a, b, d] = [world[0], world[i], world[i + 1]];
       if (Math.abs((b.u - a.u) * (d.s - a.s) - (b.s - a.s) * (d.u - a.u)) < EPS) continue;
       items.push({ p: [0, y, 0], scale: [1, height, 1], color, yaw: 0, roll: 0,
+        ...(kind === 'water' ? { riverAddress: [polygon[0], polygon[i], polygon[i + 1]].flatMap(([x, s]) => [c.east + x, c.start + s]) } : {}),
         anchor: { u: c.east, s: c.start }, frame: { u: a.u, s: a.s, eu: b.u - a.u, es: b.s - a.s, nu: d.u - a.u, ns: d.s - a.s } });
     }
   }

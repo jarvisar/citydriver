@@ -60,7 +60,11 @@ test('streamed blocks are bounded, move in both axes, and retain collision coord
       assert.ok(world.distantGroup.children.length <= 36, 'the distant city is bounded to local two-by-two tiles');
       // Separate shared basin rims, canopies and planet sculptures preserve
       // their silhouettes without per-site meshes; keep the tile budget tight.
-      assert.ok(world.distantGroup.children.every(tile => tile.children.length <= 17), 'each tile batches by geometry and material');
+      for (const tile of world.distantGroup.children) {
+        const kinds = new Set(tile.children.map(mesh => mesh.name.replace('citydriver-structure-', 'citydriver-')));
+        assert.ok(kinds.size <= 17, 'each tile batches by geometry and material');
+        assert.ok(tile.children.length <= 20, 'structure separation adds only a few batches per tile');
+      }
       assert.equal([...world.collisionChunks(s, u)].length, 9);
       const cell = cityCell(s, u);
       assert.ok(world.chunks.has(cell.key));
@@ -121,7 +125,7 @@ test('rendered upper-storey glazing covers every building facade', () => {
     const chunk = [...world.chunks.values()].find(candidate => candidate.features.buildings.length);
     assert.ok(chunk);
     const matrix = new THREE.Matrix4(), position = new THREE.Vector3();
-    const glass = ['citydriver-glass', 'citydriver-lit'].map(name => chunk.group.getObjectByName(name)).filter(Boolean);
+    const glass = ['citydriver-structure-glass', 'citydriver-structure-lit'].map(name => chunk.group.getObjectByName(name)).filter(Boolean);
     for (const building of chunk.features.buildings) {
       const sides = new Set(), frame = building.placement;
       const determinant = frame.eu * frame.ns - frame.nu * frame.es;

@@ -30,7 +30,7 @@ function frontDoor(c, x, s, base = 0, width = 4.8) {
 }
 function hall(c, x, s, w, d, h, color, floors = 2, doors = [0], doorWidth = 4.8) {
   reserve(c, rectanglePolygon(x, s, w + 1, d + 1));
-  c.rigid(x, s, () => {
+  c.structure(x, s, () => {
     c.box(x, G + h / 2, s, w, h, d, color);
     c.box(x, G + .6, s, w + .3, 1.2, d + .3, '#b7ad95');
     roof(c, x, s, w, d, h);
@@ -58,7 +58,7 @@ function gardenEdge(c, p, xs = [25, 87], ss = [31, 84]) {
 }
 function entry(c, x, s, w, color = '#648c82') {
   reserve(c, rectanglePolygon(x, s, w + 1, 7));
-  c.rigid(x, s, () => {
+  c.structure(x, s, () => {
     c.box(x, G + 5.3, s, w, .5, 6, color);
     c.box(x, G + 5.03, s - 2.9, w, .14, .18, '#ffe0a0', 'lit');
     for (const dx of [-w / 2 + .6, w / 2 - .6]) { c.box(x + dx, G + 2.6, s - 1.9, .35, 5.2, .35, cream); c.post(x + dx, s - 1.9, .25); }
@@ -67,7 +67,7 @@ function entry(c, x, s, w, color = '#648c82') {
 function cinema(c, { variant: v, palette: p }) {
   // Doorways fit between the vertical Deco piers and poster cases.
   hall(c, 56, 68, 52, 44, 17, ['#bb6c57', '#c98b76', '#729996'][v], 2, [-11.5, 11.5], 3.6);
-  c.rigid(56, 68, () => {
+  c.structure(56, 68, () => {
     // Fluted Art Deco blade and a wraparound illuminated marquee.
     for (const dx of [-9, -6, 6, 9]) c.box(56 + dx, G + 13, 45.6, 1.1, 24, .9, cream);
     c.box(56, G + 18, 44.8, 8, 26, 2.3, '#386976');
@@ -95,7 +95,7 @@ function cinema(c, { variant: v, palette: p }) {
 }
 function hotel(c, { variant: v, palette: p }) {
   hall(c, 56, 66, 54, 42, 32 + v * 4, ['#e2c6a1', '#cfa588', '#c4ccc0'][v], 7);
-  c.rigid(56, 66, () => {
+  c.structure(56, 66, () => {
     const top = 32 + v * 4;
     c.box(56, G + top + 3, 66, 34, 6, 26, '#e0cdb0');
     for (let i = 0; i < 5; i++) c.box(56, G + top + 6 + i * .9, 66, 36 - i * 4.5, 1, 28 - i * 3.5, copper);
@@ -118,7 +118,7 @@ function hotel(c, { variant: v, palette: p }) {
 }
 function museum(c, { variant: v, palette: p }) {
   hall(c, 56, 70, 64, 36, 15, v === 2 ? '#c6cfc8' : '#d6bc97', 2);
-  c.rigid(56, 63, () => {
+  c.structure(56, 63, () => {
     for (let i = 0; i < 3; i++) c.box(56, G + .3 + i * .3, 47 + i, 59 - i * 2, .6, 13 - i * 2, cream);
     c.solid(56, 48, 59, 13);
     for (const x of [32, 42, 52, 60, 70, 80]) {
@@ -132,7 +132,7 @@ function museum(c, { variant: v, palette: p }) {
   });
   entrancePath(c, [[56, 16], [56, 40.5]], 10, p.path, [56, 63], [56, 40.5]);
   for (const x of [33, 79]) {
-    c.rigid(x, 29, () => {
+    c.structure(x, 29, () => {
       c.box(x, G + .6, 29, 8, 1.2, 8, p.stone);
       c.box(x, G + 4.5, 29, 3, 7, 3, v === 1 ? '#ca875f' : '#648d95', 'solid', .5, .35); c.solid(x, 29, 8, 8);
     });
@@ -141,7 +141,7 @@ function museum(c, { variant: v, palette: p }) {
 }
 function station(c, { variant: v, palette: p }) {
   hall(c, 56, 38, 62, 24, 12, ['#ae7c61', '#cbb18c', '#8ca39b'][v], 2);
-  c.rigid(56, 64, () => {
+  c.structure(56, 64, () => {
     c.box(56, G + 11, 36, 17, 22, 21, cream); roof(c, 56, 36, 17, 21, 22);
     disk(c, 56, 36, 20, 20, G + 23, 1.5, copper);
     c.box(56, G + 17, 25.35, 7, 7, .2, '#f8e2ac', 'lit');
@@ -164,7 +164,7 @@ function station(c, { variant: v, palette: p }) {
 }
 function library(c, { variant: v, palette: p }) {
   hall(c, 56, 69, 55, 38, 15, ['#c7b79a', '#aab6a2', '#cfa78a'][v], 2);
-  c.rigid(56, 69, () => {
+  c.structure(56, 69, () => {
     c.box(56, G + 18, 69, 34, 6, 26, '#8eaeaa', 'glass');
     for (const side of [-1, 1]) for (let i = -2; i <= 2; i++) {
       c.box(56 + i * 7, G + 18, 69 + side * 13.2, .4, 6.5, .4, cream);
@@ -186,7 +186,7 @@ function hospital(c, { variant: v, palette: p }) {
   hall(c, 56, 72, 61, 28, 27, '#d9dcd0', 5);
   hall(c, 34, 49, 18, 20, 14 + v * 2, '#acc3bd', 3);
   hall(c, 78, 49, 18, 20, 14 + v * 2, '#acc3bd', 3);
-  c.rigid(56, 72, () => {
+  c.structure(56, 72, () => {
     c.box(56, G + 24, 57.6, 11, 10, .5, '#f0eadd');
     c.box(56, G + 24, 57.25, 2, 7, .25, '#c65d52');
     c.box(56, G + 24, 57.24, 7, 2, .25, '#c65d52');
@@ -202,7 +202,7 @@ function hospital(c, { variant: v, palette: p }) {
   for (const x of [34, 78]) c.prop('bench', x, 32);
 }
 function observatory(c, { variant: v, palette: p }) {
-  c.rigid(56, 66, () => {
+  c.structure(56, 66, () => {
     disk(c, 56, 66, 43, 43, G + 1, 2, p.stone);
     disk(c, 56, 66, 36, 36, G + 8, 14, '#d8ccb0');
     disk(c, 56, 66, 38, 38, G + 15.2, 1, cream);
@@ -239,7 +239,7 @@ function observatory(c, { variant: v, palette: p }) {
 }
 function music(c, { variant: v, palette: p }) {
   hall(c, 47, 73, 47, 36, 14, ['#67778f', '#997b8c', '#597d83'][v], 2);
-  c.rigid(47, 73, () => {
+  c.structure(47, 73, () => {
     c.box(47, G + 8.2, 54.7, 42, 4.4, .5, '#283e57');
     for (const y of [6, 10.4]) c.box(47, G + y, 54.35, 42, .17, .2, '#dc9dc7', 'lit');
     sign(c, 'BLUE NOTE', 47, 54.25, 8.2, 28, 3.1);
@@ -251,7 +251,7 @@ function music(c, { variant: v, palette: p }) {
   });
   entrancePath(c, [[56, 16], [56, 45], [47, 45], [47, 54.25]], 6, p.path, [47, 73], [47, 54.25]);
   for (const [x, s] of [[31, 28], [76, 27], [79, 48]]) cafeTable(c, x, s, '#aa7899');
-  c.rigid(84, 73, () => {
+  c.structure(84, 73, () => {
     c.box(84, G + .5, 73, 13, 1, 18, '#a08671'); c.solid(84, 73, 13, 18);
     c.box(89, G + 3.5, 73, .8, 6, 18, '#577584');
     for (const s of [67, 79]) c.box(87.5, G + 2.3, s, 2, 3.5, 2, dark);
@@ -261,7 +261,7 @@ function music(c, { variant: v, palette: p }) {
 }
 function sports(c, { variant: v, palette: p }) {
   hall(c, 56, 85, 60, 17, 7, '#b98c6f', 1);
-  c.rigid(56, 85, () => { sign(c, 'ATHLETIC CLUB', 56, 76.3, 5.1, 25, 2.1); });
+  c.structure(56, 85, () => { sign(c, 'ATHLETIC CLUB', 56, 76.3, 5.1, 25, 2.1); });
   c.rigid(56, 48, () => {
     const tennis = v !== 1, w = 46, d = 40;
     c.box(56, G + .06, 48, w + 8, .12, d + 6, '#c08b6f');
@@ -292,7 +292,7 @@ function sports(c, { variant: v, palette: p }) {
 function firehouse(c, { variant: v, palette: p }) {
   hall(c, 52, 68, 51, 40, 15, ['#b46551', '#bd8160', '#a76853'][v], 3);
   hall(c, 83, 77, 13, 23, 30 + v * 3, '#ad7860', 5);
-  c.rigid(52, 68, () => {
+  c.structure(52, 68, () => {
     for (const x of [35, 52, 69]) {
       c.box(x, G + 3.6, 47.7, 12.4, 7.2, .5, cream);
       c.box(x, G + 3.5, 47.3, 10.8, 6.5, .3, '#a94238');

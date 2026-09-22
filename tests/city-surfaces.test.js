@@ -82,7 +82,7 @@ test('rigid bridge parapets terminate on the actual curved bank rail junctions',
         }
       }
       let endpoints = 0;
-      for (const item of c.batches.get('solid').items) if (item.color === '#c9bd9f' && item.scale[1] === 1.1) {
+      for (const item of c.batches.get('structure-solid').items) if (item.color === '#c9bd9f' && item.scale[1] === 1.1) {
         cityItemMatrix(item, c.east, c.start, matrix);
         for (const sign of [-.5, .5]) {
           point.set(item.scale[0] > item.scale[2] ? sign : 0, 0, item.scale[0] > item.scale[2] ? 0 : sign).applyMatrix4(matrix);

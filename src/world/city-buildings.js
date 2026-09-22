@@ -354,7 +354,7 @@ export function buildCityBuildings(c) {
   const plan = planBuildings(c.plan);
   const placement = placeCityBuildings(c.plan, plan.buildings);
   c.features.layout = plan.layout;
-  for (const b of placement.buildings) c.rigid(b.x, b.s, () => buildBuilding(c, b), b.frame);
+  for (const b of placement.buildings) c.structure(b.x, b.s, () => buildBuilding(c, b), b.frame);
   // Service paving and pocket gardens fill the gaps between buildings.
   c.surface(56, G + .008, 56, plan.rotation % 2 ? 5.5 : 80, .016, plan.rotation % 2 ? 80 : 5.5, '#7e8987');
   for (const b of placement.open) {

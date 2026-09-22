@@ -16,7 +16,7 @@ import { cityLayout, cityLogical, cityLayoutFrame, cityRigidFrame } from './city
 import { cityItemMatrix, cityAffinePoint } from './city-layout-render.js';
 import { addSurfacePolygon, rectanglePolygon } from './city-surfaces.js';
 import { buildRiverGround, buildRivers, riverResidentPose, riverBoatPosition } from './city-rivers.js';
-import { createRiverWaterMaterial } from './river-water.js';
+import { createRiverWaterMaterial, attachRiverFlow } from './river-water.js';
 import { CITY_BLOCK, DISTANT_CITY_RADIUS, PAVEMENT_LEVEL, WATER_LEVEL, cityCell, cityBlock } from './city-grid.js';
 export { DISTANT_CITY_RADIUS } from './city-grid.js';
 
@@ -29,9 +29,12 @@ const GREENS = ['#63924d', '#80a85c', '#4f8054', '#93ab65'];
 const pick = (items, random) => items[Math.floor(random() * items.length)];
 
 function renderBatches(group, batches, east = 0, start = 0) {
-  for (const [key, { geometry, material, items }] of batches) {
+  for (const [batchKey, { geometry, material, items, structure }] of batches) {
+    const key = structure ? batchKey.slice('structure-'.length) : batchKey;
     if (!items.length) continue;
-    const mesh = new THREE.InstancedMesh(geometry, material, items.length); mesh.name = `citydriver-${key}`;
+    const mesh = new THREE.InstancedMesh(geometry, material, items.length); mesh.name = `citydriver-${batchKey}`;
+    mesh.renderOrder = structure ? -2 : 0;
+    if (key === 'water') attachRiverFlow(mesh, new Float32Array(items.flatMap(item => item.riverAddress)));
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
       const matrix = cityItemMatrix(item, east, start, transform.matrix);
@@ -104,8 +107,9 @@ export class CitydriverChunk {
     if (!this.layoutFrames.has(key)) this.layoutFrames.set(key, flexible ? cityLayoutFrame(s, u) : cityRigidFrame(s, u));
     return this.layoutFrames.get(key);
   }
-  item(key, geometry, material, p, scale = [1, 1, 1], color = '#ffffff', yaw = 0, roll = 0) {
-    if (!this.batches.has(key)) this.batches.set(key, { geometry, material, items: [] });
+  item(key, geometry, material, p, scale = [1, 1, 1], color = '#ffffff', yaw = 0, roll = 0, structure = this.buildingStructure === true) {
+    if (structure) key = `structure-${key}`;
+    if (!this.batches.has(key)) this.batches.set(key, { geometry, material, items: [], structure });
     const anchor = this.layoutAnchor ?? { s: this.start - p[2], u: this.east + p[0] };
     this.batches.get(key).items.push({ p, scale, color, yaw, roll, anchor, frame: this.layoutPlacement ?? this.layoutFrame(anchor.s, anchor.u, this.followLayout) });
   }
@@ -115,6 +119,14 @@ export class CitydriverChunk {
     this.layoutPlacement = placement ?? this.layoutFrame(this.layoutAnchor.s, this.layoutAnchor.u);
     this.followLayout = false;
     try { return build(); } finally { this.layoutAnchor = previousAnchor; this.layoutPlacement = previousPlacement; this.followLayout = previousFollow; }
+  }
+  structure(x, s, build, placement = null) {
+    // Separate architecture from scenery sharing its materials. These batches
+    // draw before the car silhouette; everything else keeps its normal order.
+    const previous = this.buildingStructure;
+    this.buildingStructure = true;
+    try { return this.rigid(x, s, build, placement); }
+    finally { this.buildingStructure = previous; }
   }
   polygon(points, y, height, color, kind = 'solid') {
     addSurfacePolygon(this, points, y, height, color, kind);
@@ -162,7 +174,7 @@ export class CitydriverChunk {
   post(x, s, radius) { if (!this.distant) this.features.colliders.push({ x: this.east + x, z: -this.start - s, reach: radius, anchor: this.layoutAnchor, frame: this.layoutPlacement }); }
   prop(name, x, s, yaw = 0, y = PAVEMENT_LEVEL) {
     if (this.distant) return;
-    this.item(name, cityAssets[name], this.materials.props, [x, y, -s], [1, 1, 1], '#ffffff', yaw);
+    this.item(name, cityAssets[name], this.materials.props, [x, y, -s], [1, 1, 1], '#ffffff', yaw, 0, ['shelter', 'tank', 'kiosk'].includes(name));
   }
   tree(x, s, scale = 7) {
     const index = this.random() < .28 ? 1 : 0, variant = cityTrees[index], p = [x, PAVEMENT_LEVEL, -s];

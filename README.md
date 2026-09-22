@@ -6,9 +6,9 @@ Arcade taxi driving built with Three.js.
 
 Start a **Taxi run** with 90 seconds. Stop inside a pickup ring to board a passenger. Follow the arrow and map, then stop in the yellow drop-off ring before the fare timer expires.
 
-- Completed fares earn cash and add 18 seconds.
+- Completed fares earn cash and add 18–30 seconds, with more time for longer trips.
 - Fast drop-offs, drifts, and near misses earn tips.
-- Combos multiply driving tips up to 3×. Crashes halve current tips.
+- Combos multiply driving tips up to 3×. Crashes halve current tips; repeated contacts in one scrape count as one crash.
 - Boost recharges when released.
 - Resetting the cab costs 5 seconds.
 - Best cash total is saved locally. Pause and hidden tabs stop the clock.
@@ -45,6 +45,8 @@ Gridded neighborhoods blend into curved waterfront roads and looser districts. R
 | Sound | M | Pause menu |
 
 Touch: use the stick to drive and the Boost / Drift buttons. Release the stick to stop.
+
+In a taxi run, holding brake brings the cab to a brief stop before reversing, giving passengers time to board or exit. Release and press brake again to reverse immediately. Steer while holding Drift for tight corners, then release it to regain grip.
 
 ## Run locally
 

@@ -21,6 +21,7 @@ function orientedSite(c, turn) {
     recordReserve(points) { c.recordReserve(points.map(p => point(...p))); },
     polygonSolid(points) { c.polygonSolid(points.map(p => point(...p))); },
     rigid(x, s, build) { return c.rigid(...point(x, s), build); },
+    structure(x, s, build) { return c.structure(...point(x, s), build); },
     box(x, y, s, w, h, d, color, kind, yaw = 0, roll = 0) {
       const [px, ps] = point(x, s); c.box(px, y, ps, w, h, d, color, kind, yaw + angle, roll);
     },
@@ -70,7 +71,7 @@ function pondGarden(c, p, random) {
   entrancePath(c, [[58, 87], [58, 79.55]], 3.3, paving, [58, 74], [58, 79.55]);
   pool(c, 58, 54, 41, 32, stone, false, true);
   // A straight timber viewing deck meets the gently lobed shoreline.
-  c.rigid(58, 74, () => {
+  c.structure(58, 74, () => {
     c.box(58, G + .65, 72, 17, .4, 10, '#a18b6d'); c.solid(58, 72, 17, 10);
     for (const [s, h] of [[78.9, .28], [77.65, .56]]) c.box(58, G + h / 2, s, 5, h, 1.3, stone);
     c.solid(58, 78.5, 5, 3.2);
@@ -160,7 +161,7 @@ function forum(c, p, random) {
 function mosaic(c, p, random) {
   path(c, [[22, 16], [38, 40], [72, 69], [90, 96]], 14, p.path);
   for (let i = 0; i < 7; i++) c.box(36 + i * 6, G + .095, 39 + i * 5, 4.5, .035, 4.5, i % 2 ? p.accent : p.stone, 'solid', -.7);
-  c.rigid(35, 75, () => {
+  c.structure(35, 75, () => {
     disk(c, 35, 75, 20, 20, G + .25, .5, p.stone);
     for (const dx of [-4.5, 4.5]) c.box(35 + dx, G + 5, 75, 2, 10, 3, p.accent);
     c.box(35, G + 9.3, 75, 12, 2, 3, p.accent); c.solid(35, 75, 14, 5);

@@ -3,6 +3,7 @@ import { fitSunShadow, stabilizeShadowFiltering } from './shadows.js';
 import { ThirdPersonCamera } from './third-person-camera.js';
 import { FirstPersonCamera } from './first-person-camera.js';
 import { AmbientOcclusion } from './ambient-occlusion.js';
+import { CarSilhouette } from './car-silhouette.js';
 import { Graphics, drawingPixelRatio } from './graphics.js';
 import { XRCameraRig } from './xr-camera.js';
 import { sampleCityWeather } from './world/city-weather.js';
@@ -40,6 +41,7 @@ export function createRendering(canvas, graphics = new Graphics()) {
   // The scene root never moves. Let static city transforms stay cached while
   // vehicles, cameras and streamed blocks update their own dirty matrices.
   scene.matrixAutoUpdate = false;
+  const carSilhouette = new CarSilhouette(scene);
   const drivingFog = new THREE.Fog('#c2e2db', 460, 860);
   const sky = new THREE.HemisphereLight('#e4f2f5', '#617149', 1.45); scene.add(sky);
   const sun = new THREE.DirectionalLight('#fff1db', 2.5); sun.castShadow = true;
@@ -182,6 +184,7 @@ export function createRendering(canvas, graphics = new Graphics()) {
     updateFog();
   }
   function draw(viewCamera, stereo = false) {
+    carSilhouette.update(followedCar, !stereo && viewCamera.isOrthographicCamera);
     // Hide the player's exterior for the whole first-person draw, including
     // shadows and AO. Restore it for other views and after render failures.
     const car = views[view].firstPerson ? followedCar : null;

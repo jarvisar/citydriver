@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { CITY_BLOCK } from './city-grid.js';
 import { cityItemMatrix } from './city-layout-render.js';
+import { attachRiverFlow } from './river-water.js';
 
 // Local batches let Three.js cull the skyline behind the camera. Updating one
 // edge of the city only replaces the affected tiles, not every distant buffer.
@@ -13,10 +14,12 @@ export function packDistantChunk(chunk) {
     const count = batch.items.length;
     batch.matrices = new Float32Array(count * 16);
     batch.colors = new Float32Array(count * 3);
+    if (batch.items[0]?.riverAddress) batch.riverAddress = new Float32Array(count * 6);
     for (let i = 0; i < count; i++) {
       const item = batch.items[i];
       cityItemMatrix(item, chunk.east, chunk.start, matrix).toArray(batch.matrices, i * 16);
       color.set(item.color).toArray(batch.colors, i * 3);
+      if (batch.riverAddress) batch.riverAddress.set(item.riverAddress, i * 6);
     }
     // Construction objects and layout frames are no longer needed. Keep the
     // compact, block-local transforms for the next update to this tile.
@@ -52,7 +55,7 @@ export class DistantCity {
       if (!tile.chunks.size) { tile.group.removeFromParent(); this.tiles.delete(key); continue; }
       const batches = new Map();
       for (const chunk of tile.chunks.values()) for (const [key, batch] of chunk.batches) {
-        if (!batches.has(key)) batches.set(key, { geometry: batch.geometry, material: batch.material, count: 0, parts: [] });
+        if (!batches.has(key)) batches.set(key, { geometry: batch.geometry, material: batch.material, structure: batch.structure, count: 0, parts: [] });
         const merged = batches.get(key);
         merged.count += batch.colors.length / 3; merged.parts.push({ chunk, batch });
       }
@@ -60,11 +63,14 @@ export class DistantCity {
         if (!batch.count) continue;
         const mesh = new THREE.InstancedMesh(batch.geometry, batch.material, batch.count);
         mesh.name = `citydriver-${key}`;
+        mesh.renderOrder = batch.structure ? -2 : 0;
         mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(batch.count * 3), 3);
+        const riverAddress = key === 'water' ? new Float32Array(batch.count * 6) : null;
         let offset = 0;
         for (const { chunk, batch: part } of batch.parts) {
           mesh.instanceMatrix.array.set(part.matrices, offset * 16);
           mesh.instanceColor.array.set(part.colors, offset * 3);
+          if (riverAddress) riverAddress.set(part.riverAddress, offset * 6);
           const count = part.colors.length / 3;
           for (let i = offset; i < offset + count; i++) {
             mesh.instanceMatrix.array[i * 16 + 12] += chunk.east - tile.group.position.x;
@@ -73,6 +79,7 @@ export class DistantCity {
           offset += count;
         }
         mesh.userData.ambientOcclusion = false;
+        if (riverAddress) attachRiverFlow(mesh, riverAddress);
         // Rebuilt children of an unchanged static tile must inherit its world
         // transform on their first draw, including a quality downgrade at rest.
         mesh.updateMatrix();

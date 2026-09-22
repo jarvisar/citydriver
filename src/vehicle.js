@@ -160,6 +160,7 @@ export class DrivingController {
     this.setCar(carId, { rebuild: false, paint });
     this.s = state.s ?? 24; this.u = 2.4; this.speed = 0; this.steer = 0; this.heading = route.frame(this.s).angle;
     this.distance = state.distance ?? 0; this.pitch = 0; this.roll = 0; this.previousSpeed = 0; this.groundedPosition = new THREE.Vector3();
+    this.reverseDelay = 0;
     this.bodyPitch = 0; this.bodyRoll = 0; this.wheelSpin = 0;
     // Motion a collision leaves the car with that its own drive did not make.
     this.knock = { x: 0, z: 0, spin: 0 };
@@ -334,7 +335,12 @@ export class DrivingController {
     const touch = input.touchDrive;
     const arcade = Boolean(this.arcade), boosting = arcade && input.boost;
     const forward = clamp(Number(input.forward) || 0, 0, 1); const brake = clamp(Number(input.brake) || 0, 0, 1);
-    this.steer = THREE.MathUtils.damp(this.steer, touch ? 0 : (Number(input.right) || 0) - (Number(input.left) || 0), 7, dt);
+    const steering = touch ? 0 : clamp((Number(input.right) || 0) - (Number(input.left) || 0), -1, 1);
+    // Keep some weight on turn-in, but let go of the old turn promptly when
+    // straightening up or countersteering out of an arcade drift.
+    const steeringResponse = arcade ? (steering * this.steer <= 0 || Math.abs(steering) < Math.abs(this.steer) ? 16 : 10) : 7;
+    this.steer = THREE.MathUtils.damp(this.steer, steering, steeringResponse, dt);
+    this.reverseDelay = arcade && brake && !touch && dt > 0 ? Math.max(0, this.reverseDelay - dt) : 0;
     // How far off the tarmac the car is: 0 on the road, 1 out on open ground,
     // ramped across about half a car's width so putting two wheels on the verge
     // costs a fraction of what leaving altogether does. One number drives the
@@ -358,7 +364,7 @@ export class DrivingController {
     const drifting = arcade && input.handbrake && Math.abs(this.steer) > .2 && this.speed > 8 && !brake;
     this.drifting = Boolean(drifting);
     let acceleration = 0;
-    if (forward) acceleration += forward * (this.speed < -.3 ? stats.launch : stats.acceleration);
+    if (forward && (!arcade || !brake)) acceleration += forward * (this.speed < -.3 ? stats.launch : stats.acceleration);
     if (brake) acceleration -= brake * (this.speed > .3 ? stats.braking : stats.creep);
     if (input.handbrake) acceleration -= Math.sign(this.speed) * stats.handbrake * (drifting ? .14 : 1);
     const drag = DRAG.rolling + DRAG.air * this.speed * this.speed + surface;
@@ -373,6 +379,12 @@ export class DrivingController {
     const oldSpeed = this.speed;
     const boostCoast = arcade ? Math.max(0, this.speed - stats.topSpeed - stats.braking * .4 * dt) : 0;
     this.speed = clamp(this.speed + acceleration * dt, touch ? 0 : -stats.reverseSpeed, stats.topSpeed + (boosting ? 10 : boostCoast));
+    // A held brake should settle the cab long enough to board/drop off before
+    // backing up. Releasing and pressing again still selects reverse immediately.
+    if (arcade && brake && !touch) {
+      if (oldSpeed > 0 && this.speed <= 0) this.reverseDelay = .5;
+      if (this.reverseDelay > 0) this.speed = Math.max(0, this.speed);
+    }
     if (!forward && !brake && oldSpeed * this.speed < 0) this.speed = 0;
     if (input.handbrake && oldSpeed * this.speed < 0) this.speed = 0;
     const frame = roadFrame(this.s);

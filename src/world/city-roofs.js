@@ -49,34 +49,37 @@ export function butterflyRoof(c, b, roof) {
   const gutter = .9, width = w + .6, depth = d + .7;
   const run = (width - gutter) / 2, rise = Math.min(3.2, Math.max(1.6, w * .09));
   const pitch = Math.atan2(rise, run), low = roof + .9, thickness = .38;
-  const trim = '#ded1b2';
+  const trim = '#ded1b2', sideWall = .28, endWall = .26;
   // The roof starts above the wall, including its LOWEST point at the gutter.
   // Glazed end infills and a continuous fascia explain the deliberate V shape.
-  c.box(x, roof + .4, s, w, .8, d, b.wall);
+  // Keep the backing inside the enclosure: full-width faces would overlap
+  // the glazing and side walls, causing z-fighting as the camera moves.
+  c.box(x, roof + .4, s, w - 2 * sideWall, .8, d - 2 * endWall, b.wall);
   for (const side of [-1, 1]) {
     const cx = x + side * (gutter / 2 + run / 2), center = low + rise / 2 + thickness / (2 * Math.cos(pitch));
     c.box(cx, center, s, run / Math.cos(pitch), thickness, depth, b.accent, 'solid', 0, side * pitch);
     for (const end of [-1, 1]) {
       c.box(cx, center - .06, s + end * (depth / 2 + .03), run / Math.cos(pitch), .58, .2, trim, 'solid', 0, side * pitch);
       // The infill top meets the roof underside; its lower edge joins the wall.
-      const wallRun = (w - gutter) / 2, h = wallRun * Math.tan(pitch);
-      const wx = x + side * (gutter / 2 + wallRun / 2), ws = s + end * (d / 2 - .13);
-      wedge(c, wx, ws, low, wallRun, h, .26, '#668e91', side < 0);
-      c.box(wx, roof + .45, ws, wallRun, .9, .26, '#668e91');
+      // Stop at the inner side-wall face so the corner has only one exterior.
+      const wallRun = (w - gutter) / 2 - sideWall, h = wallRun * Math.tan(pitch);
+      const wx = x + side * (gutter / 2 + wallRun / 2), ws = s + end * (d / 2 - endWall / 2);
+      wedge(c, wx, ws, low, wallRun, h, endWall, '#668e91', side < 0);
+      c.box(wx, roof + .45, ws, wallRun, .9, endWall, '#668e91');
       for (let i = 1; i <= 3; i++) {
         const dx = gutter / 2 + wallRun * i / 4, height = .9 + wallRun * i / 4 * Math.tan(pitch);
         c.box(x + side * dx, roof + height / 2, ws + end * .16, .16, height, .15, trim);
       }
     }
     const eave = low + (w - gutter) / 2 * Math.tan(pitch);
-    c.box(x + side * (w / 2 - .14), (roof + eave) / 2, s, .28, eave - roof, d, b.wall);
+    c.box(x + side * (w / 2 - sideWall / 2), (roof + eave) / 2, s, sideWall, eave - roof, d, b.wall);
     c.box(x + side * (width / 2), low + rise + .13, s, .22, .52, depth + .2, trim);
   }
   // A shallow, narrow drainage channel replaces the old exposed black trough.
   c.box(x, low + .02, s, gutter + .14, .18, depth + .14, '#768e8e');
   for (const side of [-1, 1]) c.box(x + side * (gutter / 2 - .08), low + .2, s, .12, .25, depth + .14, '#a9b9af');
   for (const end of [-1, 1]) {
-    c.box(x, roof + .45, s + end * (d / 2 - .13), gutter, .9, .26, b.wall);
+    c.box(x, roof + .45, s + end * (d / 2 - endWall / 2), gutter, .9, endWall, b.wall);
     if (!c.distant) c.box(x, roof - 1.3, s + end * (d / 2 + .17), .18, 4.3, .18, '#869e97');
   }
 }

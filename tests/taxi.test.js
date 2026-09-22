@@ -117,3 +117,109 @@ test('the cab has a roof sign, boost adds speed, and drifting creates recoverabl
     assert.equal(car.drifting, false); assert.ok(Math.abs(car.heading - car.slideHeading) < slip / 2);
   } finally { car.disposeModel(); }
 });
+
+// Isolate handling from generated streets, collisions, and surface changes.
+const handlingRoute = {
+  laneAssist: false, frame: () => ({ angle: 0, scale: 1 }),
+  position: (s, u, y = 0) => ({ x: u, y, z: -s }),
+  height: () => 0, looseness: () => 0, bounds: () => [-Infinity, Infinity],
+};
+
+test('holding brake settles a moving cab for pickup and drop-off before reversing', () => {
+  for (const hz of [30, 60, 120]) {
+    const car = new DrivingController(handlingRoute, {}, 'taxi'), run = new TaxiRun(); car.arcade = true;
+    try {
+      run.start(car);
+      for (const stage of ['pickup', 'driving']) {
+        assert.equal(run.status, stage);
+        Object.assign(car, { s: run.target.s - 9, u: run.target.u, heading: 0, speed: 25 }); car.update(0, {});
+        const start = car.s;
+        for (let i = 0; i < hz * 1.4; i++) {
+          car.update(1 / hz, { brake: 1 }); run.update(1 / hz, car);
+        }
+        assert.notEqual(run.status, stage, `${hz} Hz: holding brake completes ${stage}`);
+        assert.ok(car.s - start < 11, 'stopping distance stays short');
+      }
+      assert.equal(run.delivered, 1);
+      for (let i = 0; i < hz; i++) car.update(1 / hz, { brake: 1 });
+      assert.ok(car.speed < -2.5, 'continuing to hold brake still reverses');
+    } finally { car.disposeModel(); }
+  }
+});
+
+test('brakes beat throttle, and a fresh press selects reverse without a delay', () => {
+  const car = new DrivingController(handlingRoute, {}, 'taxi'); car.arcade = true;
+  try {
+    car.speed = 25;
+    for (let i = 0; i < 60; i++) car.update(1 / 60, { brake: 1, forward: 1 });
+    assert.equal(car.speed, 0, 'braking while still holding throttle stops the cab');
+    car.update(1 / 60, {}); car.update(1 / 60, { brake: 1 });
+    assert.ok(car.speed < 0, 'release and repress bypasses the settling pause');
+    car.reset(); car.update(1 / 60, { brake: 1 });
+    assert.ok(car.speed < 0, 'reset clears a previous stop delay');
+  } finally { car.disposeModel(); }
+});
+
+test('arcade steering straightens and countersteers promptly at different tick rates', () => {
+  for (const hz of [30, 60, 120]) {
+    const car = new DrivingController(handlingRoute, {}, 'taxi'); car.arcade = true;
+    try {
+      car.speed = 25;
+      for (let i = 0; i < hz; i++) car.update(1 / hz, { forward: 1, right: 1 });
+      const heading = car.heading;
+      for (let i = 0; i < hz / 2; i++) car.update(1 / hz, { forward: 1 });
+      assert.ok((car.heading - heading) * 180 / Math.PI < 7, 'release does not carry the cab far into the old turn');
+      for (let i = 0; i < hz; i++) car.update(1 / hz, { forward: 1, right: 1 });
+      for (let i = 0; i < Math.ceil(hz * .06); i++) car.update(1 / hz, { forward: 1, left: 1 });
+      assert.ok(car.steer < 0, 'countersteering responds in time to catch a slide');
+      for (let i = 0; i < hz; i++) car.update(1 / hz, { forward: 1, right: .25 });
+      assert.ok(Math.abs(car.steer - .25) < .001, 'analog steering retains its range');
+    } finally { car.disposeModel(); }
+  }
+});
+
+test('a short continuous corner drift earns a tip, but separate taps do not accumulate', () => {
+  const run = new TaxiRun(), car = player(); run.start(car); pickup(run, car); car.speed = 25;
+  for (let turn = 0; turn < 3; turn++) {
+    car.drifting = true; run.update(.3, car);
+    car.drifting = false; run.update(.1, car);
+  }
+  assert.equal(run.tips, 0);
+  car.drifting = true;
+  for (let i = 0; i < 42; i++) run.update(1 / 60, car);
+  assert.equal(run.tips, 5); assert.equal(run.combo, 2);
+});
+
+test('one prolonged scrape costs tips once and cannot earn stunts until clear', () => {
+  const run = new TaxiRun(), car = player(); run.start(car); pickup(run, car);
+  run.drainEvents(); run.tips = 100; car.speed = 25; car.drifting = true;
+  const other = { s: car.s, u: car.u + 3.5, speed: 10, direction: 1 };
+  for (let i = 0; i < 120; i++) {
+    car.audioTelemetry.impactSerial++; car.audioTelemetry.impact = 8;
+    run.update(1 / 60, car, [other]);
+  }
+  assert.equal(run.tips, 50); assert.equal(run.combo, 1);
+  const events = run.drainEvents();
+  assert.equal(events.filter(e => e.kind === 'crash').length, 1);
+  assert.equal(events.filter(e => e.kind === 'tip').length, 0);
+  car.drifting = false; run.update(1, car);
+  car.audioTelemetry.impactSerial++; run.update(1 / 60, car);
+  assert.equal(run.tips, 25, 'a later distinct crash still carries a penalty');
+  run.start(car); pickup(run, car); car.speed = 25; car.drifting = true; run.update(.7, car);
+  assert.equal(run.tips, 5, 'restart clears crash recovery');
+});
+
+test('long fares return more time than short fares and the shift still has a ceiling', () => {
+  const complete = (length, timeLeft = 30) => {
+    const run = new TaxiRun(), car = player(); run.start(car); pickup(run, car);
+    run.fare.length = length; run.timeLeft = timeLeft;
+    Object.assign(car, { s: run.target.s, u: run.target.u }); run.update(.5, car);
+    assert.equal(run.delivered, 1); assert.ok(run.cash > 0);
+    return run;
+  };
+  const short = complete(300), long = complete(1000);
+  assert.equal(short.timeLeft, 47.5, 'short fares keep the original time reward');
+  assert.ok(long.timeLeft >= short.timeLeft + 8 && long.timeLeft <= short.timeLeft + 12);
+  assert.match(long.drainEvents().find(e => e.kind === 'paid').text, /\+28s/);
+  assert.equal(complete(1100, 119).timeLeft, 120);
+});

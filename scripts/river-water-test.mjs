@@ -27,6 +27,7 @@ try {
     { name: 'north-night', ix: 3, iz: 2, weather: 'night' },
     { name: 'north-low-angle', ix: 3, iz: 2, weather: 'clear', low: true },
     { name: 'north-motion', ix: 3, iz: 2, weather: 'clear', time: 15 },
+    { name: 'north-game', ix: 3, iz: 2, weather: 'sunset', game: true },
     { name: 'north-phone', ix: 3, iz: 2, weather: 'clear', phone: true },
   ]) {
     const result = await page.evaluate(async shot => {
@@ -42,7 +43,7 @@ try {
       a.vehicle.car.visible = false;
       r.snap(); r.update(a.vehicle.car, 1, a.world.origin);
       r.setWeather(sampleCityWeather(0, shot.weather), 0);
-      const width = shot.phone ? 480 : 1280, height = shot.phone ? 800 : 900;
+      const width = shot.phone ? 480 : shot.game ? 1920 : 1280, height = shot.phone ? 800 : shot.game ? 1030 : 900;
       r.renderer.setPixelRatio(1); r.renderer.setSize(width, height);
       const span = shot.wide ? 120 : 66;
       const camera = shot.low ? new THREE.PerspectiveCamera(57, width / height, .5, 1800)
@@ -50,6 +51,12 @@ try {
       const z = a.world.origin - p.s;
       camera.position.set(p.u + (shot.low ? 19 : 105), shot.low ? 29 : 146, z + (shot.low ? 49 : 118));
       camera.lookAt(p.u, 19, z - (shot.low ? 30 : 0));
+      if (shot.game) {
+        camera.position.copy(r.camera.position); camera.quaternion.copy(r.camera.quaternion);
+        camera.top = r.camera.top; camera.bottom = r.camera.bottom;
+        camera.left = -camera.top * width / height; camera.right = -camera.left;
+        camera.updateProjectionMatrix();
+      }
       camera.updateMatrixWorld();
       a.world.animate(shot.time ?? 12, 12, camera);
       const sun = a.world.scene.children.find(c => c.isDirectionalLight);

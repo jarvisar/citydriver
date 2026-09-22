@@ -5,6 +5,9 @@ import { cityLayout, cityLogical, cityLanePose, cityRoutePoints } from './world/
 export const SHIFT_SECONDS = 90;
 export const STOP_RADIUS = 8;
 export const STOP_SECONDS = .45;
+// Long trips should earn back more of their travel time, without making the
+// shift self-sustaining simply by completing every fare before its deadline.
+export const deliverySeconds = length => 18 + Math.min(12, Math.round(Math.max(0, length - 400) / 60));
 const distance = (a, b) => Math.hypot(a.s - b.s, a.u - b.u);
 const PASSENGERS = {
   clock: 'Sightseer', market: 'Market shopper', garden: 'Garden visitor', depot: 'Tram driver', art: 'Art student',
@@ -62,7 +65,7 @@ export class TaxiRun {
   start(player) {
     this.status = 'pickup'; this.timeLeft = SHIFT_SECONDS; this.cash = 0; this.delivered = 0; this.failed = 0;
     this.boost = 1; this.boostActive = false; this.elapsed = 0; this.combo = 1; this.comboTime = 0;
-    this.tips = 0; this.hold = 0; this.fare = null; this.events = []; this.driftTime = 0;
+    this.tips = 0; this.hold = 0; this.fare = null; this.events = []; this.driftTime = 0; this.crashCooldown = 0;
     this.recentDestinations = [];
     this.lastImpact = player.audioTelemetry?.impactSerial ?? 0; this.makeCustomers(player);
   }
@@ -120,13 +123,19 @@ export class TaxiRun {
     this.elapsed += dt; this.timeLeft = Math.max(0, this.timeLeft - dt);
     if (this.timeLeft <= 0) { this.finish(); return; }
     this.comboTime -= dt; if (this.comboTime <= 0) this.combo = 1;
+    this.crashCooldown = Math.max(0, this.crashCooldown - dt);
     const impact = player.audioTelemetry?.impactSerial ?? 0;
     const collided = impact !== this.lastImpact;
     if (collided) {
       this.lastImpact = impact;
       if (this.status === 'driving' && (player.audioTelemetry?.impact ?? 0) > 3) {
-        const lost = Math.ceil(this.tips / 2); this.tips -= lost; this.combo = 1; this.driftTime = 0;
-        this.events.push({ kind: 'crash', text: lost ? `Crash −$${lost} tips` : 'Crash · Combo lost' });
+        // A wall scrape or traffic pileup can report contacts every tick. Charge
+        // once until the cab has been clear for a moment, and suspend stunt tips.
+        if (this.crashCooldown === 0) {
+          const lost = Math.ceil(this.tips / 2); this.tips -= lost;
+          this.events.push({ kind: 'crash', text: lost ? `Crash −$${lost} tips` : 'Crash · Combo lost' });
+        }
+        this.combo = 1; this.comboTime = 0; this.driftTime = 0; this.crashCooldown = .8;
       }
     }
     if (this.status === 'pickup') {
@@ -145,11 +154,11 @@ export class TaxiRun {
       this.failed++; this.status = 'pickup'; this.tips = 0; this.combo = 1; this.makeCustomers(player);
       this.events.push({ kind: 'missed', text: 'Fare lost' }); return;
     }
-    if (player.drifting && Math.abs(player.speed) > 10) {
+    if (player.drifting && Math.abs(player.speed) > 10 && this.crashCooldown === 0) {
       this.driftTime += dt;
-      if (this.driftTime >= 1) { this.driftTime -= 1; this.reward('Drift', 5); }
+      if (this.driftTime >= .65) { this.driftTime -= .65; this.reward('Drift', 5); }
     } else this.driftTime = 0;
-    if (Math.abs(player.speed) > 14 && !collided) {
+    if (Math.abs(player.speed) > 14 && !collided && this.crashCooldown === 0) {
       for (const car of traffic) {
         const carHeading = car.heading ?? (car.axis === 'east' ? car.direction * Math.PI / 2 : car.direction < 0 ? Math.PI : 0);
         if (this.passed.has(car) || Math.abs(player.speed - car.speed * Math.cos(carHeading - player.heading)) < 7) continue;
@@ -165,7 +174,7 @@ export class TaxiRun {
     this.hold = distance(this.fare.destination, player) < STOP_RADIUS && Math.abs(player.speed) < 2.5 ? this.hold + dt : 0;
     if (this.hold >= STOP_SECONDS) {
       const speedBonus = Math.round(this.fare.fare * .5 * this.fareLeft / this.fare.limit);
-      const paid = this.fare.fare + this.tips + speedBonus, seconds = 18;
+      const paid = this.fare.fare + this.tips + speedBonus, seconds = deliverySeconds(this.fare.length);
       this.cash += paid; this.delivered++; this.timeLeft = Math.min(120, this.timeLeft + seconds);
       this.recentDestinations = [...this.recentDestinations, this.fare.destination.type].slice(-3);
       this.events.push({ kind: 'paid', text: `+$${paid} · +${seconds}s`, paid });
