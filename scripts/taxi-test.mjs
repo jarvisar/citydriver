@@ -37,15 +37,15 @@ async function checkMapDoesNotSelectCustomer(page, touch = false) {
   assert.equal(await page.evaluate(() => window.__citydriver.taxi.target), null);
   assert.equal(await page.locator('#taxi-nav').isVisible(), false);
 }
-async function checkGroupFare(page, split, label) {
+async function checkGroupFare(page, size, label) {
   if (!await page.evaluate(() => window.__citydriver.paused)) await page.click('#pause');
-  const offer = await page.evaluate(async split => {
+  const offer = await page.evaluate(async size => {
     const { cityLayout } = await import('/src/world/city-layout.js');
     const a = window.__citydriver, v = a.vehicle, run = a.taxi;
     a.traffic.setEnabled(false, v);
     for (let s = -750; s <= 750; s += 250) for (let u = -750; u <= 750; u += 250) {
       Object.assign(v, cityLayout(s, u), { speed: 0 }); run.start(v);
-      const group = run.customers.find(c => c.passengers === (split ? 2 : 4) && c.stops.length === (split ? 2 : 1) && c.id !== run.blockedPickup?.id);
+      const group = run.customers.find(c => c.passengers === size && c.id !== run.blockedPickup?.id);
       if (!group) continue;
       Object.assign(v, { s: group.s - Math.cos(group.heading) * 16, u: group.u - Math.sin(group.heading) * 16, heading: group.heading });
       v.knock.x = v.knock.z = v.knock.spin = 0; v.update(0, {}); a.world.update(v.s, v.u);
@@ -56,8 +56,8 @@ async function checkGroupFare(page, split, label) {
         rendered: a.taxiView.markers.find(m => m.stop.id === group.id).person.count };
     }
     throw new Error('No suitable group offer found');
-  }, split);
-  assert.equal(offer.rendered, offer.passengers);
+  }, size);
+  assert.equal(offer.rendered, offer.passengers); assert.equal(offer.stops, offer.passengers);
   assert.match(await page.locator('#taxi-party').textContent(), new RegExp(`${offer.passengers} riders`));
   assert.equal(await page.evaluate(() => window.__citydriver.taxi.target), null);
   await page.click('#resume');
@@ -80,15 +80,15 @@ async function checkGroupFare(page, split, label) {
   }
   for (let i = 0; i < offer.stops; i++) {
     await page.waitForFunction(name => document.querySelector('#taxi-task-title').textContent === name, offer.names[i]);
-    if (split) assert.equal(await page.locator('#taxi-stage').textContent(), `Stop ${i + 1} of 2`);
+    assert.equal(await page.locator('#taxi-stage').textContent(), `Stop ${i + 1} of ${offer.stops}`);
     await placeAtTarget(page);
     if (i < offer.stops - 1) {
-      await page.waitForFunction(() => window.__citydriver.taxi.stopIndex === 1);
+      await page.waitForFunction(next => window.__citydriver.taxi.stopIndex === next, i + 1);
       assert.equal(await page.evaluate(() => window.__citydriver.taxi.status), 'driving');
       assert.equal(await page.evaluate(() => window.__citydriver.taxi.delivered), 0);
       assert.ok(await page.evaluate(() => window.__citydriver.taxi.cash > 0));
-      await page.waitForFunction(() => document.querySelector('#taxi-stage').textContent === 'Stop 2 of 2');
-      await page.screenshot({ path: `.artifacts/taxi/${label}-next-stop.png` });
+      await page.waitForFunction(stage => document.querySelector('#taxi-stage').textContent === stage, `Stop ${i + 2} of ${offer.stops}`);
+      if (i === 0) await page.screenshot({ path: `.artifacts/taxi/${label}-next-stop.png` });
     }
   }
   await page.waitForFunction(() => window.__citydriver.taxi.delivered === 1);
@@ -183,8 +183,8 @@ try {
   await page.screenshot({ path: '.artifacts/taxi/results.png' });
   await page.click('#taxi-retry'); assert.equal(await page.evaluate(() => window.__citydriver.taxi.cash), 0);
   assert.equal(await page.evaluate(() => window.__citydriver.taxi.best), cash);
-  await checkGroupFare(page, false, 'group-shared');
-  await checkGroupFare(page, true, 'group-two-stops');
+  await checkGroupFare(page, 2, 'group-two');
+  await checkGroupFare(page, 4, 'group-four');
   await page.keyboard.press('KeyP'); await page.click('#switch-mode');
   assert.equal(await page.evaluate(() => window.__citydriver.gameMode), 'free');
   assert.equal(await page.evaluate(() => window.__citydriver.taxi.status), 'idle');
@@ -222,10 +222,10 @@ try {
   await touch.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] });
   assert.equal(await mobile.evaluate(() => Boolean(window.__citydriver.input.state.handbrake)), false);
   await mobile.screenshot({ path: '.artifacts/taxi/mobile.png' });
-  await checkGroupFare(mobile, true, 'mobile-group');
+  await checkGroupFare(mobile, 3, 'mobile-group');
   await mobile.tap('#pause'); const mobileTime = await mobile.evaluate(() => window.__citydriver.taxi.timeLeft);
   await mobile.waitForTimeout(200); assert.equal(await mobile.evaluate(() => window.__citydriver.taxi.timeLeft), mobileTime);
   assert.deepEqual(errors, []);
   await writeFile('.artifacts/taxi/report.json', JSON.stringify({ passed: true, cash, errors }, null, 2));
-  console.log('Taxi checks passed: pickup, drop-off, shared groups, two-stop groups, automatic navigation, banked payouts, failure, boost, touch drift, pause, restart, saved best, free drive, desktop and touch.');
+  console.log('Taxi checks passed: pickup, drop-off, groups of two and four with a stop per rider, automatic navigation, banked payouts, failure, boost, touch drift, pause, restart, saved best, free drive, desktop and touch.');
 } finally { await browser.close(); }

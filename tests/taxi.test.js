@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { TaxiRun, taxiRoute, leadStop, SHIFT_SECONDS } from '../src/taxi-run.js';
+import { TaxiRun, taxiRoute, leadStop, SHIFT_SECONDS, MAX_SHIFT_SECONDS, GROUP_MAX_ROUTE } from '../src/taxi-run.js';
 import { citydriverRoute, cityStreetAt, cityRiverAt } from '../src/world/city-grid.js';
 import { DrivingController, createCar } from '../src/vehicle.js';
 import { steerCurve } from '../src/handling.js';
@@ -105,7 +105,8 @@ test('expanded destinations offer distinct customers, reachable stops and varied
     assert.ok(new Set(run.customers.map(c => c.destination.type)).size >= 3);
     for (const customer of run.customers) {
       assert.notEqual(customer.name, 'Passenger');
-      assert.ok(customer.length >= 280 && customer.length <= 1100);
+      assert.ok(customer.stops[0].length >= 280 && customer.stops[0].length <= 1100);
+      assert.ok(customer.length <= GROUP_MAX_ROUTE);
       assert.equal(cityStreetAt(customer.s, customer.u).median, false);
       assert.equal(cityStreetAt(customer.destination.s, customer.destination.u).median, false);
       for (const other of run.customers) if (other !== customer) assert.ok(Math.hypot(other.s - customer.s, other.u - customer.u) > 24);
@@ -394,8 +395,8 @@ test('one prolonged scrape costs tips once and cannot earn stunts until clear', 
 
 test('long fares return more time than short fares and the shift still has a ceiling', () => {
   const complete = (length, timeLeft = 30) => {
-    const run = new TaxiRun(), car = player(); run.start(car); pickup(run, car);
-    run.fare.length = length; run.timeLeft = timeLeft;
+    const run = new TaxiRun(), car = player(); run.start(car); pickup(run, car, run.customers.find(c => c.passengers === 1));
+    run.currentStop.length = length; run.timeLeft = timeLeft;
     Object.assign(car, { s: run.target.s, u: run.target.u }); run.update(.5, car);
     assert.equal(run.delivered, 1); assert.ok(run.cash > 0);
     return run;
@@ -404,5 +405,5 @@ test('long fares return more time than short fares and the shift still has a cei
   assert.equal(short.timeLeft, 47.5, 'short fares keep the original time reward');
   assert.ok(long.timeLeft >= short.timeLeft + 8 && long.timeLeft <= short.timeLeft + 12);
   assert.match(long.drainEvents().find(e => e.kind === 'paid').text, /\+28s/);
-  assert.equal(complete(1100, 119).timeLeft, 120);
+  assert.equal(complete(1100, MAX_SHIFT_SECONDS - 1).timeLeft, MAX_SHIFT_SECONDS);
 });

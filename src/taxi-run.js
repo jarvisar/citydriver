@@ -7,14 +7,30 @@ import { TaxiFleet } from './taxi-fleet.js';
 export const SHIFT_SECONDS = 90;
 export const STOP_RADIUS = 8;
 export const STOP_SECONDS = .45;
-export const GROUP_MAX_LEG = 260;
-export const GROUP_MAX_DETOUR = 1.3;
+export const GROUP_MAX_LEG = 650;
+// How far a hop between drop-offs may wander from the straight line. A grid
+// costs about √2 on a diagonal, so anything beyond this is a river, a dead end
+// or a hop that doubles back through the block it started on.
+export const GROUP_MAX_DETOUR = 1.45;
+export const GROUP_MAX_ROUTE = 2200;
+export const MAX_SHIFT_SECONDS = 180;
+// Cosine of the sharpest turn a party route may take between two drop-offs,
+// about 105°. Street routes zigzag, so demanding a strictly forward hop left
+// most full cabs with nowhere legal to go.
+export const GROUP_MIN_TURN = -.25;
+// Each hop samples a handful of the closest unused places; the chain is built
+// for every waiting ring, so the route tracing has to stay cheap.
+const GROUP_CANDIDATES = 6;
 const CUSTOMER_RANGE = B * 3;
 const CUSTOMER_COLORS = ['#a4f264', '#54dfe0', '#f8ba55', '#d6adff', '#ffaaa1', '#9dcaff'];
 // Long trips should earn back more of their travel time, without making the
 // shift self-sustaining simply by completing every fare before its deadline.
 export const deliverySeconds = length => 18 + Math.min(12, Math.round(Math.max(0, length - 400) / 60));
 const distance = (a, b) => Math.hypot(a.s - b.s, a.u - b.u);
+export const turnCosine = (from, via, to) => {
+  const ax = via.s - from.s, ay = via.u - from.u, bx = to.s - via.s, by = to.u - via.u;
+  return (ax * bx + ay * by) / (Math.hypot(ax, ay) * Math.hypot(bx, by) || 1);
+};
 const PASSENGERS = {
   clock: 'Sightseer', market: 'Market shopper', garden: 'Garden visitor', depot: 'Tram driver', art: 'Art student',
   cinema: 'Moviegoer', hotel: 'Hotel guest', museum: 'Museum visitor', station: 'Rail commuter', library: 'Reader',
@@ -26,45 +42,55 @@ const PASSENGERS = {
 };
 const PASSENGER_TYPES = Object.keys(PASSENGERS);
 
-// Parties board in one beat. Most share a destination; a split party gets at
-// most one extra stop, in the same neighborhood and further along the trip.
-function partyOffer(stop, destination, length, destinations) {
-  const roll = randomAt(stop.fareSeed, 20010);
-  const passengers = roll < .5 ? 1 : roll < .73 ? 2 : roll < .91 ? 3 : 4;
-  const stops = [{ destination, passengers, length }];
-  if (passengers > 1 && randomAt(stop.fareSeed, 20110) < .55) {
-    const candidates = destinations.filter(next => next.id !== destination.id
-      && distance(destination, next) >= 45 && distance(destination, next) <= GROUP_MAX_LEG)
-      .sort((a, b) => distance(destination, a) - distance(destination, b) || a.id.localeCompare(b.id));
+// Parties board in one beat and every rider keeps their own destination: a
+// four-seat party is four real drop-offs. The chain is grown one hop at a
+// time, always nearby and never doubling back, so a full cab reads as one
+// route rather than four errands. A rider whose stop will not fit never
+// boards, which keeps the count on the ring equal to the stops ahead.
+export function partySize(seed) {
+  const roll = randomAt(seed, 20010);
+  return roll < .5 ? 1 : roll < .73 ? 2 : roll < .91 ? 3 : 4;
+}
+// Bigger parties start with a shorter first ride, leaving room in the route
+// for everyone else's stop.
+const FIRST_LEG_MAX = [0, 1100, 800, 650, 500];
+
+function partyOffer(stop, destination, length, wanted) {
+  const stops = [{ destination, passengers: 1, length }];
+  let previous = stop, from = destination, totalLength = length;
+  while (stops.length < wanted) {
+    const taken = new Set(stops.map(leg => leg.destination.id));
+    // Look around the rider who just got out, not around the pickup: a long
+    // chain would otherwise run off the edge of the pickup's own window.
+    const candidates = nearbyPlaces(from.s, from.u, 6).map(place => ({ ...placeStop(place), id: place.id }))
+      .filter(next => !taken.has(next.id)
+      && distance(from, next) >= 45 && distance(from, next) <= GROUP_MAX_LEG
+      // Keep roughly heading the way the cab is already pointed.
+      && turnCosine(previous, from, next) >= GROUP_MIN_TURN)
+      .sort((a, b) => distance(from, a) - distance(from, b) || a.id.localeCompare(b.id))
+      .slice(0, GROUP_CANDIDATES);
+    let chosen = null;
     for (const next of candidates) {
-      const direct = routeDistance(taxiRoute(stop, next));
-      const orders = [
-        { first: destination, last: next, firstLength: length, direct },
-        { first: next, last: destination, firstLength: direct, direct: length },
-      ].map(order => ({ ...order, leg: routeDistance(taxiRoute(order.first, order.last)) }))
-        .filter(order => order.firstLength >= 280 && order.leg <= GROUP_MAX_LEG
-          && order.firstLength + order.leg <= Math.min(1100, order.direct * GROUP_MAX_DETOUR)
-          && (order.last.s - order.first.s) * (order.first.s - stop.s)
-            + (order.last.u - order.first.u) * (order.first.u - stop.u) >= 0)
-        .sort((a, b) => a.firstLength + a.leg - b.firstLength - b.leg);
-      if (!orders.length) continue;
-      const order = orders[0];
-      stops[0] = { destination: order.first, passengers: Math.ceil(passengers / 2), length: order.firstLength };
-      stops.push({ destination: order.last, passengers: passengers - stops[0].passengers, length: order.leg });
+      const leg = routeDistance(taxiRoute(from, next));
+      if (leg > GROUP_MAX_LEG || leg > distance(from, next) * GROUP_MAX_DETOUR) continue;
+      if (totalLength + leg > GROUP_MAX_ROUTE) continue;
+      chosen = { destination: next, passengers: 1, length: leg };
       break;
     }
+    if (!chosen) break;
+    stops.push(chosen); previous = from; from = chosen.destination; totalLength += chosen.length;
   }
-  const totalLength = stops.reduce((sum, leg) => sum + leg.length, 0);
+  const passengers = stops.length;
   const fare = Math.round((40 + totalLength * .28) * (1 + (passengers - 1) * .35));
-  // Allocate integer dollars and seconds once; stopping twice must not double
-  // the shift reward. Cash from the first stop stays banked if the party fails.
+  // Allocate integer dollars once, so the riders split the fare exactly. Each
+  // drop-off banks its own share immediately if the party later runs out.
   let allocated = 0;
   for (const [index, leg] of stops.entries()) {
-    leg.fare = index === stops.length - 1 ? fare - allocated : Math.round(fare * leg.passengers / passengers);
+    leg.fare = index === stops.length - 1 ? fare - allocated : Math.round(fare / passengers);
     allocated += leg.fare;
   }
   return { passengers, stops, destination: stops[0].destination, length: totalLength, fare,
-    limit: Math.ceil(18 + totalLength / 14 + (stops.length - 1) * 6),
+    limit: Math.ceil(18 + totalLength / 14 + (stops.length - 1) * 10),
     groupBonus: (passengers - 1) * 25 };
 }
 
@@ -160,6 +186,7 @@ export class TaxiRun {
       if (stop.destination) return stop;
       // Derive the entire offer from this pickup, not the driver's approach
       // or trip history, so unloading and revisiting recreates the same fare.
+      const wanted = partySize(stop.fareSeed), maxLength = FIRST_LEG_MAX[wanted];
       const destinations = nearbyPlaces(stop.s, stop.u, 6).map(place => ({ ...placeStop(place), id: place.id }));
       // Rank cheaply before tracing any streets. Usually only one or two
       // routes need sampling, even when many new blocks enter the window.
@@ -167,15 +194,19 @@ export class TaxiRun {
         .map((destination, j) => ({ destination, variety: randomAt(stop.fareSeed, j + 19710),
           rank: randomAt(stop.fareSeed, PASSENGER_TYPES.indexOf(destination.type) + 19810) }))
         .sort((a, b) => a.rank - b.rank || a.variety - b.variety);
-      let route;
+      // A party prefers a shorter first ride but settles for any ordinary fare.
+      let route, fallback;
       for (const { destination } of choices) {
         const length = routeDistance(taxiRoute(stop, destination));
-        if (length >= 280 && length <= 1100) { route = { destination, length }; break; }
+        if (length < 280 || length > 1100) continue;
+        fallback ??= { destination, length };
+        if (length <= maxLength) { route = { destination, length }; break; }
       }
+      route ??= fallback;
       const address = cityLogical(stop.s, stop.u);
       const destination = route?.destination ?? placeStop({ ...cityLayout(Math.round(address.s / B) * B + B / 2, Math.round(address.u / B) * B + 3.5 * B), name: 'Downtown' });
       const length = route?.length ?? routeDistance(taxiRoute(stop, destination));
-      const party = partyOffer(stop, destination, length, destinations);
+      const party = partyOffer(stop, destination, length, wanted);
       return { ...stop, name: PASSENGERS[party.destination.type] ?? 'Passenger', ...party,
         color: CUSTOMER_COLORS[Math.floor(randomAt(stop.fareSeed, 19910) * CUSTOMER_COLORS.length)] };
     });
@@ -273,13 +304,14 @@ export class TaxiRun {
       const speedBonus = Math.round(stop.fare * .5 * this.fareLeft / this.fare.limit);
       const bonus = last ? this.fare.groupBonus : 0;
       const paid = stop.fare + this.tips + speedBonus + bonus;
-      const totalSeconds = deliverySeconds(this.fare.length) + (this.fare.stops.length - 1) * 4;
-      const seconds = this.fare.stops.length === 1 ? totalSeconds : last ? 8 : totalSeconds - 8;
+      // Every rider delivered is their own time bonus, as in Crazy Taxi 2: a
+      // full cab is the fastest way to keep the shift clock alive.
+      const seconds = deliverySeconds(stop.length);
       this.cash += paid; this.deliveredPassengers += stop.passengers; this.onboard -= stop.passengers;
-      this.timeLeft = Math.min(120, this.timeLeft + seconds);
+      this.timeLeft = Math.min(MAX_SHIFT_SECONDS, this.timeLeft + seconds);
       this.fleet.credit(paid);
       this.recentDestinations = [...this.recentDestinations, stop.destination.type].slice(-3);
-      const celebration = bonus ? 'Group complete! ' : !last ? `${stop.passengers} dropped off · ` : '';
+      const celebration = bonus ? 'Group complete! ' : !last ? `Rider ${this.stopIndex + 1} of ${this.fare.passengers} · ` : '';
       this.events.push({ kind: 'paid', text: `${celebration}+$${paid} · +${seconds}s`, paid, bonus, seconds, passengers: stop.passengers, destination: stop.destination, groupComplete: last && this.fare.passengers > 1 });
       if (this.fare.passengers > 1) this.boost = Math.min(1, this.boost + .25);
       if (!last) {

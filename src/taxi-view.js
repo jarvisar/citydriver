@@ -178,7 +178,7 @@ export class TaxiView {
       }, null);
       $('taxi-task').dataset.arriving = String(Boolean(run.boarding));
       text('taxi-task-title', nearby ? nearby.destination.name : 'Find a passenger');
-      text('taxi-party', nearby ? `${nearby.passengers} rider${nearby.passengers === 1 ? '' : 's'} · ${nearby.stops.length === 1 ? nearby.passengers > 1 ? '1 shared stop' : '1 stop' : '2 nearby stops'}` : 'Groups ride together · up to 2 nearby stops');
+      text('taxi-party', nearby ? `${nearby.passengers} rider${nearby.passengers === 1 ? '' : 's'} · ${nearby.stops.length} stop${nearby.stops.length === 1 ? '' : 's'}` : 'Groups ride together · one stop each');
       text('taxi-next-stop', nearby?.stops.length > 1 ? `Then ${nearby.stops[1].destination.name}` : '');
       this.instruction(run.boarding ? `Hold still · boarding${run.boarding.passengers > 1 ? ` ${run.boarding.passengers} riders` : ''}…` : nearby ? 'Stop in the ring to pick up' : '');
       text('taxi-fare-status', nearby ? `${money(nearby.fare + nearby.groupBonus)} + tips` : '');
@@ -191,7 +191,7 @@ export class TaxiView {
     $('taxi-nav').setAttribute('aria-label', `Drop-off ${Math.round(length)} meters by road; the green arrow points directly to the destination`);
     text('taxi-task-title', stop.name);
     text('taxi-fare-status', `Arrive in ${Math.ceil(run.fareLeft)}s · ${money(run.remainingFare + run.tips)}`);
-    text('taxi-party', run.fare.passengers > 1 ? `${run.onboard} aboard · ${run.currentStop.passengers === run.onboard ? 'everyone off here' : `${run.currentStop.passengers} off here`}` : '');
+    text('taxi-party', run.fare.passengers > 1 ? `${run.onboard} aboard · ${run.onboard === 1 ? 'last rider off here' : '1 off here'}` : '');
     const next = run.fare.stops[run.stopIndex + 1];
     text('taxi-next-stop', next ? `Then ${next.destination.name} · ${Math.round(next.length / 10) * 10} m further` : run.fare.groupBonus ? `Finish the group: +${money(run.fare.groupBonus)} bonus` : '');
     const instruction = nearStop
