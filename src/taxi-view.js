@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { cityWalker } from './world/city-life.js';
-import { CITY_BLOCK, ROAD_LEVEL, PAVEMENT_LEVEL, cityStreetProfile } from './world/city-grid.js';
+import { ROAD_LEVEL, PAVEMENT_LEVEL, cityStreetProfile, nearestCityStreet } from './world/city-grid.js';
 import { STOP_SECONDS, taxiRoute } from './taxi-run.js';
 import { routeDistance } from './city-exploration.js';
 
@@ -26,9 +26,10 @@ export class TaxiView {
     this.materials = []; this.markers = []; this.revision = run.revision;
     const stops = run.status === 'pickup' ? run.customers : run.status === 'driving' ? [{ ...run.target, color: '#ffd240' }] : [];
     for (const stop of stops) {
-      const street = cityStreetProfile(stop.axis, Math.round((stop.axis === 'north' ? stop.u : stop.s) / CITY_BLOCK));
+      const street = cityStreetProfile(stop.axis, stop.index ?? nearestCityStreet(stop.s, stop.u).index);
       const acrossScale = Math.min(.65, (street.halfWidth - street.lane - .4) / 6.5);
       const group = new THREE.Group(), solid = new THREE.MeshBasicMaterial({ color: stop.color, side: THREE.DoubleSide });
+      group.rotation.y = -(stop.heading ?? (stop.axis === 'north' ? 0 : Math.PI / 2)) + (stop.axis === 'north' ? 0 : Math.PI / 2) + (stop.side < 0 ? Math.PI : 0);
       const glow = new THREE.MeshBasicMaterial({ color: stop.color, transparent: true, opacity: .08, depthWrite: false, side: THREE.DoubleSide });
       this.materials.push(solid, glow);
       const ring = new THREE.Mesh(this.ring, solid); ring.position.y = ROAD_LEVEL + .07; group.add(ring);

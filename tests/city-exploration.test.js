@@ -7,6 +7,7 @@ import { landmarkForBlock, PLACE_TYPES } from '../src/world/city-places.js';
 import { CitydriverWorld } from '../src/world/citydriver-world.js';
 import { CityExploration, nearbyPlaces, placeRoute, routeDistance } from '../src/city-exploration.js';
 import { walkerPose } from '../src/world/city-life.js';
+import { cityLayout, cityLogical } from '../src/world/city-layout.js';
 
 test('every three-by-three neighbourhood has one reproducible landmark on dry land', () => {
   const types = new Set();
@@ -18,7 +19,8 @@ test('every three-by-three neighbourhood has one reproducible landmark on dry la
       if (type) {
         landmarks.push(block); types.add(type);
         assert.equal(block.kind, 'landmark');
-        assert.equal(cityRiverAt((ix + .5) * CITY_BLOCK), null);
+        const p = cityLayout((iz + .5) * CITY_BLOCK, (ix + .5) * CITY_BLOCK);
+        assert.equal(cityRiverAt(p.u, p.s), null);
       }
     }
     assert.equal(landmarks.length, 1, `neighbourhood ${rx},${rz}`);
@@ -35,14 +37,14 @@ test('suggested routes stay on connected streets and bridge decks across all qua
       assert.ok(routeDistance(points) >= Math.hypot(points.at(-1).s - s, points.at(-1).u - u));
       for (let i = 1; i < points.length; i++) {
         const a = points[i - 1], b = points[i];
-        assert.ok(a.s === b.s || a.u === b.u, 'route legs follow one axis');
+        assert.ok(Math.hypot(b.s - a.s, b.u - a.u) <= 12, 'route legs sample bends closely');
         for (let n = 0; n <= 50; n++) {
           const s = a.s + (b.s - a.s) * n / 50, u = a.u + (b.u - a.u) * n / 50;
           const road = cityStreetAt(s, u);
-          assert.ok(road.onRoad); assert.ok(!cityRiverAt(u) || road.bridge);
+          assert.ok(road.onRoad); assert.ok(!cityRiverAt(u, s) || road.bridge);
         }
       }
-      assert.equal(points.at(-1).s, place.s - CITY_BLOCK / 2);
+      assert.deepEqual(points.at(-1), place.entrance);
     }
   }
 });
@@ -52,7 +54,7 @@ test('landmark stamps require an active drive near the road and persist once per
   const guide = new CityExploration(storage), places = nearbyPlaces(0, 0, 20);
   for (const type of PLACE_TYPES) {
     const place = places.find(p => p.type === type); assert.ok(place);
-    const s = place.s - 56 - 3, u = place.u;
+    const { s, u } = cityLayout(place.logicalS - 59, place.logicalU);
     assert.deepEqual(guide.update(s, u, false), [], 'menus and attract mode cannot collect stamps');
     assert.deepEqual(guide.update(place.s, place.u), [], 'cutting through a courtyard is not a drive-by');
     assert.equal(guide.update(s, u).length, 1);
@@ -75,7 +77,8 @@ test('destinations can be cycled, selected by type, and refreshed after resettin
   assert.equal(guide.next(0, 3, 'missing-type'), null); assert.equal(guide.target, target);
   guide.update(-42000, 19000, false);
   assert.ok(Math.hypot(guide.target.s + 42000, guide.target.u - 19000) < 2000);
-  guide.update(guide.target.s - 59, guide.target.u);
+  const entrance = cityLayout(guide.target.logicalS - 59, guide.target.logicalU);
+  guide.update(entrance.s, entrance.u);
   assert.ok(guide.justArrived);
   const arrived = guide.justArrived.id;
   guide.update(guide.target.s - 200, guide.target.u);
@@ -94,15 +97,18 @@ test('all landmark geometry streams with colliders clear of roads and stable dis
       const { west, east, south, north } = blockStreets(chunk.ix, chunk.iz);
       for (const collider of chunk.features.colliders) {
         if (collider.kind === 'median-tree') continue;
-        const x = collider.x - chunk.east, s = -collider.z - chunk.start;
-        const halfX = collider.halfWidth ?? collider.reach, halfS = collider.halfLength ?? collider.reach;
-        assert.ok(x - halfX > west.halfWidth && x + halfX < CITY_BLOCK - east.halfWidth);
-        assert.ok(s - halfS > south.halfWidth && s + halfS < CITY_BLOCK - north.halfWidth);
+        const corners = collider.corners ?? [{ x: collider.x, z: collider.z }];
+        for (const corner of corners) {
+          const p = cityLogical(-corner.z, corner.x), x = p.u - chunk.east, s = p.s - chunk.start;
+          const margin = collider.corners ? 0 : collider.reach;
+          assert.ok(x - margin > west.halfWidth && x + margin < CITY_BLOCK - east.halfWidth);
+          assert.ok(s - margin > south.halfWidth && s + margin < CITY_BLOCK - north.halfWidth);
+        }
       }
       world.animate(0);
       const positions = chunk.peopleMesh.instanceMatrix.array.slice();
       world.animate(15); assert.notDeepEqual(chunk.peopleMesh.instanceMatrix.array, positions);
-      assert.ok(world.distantGroup.children.length <= 9);
+      assert.ok(world.distantGroup.children.length <= 14);
       world.update(place.s + CITY_BLOCK * 4, place.u);
       assert.equal(world.distantChunks.get(place.id).plan.landmark, type);
     }

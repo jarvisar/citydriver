@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { seededRandom } from './route.js';
 import { PAVEMENT_LEVEL as G } from './city-grid.js';
 import { pitchedRoof } from './city-landmarks.js';
+import { placeCityBuildings, rectangleCorners, parcelsOverlap } from './city-parcels.js';
+import { cityRigidFrame } from './city-layout.js';
 
 const pick = (items, random) => items[Math.floor(random() * items.length)];
 const integer = (random, min, max) => min + Math.floor(random() * (max - min + 1));
@@ -228,7 +230,7 @@ function buildBuilding(c, b) {
   const baseHeight = b.type === 'warehouse' ? 4.8 : 4.4, height = baseHeight + b.floors * 3.6;
   const lowerFloors = b.setbackFloors, lowerHeight = baseHeight + lowerFloors * 3.6, lowerRoof = G + lowerHeight;
   const metadata = { x: c.east + b.x, s: c.start + b.s, width: b.width, depth: b.depth, height,
-    facadeSides: 4, windows: 0, type: b.type, roofType: b.roofType, floors: b.floors, setbackFloors: lowerFloors, wall: b.wall };
+    facadeSides: 4, windows: 0, type: b.type, roofType: b.roofType, floors: b.floors, setbackFloors: lowerFloors, wall: b.wall, placement: b.frame };
   c.features.buildings.push(metadata); c.solid(b.x, b.s, b.width, b.depth);
   c.box(b.x, G + lowerHeight / 2, b.s, b.width, lowerHeight, b.depth, b.wall);
   c.box(b.x, G + baseHeight / 2, b.s, b.width + .06, baseHeight, b.depth + .06, b.type === 'office' ? '#839b9e' : '#a4a69b');
@@ -281,11 +283,16 @@ function buildBuilding(c, b) {
 
 export function buildCityBuildings(c) {
   const plan = planBuildings(c.plan);
+  const placement = placeCityBuildings(c.plan, plan.buildings);
   c.features.layout = plan.layout;
-  for (const b of plan.buildings) buildBuilding(c, b);
+  for (const b of placement.buildings) c.rigid(b.x, b.s, () => buildBuilding(c, b), b.frame);
   // Service paving and pocket gardens fill the gaps between buildings.
-  c.box(56, G + .008, 56, plan.rotation % 2 ? 5.5 : 80, .016, plan.rotation % 2 ? 80 : 5.5, '#999f96');
-  const clear = (x, s, margin) => plan.buildings.every(b => Math.abs(x - b.x) > b.width / 2 + margin || Math.abs(s - b.s) > b.depth / 2 + margin);
+  c.surface(56, G + .008, 56, plan.rotation % 2 ? 5.5 : 80, .016, plan.rotation % 2 ? 80 : 5.5, '#999f96');
+  for (const b of placement.open) c.surface(b.x, G + .02, b.s, b.width, .04, b.depth, '#7c956c');
+  const clear = (x, s, margin) => {
+    const corners = rectangleCorners(cityRigidFrame(c.start + s, c.east + x), margin * 2, margin * 2);
+    return placement.buildings.every(b => !parcelsOverlap(corners, b.corners, .6));
+  };
   const random = seededRandom(c.plan.seed ^ 0x27d4eb2d);
   for (const x of [23, 40, 59, 78, 91]) for (const s of [47, 65]) {
     if (!clear(x, s, 4.5)) continue;

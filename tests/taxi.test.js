@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { TaxiRun, taxiRoute, leadStop, SHIFT_SECONDS } from '../src/taxi-run.js';
 import { citydriverRoute, cityStreetAt, cityRiverAt } from '../src/world/city-grid.js';
 import { DrivingController, createCar } from '../src/vehicle.js';
+import { cityLayout } from '../src/world/city-layout.js';
 
 const player = (s = 25, u = 3, heading = 0) => ({ s, u, heading, speed: 0, drifting: false, spec: { width: 2 }, audioTelemetry: { impactSerial: 0, impact: 0 } });
 function pickup(run, car) {
@@ -13,16 +14,16 @@ function pickup(run, car) {
 
 test('taxi stops and routes use streets and bridges in every direction', () => {
   for (const [s, u, heading] of [[25, 3, 0], [-400, -3, Math.PI], [-3, 380, Math.PI / 2], [-221, -890, -Math.PI / 2]]) {
-    const car = player(s, u, heading), run = new TaxiRun(); run.start(car);
-    const lead = leadStop(car), ds = lead.s - s, du = lead.u - u;
+    const p = cityLayout(s, u), car = player(p.s, p.u, heading), run = new TaxiRun(); run.start(car);
+    const lead = leadStop(car), ds = lead.s - p.s, du = lead.u - p.u;
     assert.ok(ds * Math.cos(heading) + du * Math.sin(heading) >= 30);
     for (const customer of run.customers) for (const [a, b] of [[car, customer], [customer, customer.destination]]) {
       const route = taxiRoute(a, b);
       for (let i = 1; i < route.length; i++) {
-        const from = route[i - 1], to = route[i]; assert.ok(from.s === to.s || from.u === to.u);
+        const from = route[i - 1], to = route[i]; assert.ok(Math.hypot(to.s - from.s, to.u - from.u) <= 12);
         for (let step = 0; step <= 50; step++) {
           const s = from.s + (to.s - from.s) * step / 50, u = from.u + (to.u - from.u) * step / 50;
-          const street = cityStreetAt(s, u); assert.ok(street.onRoad); assert.ok(!cityRiverAt(u) || street.bridge);
+          const street = cityStreetAt(s, u); assert.ok(street.onRoad); assert.ok(!cityRiverAt(u, s) || street.bridge);
         }
       }
     }

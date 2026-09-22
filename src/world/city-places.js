@@ -1,4 +1,5 @@
 import { randomAt } from './route.js';
+import { cityRiverAxes } from './city-waterways.js';
 
 export const CITY_PLACES = Object.freeze({
   clock: { name: 'Clocktower', short: 'Clocktower', color: '#eac482', symbol: 'I', description: 'Clocktower and fountains.' },
@@ -15,8 +16,9 @@ const mod = (n, d) => ((n % d) + d) % d;
 export function landmarkForBlock(ix, iz) {
   const rx = Math.floor(ix / 3), rz = Math.floor(iz / 3);
   let localX = Math.floor(randomAt(rx, rz + 7200) * 3);
-  const localZ = Math.floor(randomAt(rx, rz + 7201) * 3);
-  if (mod(rx * 3 + localX, 7) === 3) localX = (localX + 1) % 3;
+  let localZ = Math.floor(randomAt(rx, rz + 7201) * 3);
+  if (cityRiverAxes(rx * 3 + localX, rz * 3 + localZ).north) localX = (localX + 1) % 3;
+  if (cityRiverAxes(rx * 3 + localX, rz * 3 + localZ).east) localZ = (localZ + 1) % 3;
   if (mod(ix, 3) !== localX || mod(iz, 3) !== localZ) return null;
   return PLACE_TYPES[Math.floor(randomAt(rx, rz + 7202) * PLACE_TYPES.length)];
 }

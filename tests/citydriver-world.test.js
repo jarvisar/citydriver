@@ -7,6 +7,7 @@ import {
 } from '../src/world/city-grid.js';
 import { CitydriverWorld, DISTANT_CITY_RADIUS } from '../src/world/citydriver-world.js';
 import { residentWindow, setResidentWindow } from '../src/world/resident.js';
+import { cityLayout } from '../src/world/city-layout.js';
 
 test('the city has connected, level streets in all four directions through negative coordinates', () => {
   assert.deepEqual(cityCell(-1, -1), { ix: -1, iz: -1, key: '-1,-1' });
@@ -16,7 +17,8 @@ test('the city has connected, level streets in all four directions through negat
     const line = index * CITY_BLOCK;
     for (let along = -CITY_BLOCK * 4; along <= CITY_BLOCK * 4; along += 3.5) {
       for (const lane of [-cityStreetProfile('north', index).halfWidth + .1, -cityStreetProfile('north', index).lane, cityStreetProfile('north', index).lane, cityStreetProfile('north', index).halfWidth - .1]) {
-        for (const [s, u] of [[along, line + lane], [line + lane, along]]) {
+        for (const address of [[along, line + lane], [line + lane, along]]) {
+          const { s, u } = cityLayout(...address);
           assert.equal(cityStreetAt(s, u).onRoad, true);
           assert.equal(citydriverRoute.height(s, u), ROAD_LEVEL);
           assert.equal(citydriverRoute.water(s, u), false);
@@ -30,14 +32,14 @@ test('the city has connected, level streets in all four directions through negat
 
 test('every recurring river is crossed by safe east-west bridges', () => {
   for (let ix = -22; ix <= 24; ix++) {
-    const block = cityBlock(ix, 0), u = (ix + .5) * CITY_BLOCK;
+    const block = cityBlock(ix, 0), center = (ix + .5) * CITY_BLOCK, water = cityLayout(CITY_BLOCK / 2, center), u = water.u;
     assert.deepEqual(cityBlock(ix, -7), cityBlock(ix, -7), 'block generation is repeatable');
-    if (block.kind !== 'river') { assert.equal(cityRiverAt(u), null); continue; }
+    if (block.kind !== 'river') { assert.equal(cityRiverAt(u, water.s), null); continue; }
     assert.equal(cityBlock(ix + RIVER_PERIOD, -11).kind, 'river');
-    assert.equal(citydriverRoute.height(CITY_BLOCK / 2, u), WATER_LEVEL);
-    assert.equal(citydriverRoute.water(CITY_BLOCK / 2, u), true);
+    assert.equal(citydriverRoute.height(water.s, u), WATER_LEVEL);
+    assert.equal(citydriverRoute.water(water.s, u), true);
     for (let row = -4; row <= 4; row++) for (const lane of [-cityStreetProfile('east', row).halfWidth + .1, -3, 0, 3, cityStreetProfile('east', row).halfWidth - .1]) {
-      const s = row * CITY_BLOCK + lane;
+      const { s, u } = cityLayout(row * CITY_BLOCK + lane, center);
       assert.equal(cityStreetAt(s, u).bridge, true);
       assert.equal(citydriverRoute.height(s, u), ROAD_LEVEL);
       assert.equal(citydriverRoute.water(s, u), false);
@@ -55,7 +57,7 @@ test('streamed blocks are bounded, move in both axes, and retain collision coord
       assert.equal(world.chunks.size, 25);
       assert.equal(scene.children.length, 26);
       assert.equal(world.chunks.size + world.distantChunks.size, (2 * DISTANT_CITY_RADIUS + 1) ** 2);
-      assert.ok(world.distantGroup.children.length <= 9, 'the distant city, including both tree silhouettes, shares nine draw calls');
+      assert.ok(world.distantGroup.children.length <= 14, 'the distant city, including both tree silhouettes, shares fourteen draw calls including joined ground and public-space stone and water');
       assert.equal([...world.collisionChunks(s, u)].length, 9);
       const cell = cityCell(s, u);
       assert.ok(world.chunks.has(cell.key));
@@ -70,8 +72,8 @@ test('streamed blocks are bounded, move in both axes, and retain collision coord
         assert.equal(chunk.group.position.x, chunk.ix * CITY_BLOCK);
         assert.equal(chunk.group.position.z, world.origin - chunk.iz * CITY_BLOCK);
         for (const collider of chunk.features.colliders) {
-          assert.ok(collider.x >= chunk.east && collider.x <= chunk.east + CITY_BLOCK);
-          assert.ok(-collider.z >= chunk.start && -collider.z <= chunk.start + CITY_BLOCK);
+          assert.ok(collider.logicalU >= chunk.east && collider.logicalU <= chunk.east + CITY_BLOCK);
+          assert.ok(collider.logicalS >= chunk.start && collider.logicalS <= chunk.start + CITY_BLOCK);
           assert.ok(collider.kind === 'median-tree' ? cityStreetAt(-collider.z, collider.x).median : !cityStreetAt(-collider.z, collider.x).onRoad, 'street furniture leaves the travel lanes clear');
         }
         for (const building of chunk.features.buildings) {
@@ -104,7 +106,7 @@ test('river deck meshes match the physical road height and keep their piers outs
     for (const collider of chunk.features.colliders) {
       const s = -collider.z, u = collider.x;
       assert.ok(collider.kind === 'median-tree' ? cityStreetAt(s, u).median : !cityStreetAt(s, u).onRoad);
-      if (cityRiverAt(u)) assert.ok(cityStreetAt(s, u).eastDistance > ROAD_HALF_WIDTH + 1);
+      if (cityRiverAt(u, s)) assert.ok(cityStreetAt(s, u).eastDistance > ROAD_HALF_WIDTH + 1);
     }
   } finally { world.dispose(); }
 });
@@ -118,11 +120,14 @@ test('rendered upper-storey glazing covers every building facade', () => {
     const matrix = new THREE.Matrix4(), position = new THREE.Vector3();
     const glass = ['citydriver-glass', 'citydriver-lit'].map(name => chunk.group.getObjectByName(name)).filter(Boolean);
     for (const building of chunk.features.buildings) {
-      const sides = new Set(), x = building.x - chunk.east, s = building.s - chunk.start;
+      const sides = new Set(), frame = building.placement;
+      const determinant = frame.eu * frame.ns - frame.nu * frame.es;
       for (const mesh of glass) for (let i = 0; i < mesh.count; i++) {
         mesh.getMatrixAt(i, matrix); position.setFromMatrixPosition(matrix);
         if (position.y < 28.5 || position.y > ROAD_LEVEL + building.height) continue;
-        const dx = position.x - x, ds = -position.z - s;
+        const duWorld = position.x + chunk.east - building.x, dsWorld = -position.z + chunk.start - building.s;
+        const dx = (duWorld * frame.ns - dsWorld * frame.nu) / determinant;
+        const ds = (dsWorld * frame.eu - duWorld * frame.es) / determinant;
         if (Math.abs(Math.abs(dx) - building.width / 2 - .17) < .002 && Math.abs(ds) < building.depth / 2) sides.add(dx < 0 ? 'west' : 'east');
         if (Math.abs(Math.abs(ds) - building.depth / 2 - .17) < .002 && Math.abs(dx) < building.width / 2) sides.add(ds < 0 ? 'south' : 'north');
       }

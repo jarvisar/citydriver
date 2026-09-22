@@ -15,9 +15,10 @@ import { CARS, CAR_IDS, DEFAULT_CAR, ROUTE_PAINT, carEntry, carMeters } from './
 import { carArt } from './car-art.js';
 import { PAINTS, DEFAULT_PAINT, DEFAULT_PAINT_NAME, paintName, readPaint } from './car-paint.js';
 import { SEED, journeyStart } from './world/route.js';
-import { freshSceneStart } from './world/generation.js';
+import { freshSceneStart, resolveWorldSeed } from './world/generation.js';
 import { CityWeather } from './world/city-weather.js';
 import { CITY_BLOCK, cityCell, cityDistrict, nearestCityStreet, cityStreetProfile } from './world/city-grid.js';
+import { cityLanePose } from './world/city-layout.js';
 import { CityGuide } from './city-guide.js';
 import { TaxiRun } from './taxi-run.js';
 import { TaxiView } from './taxi-view.js';
@@ -168,10 +169,10 @@ async function boot() {
     }
     function recoverTaxi(penalty = false) {
       const street = nearestCityStreet(vehicle.s, vehicle.u);
-      const profile = cityStreetProfile(street.axis, Math.round((street.axis === 'north' ? street.u : street.s) / CITY_BLOCK));
-      vehicle.s = street.s - (street.axis === 'east' ? profile.lane : 0);
-      vehicle.u = street.u + (street.axis === 'north' ? profile.lane : 0);
-      vehicle.heading = street.axis === 'north' ? 0 : Math.PI / 2;
+      const profile = cityStreetProfile(street.axis, street.index);
+      const pose = cityLanePose(street.axis, street.index * CITY_BLOCK + (street.axis === 'north' ? 1 : -1) * profile.lane,
+        street.axis === 'north' ? street.logicalS : street.logicalU);
+      vehicle.s = pose.s; vehicle.u = pose.u; vehicle.heading = pose.heading;
       vehicle.speed = 0; vehicle.knock.x = vehicle.knock.z = vehicle.knock.spin = 0; vehicle.update(0, {});
       if (penalty) { taxi.timeLeft = Math.max(0, taxi.timeLeft - 5); toast('Reset −5s'); }
       taxi.hold = 0;
@@ -188,14 +189,14 @@ async function boot() {
       taxiView.render(taxi, vehicle, world.origin, time); rendering.update(vehicle.car, 1, world.origin);
       toast('Stop in a ring to pick up');
     }
-    function beginFree() {
+    function beginFree({ preserveInput = false } = {}) {
       if (changingJourney) return;
       const wasTaxi = taxi.status !== 'idle'; taxi.stop(); started = true; gameMode = 'free';
       autodrive.reset(); vehicle.arcade = false; vehicle.setCar(carId, { paint }); vehicle.speed = 0; vehicle.update(0, {});
       if (wasTaxi && freeTraffic !== undefined) traffic.setEnabled(freeTraffic, vehicle);
       $('#traffic').setAttribute('aria-pressed', String(traffic.enabled)); $('#autodrive').setAttribute('aria-pressed', 'false');
       $('#taxi-results').hidden = true; $('#welcome').classList.add('hidden');
-      taxiView.render(taxi, vehicle, world.origin, time); setPaused(false); modeUi(); updateHud();
+      taxiView.render(taxi, vehicle, world.origin, time); setPaused(false, { preserveInput }); modeUi(); updateHud();
     }
     function start() {
       if (paused || changingJourney) return;
@@ -203,8 +204,8 @@ async function boot() {
         if (gameMode === 'taxi') beginTaxi(); else beginFree();
       }
     }
-    function setPaused(value) {
-      paused = value; input.clear(); frameClock.suspend();
+    function setPaused(value, { preserveInput = false } = {}) {
+      paused = value; if (!preserveInput) input.clear(); frameClock.suspend();
       if (!paused && autodrive.enabled) start();
       if (paused) { clearTimeout(toastTimer); $('#toast').classList.remove('show'); }
       audio.setPaused(paused);
@@ -456,9 +457,26 @@ async function boot() {
         toast(`Autodrive ${enabled ? 'on' : 'off'}`);
         return;
       }
-      if (name === 'drive') start();
+      if (name === 'drive') {
+        if (!started && !paused) beginFree({ preserveInput: true });
+        return;
+      }
       if (name === 'pause') setPaused(!paused);
-      if (name === 'reset') { if (taxi.running) { recoverTaxi(true); return; } await changeJourney(journey, { regenerate: true }); return; }
+      if (name === 'reset') {
+        if (!started) {
+          // The seed also initializes shared layouts and scenery at module load.
+          // Reload with a fresh seed to regenerate the whole city consistently.
+          const url = new URL(window.location.href);
+          let seed = resolveWorldSeed();
+          if (seed === SEED) seed = (seed + 1) >>> 0;
+          url.searchParams.set('seed', String(seed));
+          changingJourney = true; input.clear();
+          window.location.replace(url.href);
+          return;
+        }
+        if (taxi.running) { recoverTaxi(true); return; }
+        await changeJourney(journey, { regenerate: true }); return;
+      }
       if (name === 'view') {
         toast(rendering.toggleView()); updateViewUi();
         rendering.update(vehicle.car, 0, world.origin);

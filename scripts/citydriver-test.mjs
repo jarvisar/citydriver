@@ -33,17 +33,23 @@ try {
     const a = window.__citydriver;
     const { collideScenery } = await import('/src/collision.js');
     const { citydriverRoute, CITY_BLOCK } = await import('/src/world/city-grid.js');
+    const { cityLayout, cityLanePose } = await import('/src/world/city-layout.js');
+    const { CityAutodrive } = await import('/src/city-autodrive.js');
     a.traffic.setEnabled(false, a.vehicle);
     const records = [];
     for (const [s, u, heading] of [[0, 3, 0], [0, -3, Math.PI], [-3, 0, Math.PI / 2], [3, 0, -Math.PI / 2], [11200, -11197, 0], [-11203, 11200, Math.PI / 2], [-3, 340, Math.PI / 2], [3, 445, -Math.PI / 2]]) {
       const v = a.vehicle;
-      v.s = s; v.u = u; v.speed = 0; v.heading = heading; v.knock.x = v.knock.z = v.knock.spin = 0; v.update(0, {});
+      const axis = Math.abs(Math.cos(heading)) > .5 ? 'north' : 'east';
+      const direction = Math.sign(axis === 'north' ? Math.cos(heading) : Math.sin(heading));
+      Object.assign(v, cityLanePose(axis, axis === 'north' ? u : s, axis === 'north' ? s : u, direction));
+      const start = { s: v.s, u: v.u }, pilot = new CityAutodrive();
+      v.speed = 0; v.knock.x = v.knock.z = v.knock.spin = 0; v.update(0, {});
       for (let i = 0; i < 10; i++) a.world.update(v.s, v.u);
-      for (let i = 0; i < 360; i++) { v.update(1 / 60, { forward: true }); collideScenery(v, a.world.chunks, 1 / 60); a.world.update(v.s, v.u); }
-      records.push({ from: [s, u], to: [v.s, v.u], moved: Math.hypot(v.s - s, v.u - u), height: v.ground(v.s, v.u).height, blocked: v.ground(v.s, v.u).blocked, speed: v.speed, road: citydriverRoute.looseness(v.s, v.u), chunks: a.world.chunks.size, totalChunks: a.world.chunks.size + a.world.distantChunks.size });
+      for (let i = 0; i < 900; i++) { v.update(1 / 60, pilot.update(v, { enabled: false })); collideScenery(v, a.world.chunks, 1 / 60); a.world.update(v.s, v.u); }
+      records.push({ from: [start.s, start.u], to: [v.s, v.u], moved: Math.hypot(v.s - start.s, v.u - start.u), height: v.ground(v.s, v.u).height, blocked: v.ground(v.s, v.u).blocked, speed: v.speed, road: citydriverRoute.looseness(v.s, v.u), chunks: a.world.chunks.size, totalChunks: a.world.chunks.size + a.world.distantChunks.size });
     }
     // A stationary car beyond the current deck still cannot enter open water.
-    const blocked = a.vehicle.ground(CITY_BLOCK / 2, 3.5 * CITY_BLOCK).blocked;
+    const water = cityLayout(CITY_BLOCK / 2, 3.5 * CITY_BLOCK), blocked = a.vehicle.ground(water.s, water.u).blocked;
     return { records, waterBlocked: blocked };
   });
   for (const record of results.records) { assert.ok(record.moved > 100, JSON.stringify(record)); assert.equal(record.blocked, false); assert.equal(record.road, 0); assert.ok(record.chunks <= 49); assert.equal(record.totalChunks, 121); }
@@ -84,15 +90,20 @@ try {
     const { nearbyPlaces } = await import('/src/city-exploration.js');
     const { PLACE_TYPES } = await import('/src/world/city-places.js');
     const { collideScenery } = await import('/src/collision.js');
+    const { cityLanePose } = await import('/src/world/city-layout.js');
+    const { cityStreetProfile } = await import('/src/world/city-grid.js');
+    const { CityAutodrive } = await import('/src/city-autodrive.js');
     const places = nearbyPlaces(0, 0, 20);
     guide.exploration.found.clear();
     for (const type of PLACE_TYPES) {
       const place = places.find(p => p.type === type);
-      v.s = place.s - 59; v.u = place.u - 70; v.heading = Math.PI / 2; v.speed = 0;
+      const center = place.logicalS - 56, profile = cityStreetProfile('east', Math.round(center / 112));
+      Object.assign(v, cityLanePose('east', center - profile.lane, place.logicalU - 70)); v.speed = 0;
+      const pilot = new CityAutodrive();
       v.knock.x = v.knock.z = v.knock.spin = 0; v.update(0, {}); a.world.update(v.s, v.u);
       guide.exploration.target = place;
       for (let tick = 0; tick < 300; tick++) {
-        v.update(1 / 60, { forward: true }); collideScenery(v, a.world.chunks, 1 / 60); a.world.update(v.s, v.u);
+        v.update(1 / 60, pilot.update(v, { enabled: false })); collideScenery(v, a.world.chunks, 1 / 60); a.world.update(v.s, v.u);
         guide.update(true);
       }
     }

@@ -5,6 +5,7 @@ import { CityTraffic } from '../src/city-traffic.js';
 import { CityAutodrive, cityGreen } from '../src/city-autodrive.js';
 import { DrivingController } from '../src/vehicle.js';
 import { CITY_BLOCK, ROAD_LEVEL, citydriverRoute, cityStreetAt, cityRiverAt } from '../src/world/city-grid.js';
+import { cityLogical, cityLanePose } from '../src/world/city-layout.js';
 
 function setup(t, s = 70, u = 70) {
   const scene = new THREE.Scene();
@@ -52,7 +53,10 @@ test('traffic moves along each axis with matching poses, and rendering rebases o
   traffic.vehicles.forEach((car, i) => {
     const ds = car.s - before[i].s, du = car.u - before[i].u;
     assert.ok((car.axis === 'north' ? ds : du) * car.direction > 0);
-    assert.equal(car.axis === 'north' ? du : ds, 0);
+    const address = cityLogical(car.s, car.u);
+    assert.ok(Math.abs((car.axis === 'north' ? address.u : address.s) - car.lane) < 1e-7);
+    const expected = cityLanePose(car.axis, car.lane, car.axis === 'north' ? address.s : address.u, car.direction);
+    assert.ok(Math.abs(car.heading - expected.heading) < 1e-7);
     assert.equal(car.position.x, car.u); assert.equal(car.position.z, -car.s);
     assert.equal(car.car.position.x, car.position.x);
     assert.equal(car.car.position.z, car.position.z);
@@ -151,19 +155,19 @@ test('controller keeps road grip on distant east-west streets and crosses rivers
   t.after(() => player.disposeModel());
   player.freeDriving = true;
   for (const direction of [-1, 1]) {
-    player.s = -CITY_BLOCK * 8 - direction * 3;
-    player.u = direction > 0 ? 348 : 436;
-    player.speed = 0; player.heading = direction * Math.PI / 2; player.update(0, {});
+    Object.assign(player, cityLanePose('east', -CITY_BLOCK * 8 - direction * 5.7, direction > 0 ? 348 : 436, direction));
+    const pilot = new CityAutodrive();
+    player.speed = 0; player.update(0, {});
     let crossedWater = false;
     for (let tick = 0; tick < 720; tick++) {
-      player.update(1 / 60, { touchDrive: { amount: .6, along: 0, across: direction, heading: direction * Math.PI / 2 } });
-      crossedWater ||= Boolean(cityRiverAt(player.u));
+      player.update(1 / 60, pilot.update(player, { enabled: false }));
+      crossedWater ||= Boolean(cityRiverAt(player.u, player.s));
       assert.equal(player.audioTelemetry.offRoad, 0);
       assert.equal(player.ground(player.s, player.u).blocked, false);
       assert.equal(player.groundedPosition.y, ROAD_LEVEL + .13);
     }
     assert.equal(crossedWater, true);
     assert.ok(direction > 0 ? player.u > 448 : player.u < 336);
-    assert.equal(player.heading, direction * Math.PI / 2);
+    assert.ok(Math.cos(player.heading - direction * Math.PI / 2) > .9);
   }
 });

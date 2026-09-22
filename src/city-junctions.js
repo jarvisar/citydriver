@@ -1,4 +1,5 @@
 import { CITY_BLOCK as B, cityStreetProfile, cityJunctionControl } from './world/city-grid.js';
+import { cityLogical } from './world/city-layout.js';
 
 export function cityGreen(axis, time) {
   const phase = ((time % 24) + 24) % 24;
@@ -25,8 +26,9 @@ export function junctionSpeed(driver, traffic, axis, direction, lane, along, spe
     const crossing = traffic.vehicles.some(other => {
       if (other === driver || other.axis === axis || !other.axis) return false;
       const center = streetIndex * B;
-      const otherAlong = other.axis === 'north' ? other.s : other.u;
-      const otherAcross = other.axis === 'north' ? other.u : other.s;
+      const p = cityLogical(other.s, other.u);
+      const otherAlong = other.axis === 'north' ? p.s : p.u;
+      const otherAcross = other.axis === 'north' ? p.u : p.s;
       const approaching = (center - otherAlong) * other.direction;
       const occupied = Math.abs(approaching) < cityStreetProfile(axis, streetIndex).halfWidth + 4;
       return Math.abs(otherAcross - crossingIndex * B) < 11 && (occupied || (approaching > -15 && approaching < Math.max(16, other.speed * 3) && other.speed > .5));

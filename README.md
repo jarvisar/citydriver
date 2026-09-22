@@ -15,9 +15,13 @@ Start a **Taxi run** with 90 seconds. Stop inside a pickup ring to board a passe
 
 **Free drive** has no timer and includes the garage, weather settings, and landmark map.
 
+On the main menu, press forward to enter free drive, or press **R** to generate a new city. **Start run** starts a taxi run.
+
 Blocks mix shops, brick buildings, balcony apartments, stepped towers, and warehouses, with varied rooflines and planted courtyards. Weather defaults to Auto, starting at golden hour and cycling through conditions; your selected weather is saved.
 
 Side streets have stop signs. Avenues connect to wider boulevards with grass and trees in the medians. Traffic stops and yields at smaller junctions.
+
+Gridded neighborhoods blend into curved waterfront roads and looser districts. Rivers bend in both directions and meet at open confluences, with bridges on both street axes. Buildings retain their rectangular shapes; awkward lots become planted courtyards. [Layout design and research](docs/organic-city-design.md).
 
 ## Controls
 
@@ -56,6 +60,7 @@ npm test
 npm run build
 npm run test:browser
 npm run test:taxi
+npm run test:layout
 npm run test:pwa
 ```
 

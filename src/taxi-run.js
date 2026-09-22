@@ -1,5 +1,6 @@
 import { CITY_BLOCK as B, nearestCityStreet, cityStreetProfile } from './world/city-grid.js';
 import { nearbyPlaces, routeDistance } from './city-exploration.js';
+import { cityLayout, cityLogical, cityLanePose, cityRoutePoints } from './world/city-layout.js';
 
 export const SHIFT_SECONDS = 90;
 export const STOP_RADIUS = 8;
@@ -8,7 +9,9 @@ const distance = (a, b) => Math.hypot(a.s - b.s, a.u - b.u);
 
 export function taxiRoute(player, target) {
   if (!target) return [];
-  const a = nearestCityStreet(player.s, player.u), b = nearestCityStreet(target.s, target.u);
+  const address = p => { const n = nearestCityStreet(p.s, p.u); return { s: n.logicalS, u: n.logicalU, axis: n.axis }; };
+  const a = address(player), b = address(target);
+  player = cityLogical(player.s, player.u); target = cityLogical(target.s, target.u);
   const points = [{ s: player.s, u: player.u }, { s: a.s, u: a.u }];
   if (a.axis !== b.axis) points.push(a.axis === 'north' ? { s: b.s, u: a.u } : { s: a.s, u: b.u });
   else if (a.axis === 'north' && a.u !== b.u) {
@@ -19,22 +22,28 @@ export function taxiRoute(player, target) {
     points.push({ s: a.s, u }, { s: b.s, u });
   }
   points.push({ s: b.s, u: b.u }, { s: target.s, u: target.u });
-  return points;
+  return cityRoutePoints(points);
 }
 
 export function leadStop(player) {
   const road = nearestCityStreet(player.s, player.u), north = road.axis === 'north';
-  const direction = (north ? Math.cos(player.heading) : Math.sin(player.heading)) >= 0 ? 1 : -1;
-  const along = north ? player.s : player.u;
+  const along = north ? road.logicalS : road.logicalU;
+  const tangent = cityLanePose(road.axis, road.index * B, along);
+  const direction = Math.cos(player.heading - tangent.heading) >= 0 ? 1 : -1;
   let middle = Math.floor(along / B) * B + B / 2;
   if ((middle - along) * direction < 30) middle += direction * B;
-  const street = cityStreetProfile(road.axis, Math.round((north ? road.u : road.s) / B));
-  return north ? { s: middle, u: road.u + street.lane * direction, axis: 'north', side: direction }
-    : { s: road.s - street.lane * direction, u: middle, axis: 'east', side: direction };
+  const street = cityStreetProfile(road.axis, road.index);
+  const lane = road.index * B + (north ? 1 : -1) * street.lane * direction;
+  let pose = cityLanePose(road.axis, lane, middle, direction);
+  if ((pose.s - player.s) * Math.cos(player.heading) + (pose.u - player.u) * Math.sin(player.heading) < 30) {
+    middle += direction * B; pose = cityLanePose(road.axis, lane, middle, direction);
+  }
+  return { ...pose, axis: road.axis, index: road.index, side: direction };
 }
 const placeStop = place => {
-  const center = place.s - B / 2, street = cityStreetProfile('east', Math.round(center / B));
-  return { s: center - street.lane, u: place.u, axis: 'east', side: 1, name: place.name };
+  const p = place.logicalS === undefined ? cityLogical(place.s, place.u) : { s: place.logicalS, u: place.logicalU };
+  const center = p.s - B / 2, index = Math.round(center / B), street = cityStreetProfile('east', index);
+  return { ...cityLanePose('east', center - street.lane, p.u), axis: 'east', index, side: 1, name: place.name };
 };
 
 export class TaxiRun {
@@ -59,8 +68,8 @@ export class TaxiRun {
         .map(destination => ({ destination, length: routeDistance(taxiRoute(stop, destination)) }))
         .filter(route => route.length >= 280 && route.length <= 1100);
       const route = choices[(this.delivered * 3 + this.failed + i * 2) % choices.length];
-      // A grid fallback keeps a fare valid even if a future map has no POIs.
-      const destination = route?.destination ?? placeStop({ s: Math.round(stop.s / B) * B + B / 2, u: Math.round(stop.u / B) * B + 3.5 * B, name: 'Downtown' });
+      const address = cityLogical(stop.s, stop.u);
+      const destination = route?.destination ?? placeStop({ ...cityLayout(Math.round(address.s / B) * B + B / 2, Math.round(address.u / B) * B + 3.5 * B), name: 'Downtown' });
       const length = route?.length ?? routeDistance(taxiRoute(stop, destination));
       return { ...stop, id: `${this.revision}-${i}`, name: 'Passenger', destination, length,
         fare: Math.round(40 + length * .28), limit: Math.ceil(18 + length / 14), color: i === 0 ? '#a4f264' : i === 1 ? '#54dfe0' : '#f8ba55' };
@@ -121,7 +130,7 @@ export class TaxiRun {
     } else this.driftTime = 0;
     if (Math.abs(player.speed) > 14 && !collided) {
       for (const car of traffic) {
-        const carHeading = car.axis === 'east' ? car.direction * Math.PI / 2 : car.direction < 0 ? Math.PI : 0;
+        const carHeading = car.heading ?? (car.axis === 'east' ? car.direction * Math.PI / 2 : car.direction < 0 ? Math.PI : 0);
         if (this.passed.has(car) || Math.abs(player.speed - car.speed * Math.cos(carHeading - player.heading)) < 7) continue;
         const ds = car.s - player.s, du = car.u - player.u;
         const along = ds * Math.cos(player.heading) + du * Math.sin(player.heading);

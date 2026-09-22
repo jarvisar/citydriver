@@ -1,6 +1,6 @@
-import { clamp } from './world/route.js';
 import { CITY_BLOCK, cityStreetAt, cityStreetProfile } from './world/city-grid.js';
 import { junctionSpeed } from './city-junctions.js';
+import { cityLogical, cityLanePose } from './world/city-layout.js';
 export { cityGreen } from './city-junctions.js';
 
 // Cruise on whichever street the driver joins, in their current direction.
@@ -14,26 +14,28 @@ export class CityAutodrive {
     if (!this.path) {
       const street = cityStreetAt(player.s, player.u);
       if (!street.onRoad || street.median) return { handbrake: true };
-      const axis = street.intersection ? (Math.abs(Math.cos(player.heading)) >= Math.abs(Math.sin(player.heading)) ? 'north' : 'east') : street.axis;
+      const northHeading = cityLanePose('north', street.northIndex * CITY_BLOCK, street.logicalS).heading;
+      const eastHeading = cityLanePose('east', street.eastIndex * CITY_BLOCK, street.logicalU).heading;
+      const axis = street.intersection ? (Math.abs(Math.cos(player.heading - northHeading)) >= Math.abs(Math.cos(player.heading - eastHeading)) ? 'north' : 'east') : street.axis;
       if (!axis) return { handbrake: true };
-      const direction = Math.sign(axis === 'north' ? Math.cos(player.heading) : Math.sin(player.heading)) || 1;
-      const center = Math.round((axis === 'north' ? player.u : player.s) / CITY_BLOCK) * CITY_BLOCK;
+      const direction = Math.sign(Math.cos(player.heading - (axis === 'north' ? northHeading : eastHeading))) || 1;
+      const center = (axis === 'north' ? street.northIndex : street.eastIndex) * CITY_BLOCK;
       const profile = cityStreetProfile(axis, Math.round(center / CITY_BLOCK));
       this.path = { axis, direction, lane: center + (axis === 'north' ? 1 : -1) * profile.lane * direction, speed: profile.speed };
     }
     const { axis, direction, lane } = this.path;
-    const lateral = axis === 'north' ? player.u : player.s;
-    const correction = clamp((lane - lateral) * .16, -.45, .45);
-    const forward = Math.sqrt(1 - correction * correction) * direction;
-    const along = axis === 'north' ? forward : correction;
-    const across = axis === 'north' ? correction : forward;
+    const address = cityLogical(player.s, player.u), position = axis === 'north' ? address.s : address.u;
+    const pose = cityLanePose(axis, lane, position, direction);
+    const lookahead = Math.max(6, Math.abs(player.speed ?? 0) * .65);
+    const aim = cityLanePose(axis, lane, position + direction * lookahead / pose.stretch, direction);
+    const ds = aim.s - player.s, du = aim.u - player.u, length = Math.hypot(ds, du);
+    const along = ds / Math.max(.001, length), across = du / Math.max(.001, length);
     let speed = Math.min(this.path.speed, speedLimit, player.stats.topSpeed);
-    const position = axis === 'north' ? player.s : player.u;
     if (traffic.enabled) speed = Math.min(speed, junctionSpeed(this, traffic, axis, direction, lane, position, player.speed ?? 0, dt));
     for (const car of traffic.enabled ? traffic.vehicles : []) {
       const dx = car.u - player.u, ds = car.s - player.s;
-      const ahead = (axis === 'north' ? ds : dx) * direction;
-      const beside = Math.abs(axis === 'north' ? dx : ds);
+      const ahead = ds * Math.cos(pose.heading) + dx * Math.sin(pose.heading);
+      const beside = Math.abs(dx * Math.cos(pose.heading) - ds * Math.sin(pose.heading));
       if (ahead > 0 && beside < 3) speed = Math.min(speed, Math.sqrt(2 * 7 * Math.max(0, ahead - 10)));
     }
     return { touchDrive: { amount: speed / player.stats.topSpeed, along, across, heading: Math.atan2(across, along) } };

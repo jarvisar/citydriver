@@ -1,29 +1,37 @@
 import { CITY_BLOCK, cityBlock, cityCell, cityStreetAt, nearestCityStreet } from './world/city-grid.js';
 import { CITY_PLACES, PLACE_TYPES } from './world/city-places.js';
+import { cityLayout, cityLogical, cityRoutePoints } from './world/city-layout.js';
 
 export function nearbyPlaces(s, u, radius = 8) {
   const cell = cityCell(s, u), places = [];
   for (let ix = cell.ix - radius; ix <= cell.ix + radius; ix++) for (let iz = cell.iz - radius; iz <= cell.iz + radius; iz++) {
     const block = cityBlock(ix, iz);
-    if (block.landmark) places.push({ id: block.key, type: block.landmark, ...CITY_PLACES[block.landmark], s: (iz + .5) * CITY_BLOCK, u: (ix + .5) * CITY_BLOCK });
+    if (block.landmark) {
+      const logicalS = (iz + .5) * CITY_BLOCK, logicalU = (ix + .5) * CITY_BLOCK;
+      places.push({ id: block.key, type: block.landmark, ...CITY_PLACES[block.landmark], logicalS, logicalU,
+        ...cityLayout(logicalS, logicalU), entrance: cityLayout(iz * CITY_BLOCK, logicalU) });
+    }
   }
   return places.sort((a, b) => Math.hypot(a.s - s, a.u - u) - Math.hypot(b.s - s, b.u - u) || a.id.localeCompare(b.id));
 }
 
 // The last leg ends on the street beside the entrance. Every preceding leg
-// follows a grid line, so a suggested route cannot cut through a block/river.
+// follows a connected street, sampled through every bend.
 export function placeRoute(s, u, place) {
   if (!place) return [];
-  const street = nearestCityStreet(s, u), end = { s: place.s - CITY_BLOCK / 2, u: place.u };
+  const nearest = nearestCityStreet(s, u), street = { s: nearest.logicalS, u: nearest.logicalU, axis: nearest.axis };
+  const logicalPlace = place.logicalS === undefined ? cityLogical(place.s, place.u) : { s: place.logicalS, u: place.logicalU };
+  ({ s, u } = cityLogical(s, u));
+  const end = { s: logicalPlace.s - CITY_BLOCK / 2, u: logicalPlace.u };
   const points = [{ s, u }, { s: street.s, u: street.u }];
   if (street.axis === 'north') points.push({ s: end.s, u: street.u });
   else if (street.s !== end.s) {
-    const west = place.u - CITY_BLOCK / 2, east = place.u + CITY_BLOCK / 2;
+    const west = logicalPlace.u - CITY_BLOCK / 2, east = logicalPlace.u + CITY_BLOCK / 2;
     const line = Math.abs(u - west) < Math.abs(u - east) ? west : east;
     points.push({ s: street.s, u: line }, { s: end.s, u: line });
   }
   points.push(end);
-  return points;
+  return cityRoutePoints(points);
 }
 export function routeDistance(points) {
   return points.slice(1).reduce((sum, p, i) => sum + Math.hypot(p.s - points[i].s, p.u - points[i].u), 0);
@@ -62,7 +70,7 @@ export class CityExploration {
     if (!active) return [];
     const discoveries = [];
     if (cityStreetAt(s, u).onRoad) for (const place of this.places) {
-      if (Math.hypot(place.s - s, place.u - u) > 69) continue;
+      if (Math.hypot(place.s - s, place.u - u) > 69 && Math.hypot(place.entrance.s - s, place.entrance.u - u) > 24) continue;
       if (place.id === this.target?.id) this.justArrived = place;
       if (this.found.has(place.type)) continue;
       this.found.add(place.type); discoveries.push(place);

@@ -1,8 +1,11 @@
 import { randomAt } from './route.js';
 import { landmarkForBlock } from './city-places.js';
+import { cityLayout, cityLogical } from './city-layout.js';
+import { cityRiverAxes, logicalWaterAt } from './city-waterways.js';
+export { RIVER_PERIOD, RIVER_COLUMN, RIVER_MARGIN } from './city-waterways.js';
 
-// s points north; u points east. Streets meet at every integer grid line,
-// including negative coordinates. Rendering, traffic and physics share this map.
+// s points north; u points east. Integer addresses describe connectivity;
+// city-layout maps those addresses to the streets' actual world positions.
 export const CITY_BLOCK = 112;
 export const DISTANT_CITY_RADIUS = 5;
 export const ROAD_HALF_WIDTH = 8;
@@ -10,9 +13,6 @@ export const ROAD_LEVEL = 24;
 export const PAVEMENT_LEVEL = 24.12;
 export const WATER_LEVEL = 17.8;
 export const BRIDGE_HALF_WIDTH = 10.8;
-export const RIVER_PERIOD = 7;
-export const RIVER_COLUMN = 3;
-export const RIVER_MARGIN = 28;
 
 export const positiveModulo = (value, divisor) => ((value % divisor) + divisor) % divisor;
 const STREET_PROFILES = Object.freeze({
@@ -33,38 +33,46 @@ export function cityMedianRange(axis, blockIndex) {
   return [cityStreetProfile(cross, blockIndex).halfWidth + 12, CITY_BLOCK - cityStreetProfile(cross, blockIndex + 1).halfWidth - 12];
 }
 export function cityMedianAt(s, u) {
+  const p = cityLogical(s, u);
+  return logicalMedianAt(p.s, p.u);
+}
+function logicalMedianAt(s, u) {
   for (const axis of ['north', 'east']) {
     const across = axis === 'north' ? u : s, along = axis === 'north' ? s : u;
     const index = Math.round(across / CITY_BLOCK), profile = cityStreetProfile(axis, index);
     if (!profile.median || Math.abs(across - index * CITY_BLOCK) > profile.median) continue;
     const block = Math.floor(along / CITY_BLOCK);
-    if (axis === 'east' && positiveModulo(block, RIVER_PERIOD) === RIVER_COLUMN) continue;
+    if (axis === 'east' ? cityRiverAxes(block, index).north : cityRiverAxes(index, block).east) continue;
     const [start, end] = cityMedianRange(axis, block), local = along - block * CITY_BLOCK;
     if (local >= start && local <= end) return true;
   }
   return false;
 }
 export function cityCell(s, u) {
+  ({ s, u } = cityLogical(s, u));
   const ix = Math.floor(u / CITY_BLOCK), iz = Math.floor(s / CITY_BLOCK);
   return { ix, iz, key: `${ix},${iz}` };
 }
-export function cityRiverAt(u) {
-  const ix = Math.floor(u / CITY_BLOCK);
-  if (positiveModulo(ix, RIVER_PERIOD) !== RIVER_COLUMN) return null;
-  const min = ix * CITY_BLOCK + RIVER_MARGIN, max = (ix + 1) * CITY_BLOCK - RIVER_MARGIN;
-  return u >= min && u <= max ? { ix, min, max, center: (min + max) / 2 } : null;
+export function cityRiverAt(u, s = 0) {
+  const p = cityLogical(s, u), river = logicalWaterAt(p.s, p.u);
+  if (!river) return null;
+  return { ...river, center: cityLayout((river.iz + .5) * CITY_BLOCK, (river.ix + .5) * CITY_BLOCK) };
 }
 export function cityStreetAt(s, u) {
+  ({ s, u } = cityLogical(s, u));
   const northIndex = Math.round(u / CITY_BLOCK), eastIndex = Math.round(s / CITY_BLOCK);
   const northDistance = Math.abs(u - northIndex * CITY_BLOCK), eastDistance = Math.abs(s - eastIndex * CITY_BLOCK);
   const northProfile = cityStreetProfile('north', northIndex), eastProfile = cityStreetProfile('east', eastIndex);
   const north = northDistance <= northProfile.halfWidth, east = eastDistance <= eastProfile.halfWidth;
+  const river = logicalWaterAt(s, u);
   const axis = north && !east ? 'north' : east && !north ? 'east' : northDistance <= eastDistance ? 'north' : 'east';
   return {
     onRoad: north || east, intersection: north && east,
     axis, northDistance, eastDistance, profile: axis === 'north' ? northProfile : eastProfile,
-    median: cityMedianAt(s, u),
-    bridge: Boolean(cityRiverAt(u)) && eastDistance <= Math.max(BRIDGE_HALF_WIDTH, eastProfile.halfWidth + 2.8),
+    logicalS: s, logicalU: u, northIndex, eastIndex,
+    median: logicalMedianAt(s, u),
+    bridge: Boolean(river && ((river.north && eastDistance <= Math.max(BRIDGE_HALF_WIDTH, eastProfile.halfWidth + 2.8))
+      || (river.east && northDistance <= Math.max(BRIDGE_HALF_WIDTH, northProfile.halfWidth + 2.8)))),
   };
 }
 export function cityRoadDistance(s, u) {
@@ -73,31 +81,37 @@ export function cityRoadDistance(s, u) {
 }
 export function nearestCityStreet(s, u) {
   const street = cityStreetAt(s, u);
-  return street.axis === 'north'
-    ? { s, u: Math.round(u / CITY_BLOCK) * CITY_BLOCK, axis: 'north' }
-    : { s: Math.round(s / CITY_BLOCK) * CITY_BLOCK, u, axis: 'east' };
+  const north = street.axis === 'north', index = north ? street.northIndex : street.eastIndex;
+  const logicalS = north ? street.logicalS : index * CITY_BLOCK;
+  const logicalU = north ? index * CITY_BLOCK : street.logicalU;
+  return { ...cityLayout(logicalS, logicalU), logicalS, logicalU, index, axis: street.axis };
 }
 
 const DISTRICTS = ['Old town', 'Garden quarter', 'Midtown', 'Warehouse district', 'Market district', 'Civic quarter'];
 export function cityDistrict(s, u) {
   const { ix, iz } = cityCell(s, u);
-  if (positiveModulo(ix, RIVER_PERIOD) === RIVER_COLUMN) return 'Riverfront';
+  return blockDistrict(ix, iz);
+}
+function blockDistrict(ix, iz) {
+  const river = cityRiverAxes(ix, iz);
+  if (river.north || river.east) return 'Riverfront';
   return DISTRICTS[Math.floor(randomAt(Math.floor(ix / 4), Math.floor(iz / 4) + 7101) * DISTRICTS.length)];
 }
 export function cityBlock(ix, iz) {
   const seed = Math.floor(randomAt(ix, iz + 7102) * 0xffffffff);
   const chance = randomAt(ix, iz + 7103);
   const landmark = landmarkForBlock(ix, iz);
-  const kind = positiveModulo(ix, RIVER_PERIOD) === RIVER_COLUMN ? 'river' : landmark ? 'landmark'
+  const rivers = cityRiverAxes(ix, iz);
+  const kind = rivers.north || rivers.east ? 'river' : landmark ? 'landmark'
     : chance < .13 ? 'park' : chance < .2 ? 'plaza' : 'blocks';
-  return { ix, iz, key: `${ix},${iz}`, seed, kind, landmark, district: cityDistrict((iz + .5) * CITY_BLOCK, (ix + .5) * CITY_BLOCK) };
+  return { ix, iz, key: `${ix},${iz}`, seed, kind, rivers, landmark, district: blockDistrict(ix, iz) };
 }
 
 export function cityHeight(s, u) {
   const street = cityStreetAt(s, u);
   if (street.median) return PAVEMENT_LEVEL + .16;
   if (street.onRoad) return ROAD_LEVEL;
-  if (cityRiverAt(u) && !street.bridge) return WATER_LEVEL;
+  if (logicalWaterAt(street.logicalS, street.logicalU) && !street.bridge) return WATER_LEVEL;
   return PAVEMENT_LEVEL;
 }
 export const citydriverRoute = {
@@ -107,5 +121,5 @@ export const citydriverRoute = {
   height: cityHeight,
   bounds: () => [-Infinity, Infinity],
   looseness: (s, u) => { const street = cityStreetAt(s, u); return street.median ? .55 : street.onRoad ? 0 : .3; },
-  water: (s, u) => Boolean(cityRiverAt(u)) && !cityStreetAt(s, u).bridge,
+  water: (s, u) => { const street = cityStreetAt(s, u); return Boolean(logicalWaterAt(street.logicalS, street.logicalU)) && !street.bridge; },
 };

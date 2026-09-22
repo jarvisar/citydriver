@@ -12,6 +12,8 @@
     "test:browser": "node scripts/citydriver-test.mjs",
     "test:taxi": "node scripts/taxi-test.mjs",
     "test:city": "node scripts/citydriver-test.mjs",
+    "test:layout": "node scripts/city-layout-test.mjs",
+    "test:spaces": "node scripts/public-spaces-test.mjs",
     "electron:web": "vite build --outDir dist-electron",
     "electron:dev": "node scripts/electron-launch.mjs",
     "electron:start": "npm run electron:web && node scripts/electron-launch.mjs --built",

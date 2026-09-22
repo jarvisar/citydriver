@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { randomAt, clamp } from './world/route.js';
 import { CITY_BLOCK, cityStreetProfile } from './world/city-grid.js';
+import { cityLogical, cityLanePose } from './world/city-layout.js';
 import { createTrafficModels, TRAFFIC_MODELS, TRAFFIC_COLORS } from './traffic-models.js';
 import { trafficContact } from './traffic.js';
 import { collisionImpulse, contactPoint } from './impact.js';
@@ -34,18 +35,18 @@ export class CityTraffic {
     car.axis = car.index % 2 ? 'east' : 'north';
     car.direction = Math.floor(car.index / 2) % 2 ? -1 : 1;
     const r = salt => randomAt(car.index + car.generation * 97, 8100 + salt);
-    const lateral = Math.round((car.axis === 'north' ? u : s) / CITY_BLOCK) + Math.floor(r(1) * 5) - 2;
+    const address = cityLogical(s, u);
+    const lateral = Math.round((car.axis === 'north' ? address.u : address.s) / CITY_BLOCK) + Math.floor(r(1) * 5) - 2;
     const street = cityStreetProfile(car.axis, lateral);
     car.lane = lateral * CITY_BLOCK + (car.axis === 'north' ? 1 : -1) * street.lane * car.direction;
     car.stopKey = null; car.stopWait = 0; car.stopReleased = false;
-    const center = car.axis === 'north' ? s : u;
+    const center = car.axis === 'north' ? address.s : address.u;
     // Place each new car into an empty stretch. A lane can already contain a
     // queue at a red light when it is recycled, so spacing only from the player
     // would allow two traffic models to appear inside one another.
     let along = center + (initial ? (r(2) - .5) * 520 : (r(2) < .5 ? -1 : 1) * (260 + r(3) * 90));
     for (let attempt = 0; attempt < 80; attempt++) {
-      car.s = car.axis === 'north' ? along : car.lane;
-      car.u = car.axis === 'north' ? car.lane : along;
+      Object.assign(car, cityLanePose(car.axis, car.lane, along, car.direction));
       const occupied = Math.hypot(car.s - s, car.u - u) < 25 || this.vehicles.some(other =>
         other !== car && Math.hypot(car.s - other.s, car.u - other.u) < 13);
       if (!occupied) break;
@@ -55,9 +56,12 @@ export class CityTraffic {
     this.pose(car); car.previousPosition.copy(car.position); car.previousQuaternion.copy(car.quaternion);
   }
   pose(car) {
+    const address = cityLogical(car.s, car.u), along = car.axis === 'north' ? address.s : address.u;
+    Object.assign(car, cityLanePose(car.axis, car.lane, along, car.direction));
+    car.logicalS = car.axis === 'north' ? along : car.lane;
+    car.logicalU = car.axis === 'north' ? car.lane : along;
     const p = this.route.position(car.s, car.u);
     car.position.set(p.x, p.y + .13, p.z);
-    car.heading = car.axis === 'north' ? (car.direction > 0 ? 0 : Math.PI) : car.direction * Math.PI / 2;
     car.quaternion.setFromAxisAngle(new THREE.Vector3(0, 1, 0), -car.heading);
   }
   update(dt, player) {
@@ -68,21 +72,21 @@ export class CityTraffic {
       if (Math.hypot(car.s - player.s, car.u - player.u) > 430) this.spawn(car, player.s, player.u);
       car.previousPosition.copy(car.position); car.previousQuaternion.copy(car.quaternion);
       let target = car.cruiseSpeed;
-      const along = car.axis === 'north' ? car.s : car.u;
+      const along = car.axis === 'north' ? car.logicalS : car.logicalU;
       target = Math.min(target, junctionSpeed(car, this, car.axis, car.direction, car.lane, along, car.speed, dt));
       for (const other of [...this.vehicles, player]) {
         if (other === car) continue;
         const ds = other.s - car.s, du = other.u - car.u;
-        const ahead = (car.axis === 'north' ? ds : du) * car.direction;
-        const beside = Math.abs(car.axis === 'north' ? du : ds);
+        const ahead = ds * Math.cos(car.heading) + du * Math.sin(car.heading);
+        const beside = Math.abs(du * Math.cos(car.heading) - ds * Math.sin(car.heading));
         if (ahead > 0 && beside < 2.9) target = Math.min(target, Math.sqrt(2 * 8 * Math.max(0, ahead - 9)));
       }
       car.targetSpeed = target;
     }
     for (const car of this.vehicles) {
       car.speed += clamp(car.targetSpeed - car.speed, -16 * dt, 3 * dt);
-      if (car.axis === 'north') car.s += car.direction * car.speed * dt;
-      else car.u += car.direction * car.speed * dt;
+      const along = (car.axis === 'north' ? car.logicalS : car.logicalU) + car.direction * car.speed * dt / car.stretch;
+      Object.assign(car, cityLanePose(car.axis, car.lane, along, car.direction));
       this.pose(car);
       const p = player.groundedPosition;
       if (Math.abs(car.position.x - p.x) > 7 || Math.abs(car.position.z - p.z) > 7) continue;
