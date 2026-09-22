@@ -1,9 +1,9 @@
 # City generation
 
-Citydriver has one procedural city that expands in both horizontal world axes. Streets form a connected grid, with continuous crossings over river channels. The same road surface and bridge elevations are used by the car and the scenery.
+The city extends in all four directions. A seed determines streets, buildings, and neighborhood details. Nearby blocks load as you drive; distant blocks unload.
 
-A seed determines the layout, buildings, and neighbourhood details. Nearby cells stream in as the car explores, and distant cells are released to keep the resident world bounded. Buildings need finished facades on all four sides because every street can be approached from either direction.
+Roads, scenery, and vehicle physics share bridge elevations and lane positions. Buildings have finished facades on all sides. Keep props clear of lanes and bridge approaches.
 
-Weather and lighting are separate from the city layout. Changing the weather must preserve the player's position and the generated neighbourhood. Reset moves the player to a fresh district within the same seeded city.
+Changing weather preserves the city and player position. Reset moves the player to another district in the same seeded city.
 
-Traffic travels both street axes and respects timed crossings. Future work can add more district types, activities, and traffic that chooses turns at intersections. New scenery should preserve driveable road connections and avoid placing props in lanes or bridge approaches.
+See [layout](organic-city-design.md), [destinations](city-improvements.md), and [parks and squares](public-space-design.md).

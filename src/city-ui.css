@@ -61,14 +61,11 @@
 #city-map { display: block; width: 100%; height: auto; border-radius: 7px; border: 1px solid #b6c7b918; }
 #city-map[hidden] { display: none; }
 .city-guide-stop { display: grid; gap: 5px; padding: 13px 1px 11px; }
-body[data-mode=free] :is(.city-guide-stop, #next-city-stop) { display: none; }
+body[data-mode=free] .city-guide-stop { display: none; }
 .city-guide-eyebrow { color: #b7c9bd; font-size: 8px; letter-spacing: 1.25px; }
 #city-stop-name { font-family: Georgia, serif; font-size: 21px; font-weight: 400; letter-spacing: -.3px; }
 #city-stop-distance { font-size: 10px; color: #c4d2c8; }
 #city-stop-context { font-size: 10px; line-height: 1.5; color: #becfc4; }
-#next-city-stop { min-height: 35px; width: 100%; display: flex; align-items: center; justify-content: space-between; border-top: 1px solid #d2e0cc26; padding: 10px 1px 0; font-size: 11px; color: #f1cc8e; }
-#next-city-stop:hover { color: #fff5da; }
-#next-city-stop span { font-size: 18px; }
 #app:has(#welcome:not(.hidden), #pause-overlay:not([hidden]), dialog[open], #journey-transition.active) .city-guide { visibility: hidden; pointer-events: none; }
 #city-notebook-progress { font-size: 12px; line-height: 1.6; margin: 0 0 12px; }
 .notebook-panel { padding: 14px; border: 1px solid var(--ui-line); border-radius: 12px; background: color-mix(in srgb, var(--cream) 90%, transparent); }
@@ -92,7 +89,6 @@ body[data-mode=free] :is(.city-guide-stop, #next-city-stop) { display: none; }
   .city-guide-eyebrow { font-size: 7px; letter-spacing: .65px; }
   #city-stop-name { font-size: 17px; }
   #city-stop-distance { font-size: 9px; }
-  #next-city-stop { min-height: 34px; font-size: 10px; }
 }
 @media (max-height: 560px) and (orientation: landscape) {
   .city-guide { top: auto; bottom: var(--ui-bottom); width: 168px; }
@@ -100,4 +96,27 @@ body[data-mode=free] :is(.city-guide-stop, #next-city-stop) { display: none; }
   .city-guide-stop { padding: 7px 0; }
   .city-guide-eyebrow { display: none; }
   #city-stop-name { font-size: 16px; }
+}
+
+body[data-mode=free] .city-hud { flex: 1; }
+body[data-mode=free] .city-hud-copy { flex: 1; }
+body[data-mode=free] #app #city-location { max-width: none; white-space: normal; overflow-wrap: anywhere; }
+
+@media (any-pointer: coarse), (max-width: 760px), (max-height: 560px) {
+  body[data-mode=free] .city-guide {
+    --map-bottom: var(--ui-bottom);
+    top: auto; bottom: var(--map-bottom); left: var(--ui-left); right: auto;
+  }
+  body[data-mode=free] .city-guide[data-expanded=true] {
+    --map-bottom: var(--ui-bottom);
+    display: block;
+    width: min(var(--free-map-width, 260px), calc(100% - var(--ui-left) - var(--ui-right) - var(--stick-size) - 16px));
+  }
+  body[data-mode=free] .city-guide[data-expanded=true] #city-map { width: 100%; }
+}
+@media (max-height: 560px) {
+  body[data-mode=free] .city-guide { --free-map-width: min(220px, calc(100dvh - var(--ui-top) - var(--ui-bottom) - 84px)); }
+}
+@media (max-width: 360px) {
+  body[data-mode=free] .city-guide-header > span { display: none; }
 }

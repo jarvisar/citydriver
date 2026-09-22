@@ -48,7 +48,7 @@ test('a driver can save directly for Formula, and malformed saves cannot unlock 
 test('completed fares bank exactly once and survive restart, abandonment, expiry and reload', () => {
   const disk = storage(), run = new TaxiRun(disk);
   const player = { s: 25, u: 3, heading: 0, speed: 0 };
-  run.start(player); Object.assign(player, run.target); run.update(.5, player);
+  run.start(player); Object.assign(player, run.customers[0]); run.update(.5, player);
   assert.equal(run.status, 'driving'); assert.equal(run.fleet.balance, 0);
   Object.assign(player, { s: run.target.s, u: run.target.u }); run.update(.5, player);
   const paid = run.cash; assert.ok(paid > 0);
@@ -56,7 +56,7 @@ test('completed fares bank exactly once and survive restart, abandonment, expiry
   run.update(.5, player); assert.equal(run.fleet.balance, paid);
   run.finish(); run.finish(); assert.equal(run.fleet.balance, paid);
   run.start(player); assert.equal(run.cash, 0); assert.equal(run.fleet.balance, paid);
-  Object.assign(player, run.target); run.update(.5, player);
+  Object.assign(player, run.customers[0]); run.update(.5, player);
   run.fareLeft = .01; run.update(.02, player); assert.equal(run.fleet.balance, paid);
   run.stop(); assert.equal(run.fleet.balance, paid);
   assert.equal(new TaxiRun(disk).best, paid);

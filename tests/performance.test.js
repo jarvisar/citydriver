@@ -57,17 +57,20 @@ test('unchanged distant tiles retain GPU buffers and retired tiles dispose their
     const disposed = new Set();
     for (const { meshes } of tiles.values()) for (const mesh of meshes) mesh.addEventListener('dispose', () => disposed.add(mesh));
     world.update(145, 3);
-    let retained = 0, retired = 0;
+    let retained = 0, retired = 0, reused = 0;
     for (const [key, old] of tiles) {
       const tile = world.distantCity.tiles.get(key);
       if (tile && [...tile.chunks.keys()].sort().join('/') === old.members) {
         assert.deepEqual(tile.group.children, old.meshes); retained++;
       } else {
-        for (const mesh of old.meshes) assert.ok(disposed.has(mesh));
+        for (const mesh of old.meshes) {
+          if (tile?.group.children.includes(mesh)) { assert.ok(!disposed.has(mesh)); reused++; }
+          else assert.ok(disposed.has(mesh));
+        }
         retired++;
       }
     }
-    assert.ok(retained > 0 && retired > 0);
+    assert.ok(retained > 0 && retired > 0 && reused > 0);
     const live = [];
     world.distantGroup.traverse(mesh => { if (mesh.isInstancedMesh) {
       live.push(mesh); mesh.addEventListener('dispose', () => disposed.add(mesh));
@@ -131,7 +134,7 @@ test('prefetch prepares a bounded future strip and reuses it when crossing the b
     const initial = cityLayout(65, 55); world.update(initial.s, initial.u);
     // Large budget removes machine-speed dependence from this cache test;
     // the production loop uses 3 ms and still builds at most one per frame.
-    for (let i = 0; i < 24; i++) {
+    for (let i = 0; i < 32; i++) {
       const p = cityLayout(66 + i, 55); world.update(p.s, p.u, { budgetMs: 1000 });
       assert.ok(world.prefetched.size <= 21);
     }

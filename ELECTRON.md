@@ -1,25 +1,23 @@
-# Citydriver desktop
+# Desktop app
 
-The Electron shell runs the same Citydriver build as the browser. It serves local assets from `app://citydriver/`, supports native fullscreen, and keeps its own application data.
+The Electron app runs the browser build locally at `app://citydriver/` and stores saves separately from the browser.
 
-## Develop
+## Run locally
 
 ```sh
 npm install
 npm run electron:dev
 ```
 
-To run a production renderer build locally:
+Use `npm run electron:start` to build and run the production version.
 
-```sh
-npm run electron:start
-```
+Fullscreen is the default. Press F, F11, or Alt+Enter to toggle it; Escape pauses.
 
-Useful launch flags are `--windowed`, `--fullscreen`, `--seed=4817`, `--devtools`, and `--software-gl`. Fullscreen is the default. F, F11, or Alt+Enter changes fullscreen; Escape pauses the game. Use `--dev-url=http://127.0.0.1:5173` to attach directly to a running Vite server.
+Launch flags: `--windowed`, `--fullscreen`, `--seed=4817`, `--devtools`, `--software-gl`, and `--dev-url=http://127.0.0.1:5173`.
 
-Environment overrides use the `CITYDRIVER_` prefix: `DEV_URL`, `DEVTOOLS`, `SOFTWARE_GL`, `FULLSCREEN`, and `USER_DATA`.
+Environment variables: `CITYDRIVER_DEV_URL`, `CITYDRIVER_DEVTOOLS`, `CITYDRIVER_SOFTWARE_GL`, `CITYDRIVER_FULLSCREEN`, and `CITYDRIVER_USER_DATA`.
 
-## Build local packages
+## Build
 
 ```sh
 npm run electron:pack
@@ -28,29 +26,28 @@ npm run electron:build:linux
 npm run electron:build:mac
 ```
 
-Packages are written to `release/`. Build the target platform on a suitable host. Windows produces an installer and portable executable, Linux an AppImage, and macOS DMG/ZIP packages. These are unsigned local builds. On Linux, make the AppImage executable before launching; it can also be added as a non-Steam game.
+Build on the target platform. Output goes to `release/`: installer and portable EXE for Windows, AppImage for Linux, and DMG/ZIP for macOS. Builds are unsigned. On Linux, make the AppImage executable before launching.
 
-The desktop icon comes from `public/favicon.svg`. Regenerate it with `npm run electron:icons` after editing the mark.
+Run `npm run electron:icons` after changing `public/favicon.svg`.
 
-## Check the shell
+## Tests
 
 ```sh
 npm run test:electron -- --build
 npm run test:electron -- --packaged
 ```
 
-The smoke check launches Electron, verifies the local renderer, driving, city settings, fullscreen, and isolation from browser-only installation helpers. Reports and screenshots go to `.artifacts/electron/`.
+Checks startup, driving, settings, fullscreen, and browser-only install UI. Reports go to `.artifacts/electron/`.
 
 ## Releases
 
-The desktop GitHub workflow builds Windows, Linux, and macOS packages when a `v*` tag is pushed. After all builds succeed, it creates a GitHub release for the tag and attaches the packages. Follow progress under **Actions > Build Citydriver desktop** and download the finished packages under **Releases**.
-
-Commit your changes before creating the next version tag:
+After committing your changes, create and push a version tag:
 
 ```sh
-npm version patch && git push --follow-tags
+npm version patch
+git push --follow-tags
 ```
 
-The tag must include the release workflow changes. Existing tags do not build retroactively; after committing the workflow, create a new version with the command above.
+The `v*` tag triggers **Build Citydriver desktop** in GitHub Actions. Once all builds finish, packages appear under **Releases**. The tag must contain the release workflow; existing tags won't rebuild automatically.
 
-Manual workflow runs upload Actions artifacts without publishing a release. Local packaging also only builds files: the builder uses `publish: null` and npm packaging commands pass `--publish never`. GitHub Actions handles release uploads separately. The shell has no updater and makes no requests to the original game's release feed.
+Manual workflow runs upload Actions artifacts. Local builds write files to `release/`. Neither publishes a release. The app has no automatic updater.

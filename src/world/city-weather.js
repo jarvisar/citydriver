@@ -5,7 +5,13 @@ import { Rainfall } from './rainfall.js';
 // the game, so pausing or hiding the tab also pauses the sky and the rain.
 export const WEATHER_INTERVAL = 105;
 export const WEATHER_TRANSITION = 22;
-export const WEATHER_CYCLE = Object.freeze(['sunset', 'night', 'clear', 'clear', 'overcast', 'rain', 'storm', 'rain']);
+// Shuffle once per game load so sampling the clock stays stable while driving.
+const middlePhases = ['clear', 'clear', 'overcast', 'rain', 'storm', 'rain'];
+for (let i = middlePhases.length - 1; i > 0; i--) {
+  const j = Math.floor(Math.random() * (i + 1));
+  [middlePhases[i], middlePhases[j]] = [middlePhases[j], middlePhases[i]];
+}
+export const WEATHER_CYCLE = Object.freeze(['sunset', ...middlePhases, 'night']);
 const NUMBER_KEYS = ['rain', 'wetness', 'lightLevel', 'skyIntensity', 'sunIntensity', 'exposure', 'fogNear', 'fogFar', 'drivingFogNear', 'drivingFogFar', 'sunX', 'sunY', 'sunZ'];
 const COLOR_KEYS = ['background', 'fogColor', 'skyColor', 'groundColor', 'sunColor'];
 const clamp = value => Math.max(0, Math.min(1, value));

@@ -49,26 +49,34 @@
       </header>
       <div id="fps-counter" hidden>FPS: …</div>
       <div id="taxi-hud" class="taxi-hud" hidden>
-        <div class="taxi-clock-box"><span>TIME</span><strong id="taxi-clock" aria-label="Seconds remaining">90</strong></div>
+        <div class="taxi-clock-box"><span>SHIFT</span><strong id="taxi-clock" aria-label="Shift seconds remaining">90</strong></div>
         <div class="taxi-score"><strong id="taxi-cash">$0</strong><span id="taxi-fares">0 fares</span></div>
       </div>
-      <div id="taxi-nav" class="taxi-nav" hidden aria-label="Destination direction">
-        <svg id="taxi-arrow" viewBox="0 0 64 64" aria-hidden="true"><path d="M32 3 59 31H43v29H21V31H5Z" fill="currentColor" stroke="#172229" stroke-width="2" stroke-linejoin="round"/></svg><span id="taxi-nav-distance">0 m</span>
+      <section id="taxi-task" class="taxi-task" hidden aria-label="Current taxi task">
+        <div id="taxi-nav" class="taxi-nav" hidden aria-label="Distance to drop-off">
+          <canvas id="taxi-arrow" width="52" height="52" aria-hidden="true"></canvas>
+          <span id="taxi-nav-distance">0 m</span>
+        </div>
+        <div class="taxi-task-copy">
+          <div class="taxi-task-heading"><span id="taxi-stage">Pick up</span><span id="taxi-fare-status"></span></div>
+          <strong id="taxi-task-title">Find a passenger</strong>
+          <span id="taxi-task-detail" role="status"></span>
+        </div>
+        <div class="taxi-stop-track" hidden role="progressbar" aria-label="Passenger boarding" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="taxi-stop-progress"></span></div>
+      </section>
+      <div id="taxi-dash" class="taxi-dash" hidden><span><b id="taxi-speed">0</b> mph</span><span id="taxi-combo"></span><span class="taxi-controller-charge">Boost<progress id="taxi-controller-boost" max="1" value="1" aria-label="Boost available"></progress></span></div>
+      <div id="taxi-buttons" hidden>
+        <div class="taxi-boost-control"><button type="button" data-drive-button="boost" aria-describedby="taxi-boost-state"><kbd>SHIFT</kbd><span>Boost</span><small id="taxi-boost-state">Hold</small></button><div id="taxi-boost" role="progressbar" aria-label="Boost available" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100"><span id="taxi-boost-fill"></span></div></div>
+        <button type="button" data-drive-button="handbrake"><kbd>SPACE</kbd><span>Drift</span><small>Hold + steer</small></button>
       </div>
-      <div id="taxi-task" class="taxi-task" hidden>
-        <strong id="taxi-task-title">PICK UP</strong><span id="taxi-task-detail">Stop in a green ring</span>
-        <div class="taxi-stop-track"><span id="taxi-stop-progress"></span></div>
-        <div class="taxi-dash"><span><b id="taxi-speed">0</b> MPH</span><span>BOOST</span><div id="taxi-boost" role="progressbar" aria-label="Boost" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100"><span id="taxi-boost-fill"></span></div><span id="taxi-combo"></span></div>
-      </div>
-      <div id="taxi-buttons" hidden><button type="button" data-drive-button="boost"><kbd>SHIFT</kbd> BOOST</button><button type="button" data-drive-button="handbrake"><kbd>SPACE</kbd> DRIFT</button></div>
       <section id="taxi-results" class="taxi-results" hidden role="dialog" aria-modal="true" aria-labelledby="taxi-result-title">
         <div class="taxi-result-card"><h2 id="taxi-result-title">TIME UP</h2><strong id="taxi-result-cash">$0</strong><p id="taxi-result-fares">0 fares</p><p id="taxi-result-best">Best $0</p><p id="taxi-result-bank"></p><button type="button" id="taxi-retry">Play again</button><button type="button" id="taxi-fleet-results" data-open-fleet>Taxi fleet</button><button type="button" id="taxi-free">Free drive</button></div>
       </section>
       <aside id="city-guide" class="city-guide" aria-label="Landmarks">
         <div class="city-guide-header"><span>MAP <b id="city-stamps">0 / 5</b></span><button type="button" id="city-map-toggle" aria-expanded="true" aria-controls="city-map">Hide map</button></div>
         <canvas id="city-map" width="208" height="144" role="img" aria-label="Local street map. North is up; the white arrow is your car, gold marks your route, and colored dots mark landmarks."></canvas>
+        <p id="taxi-offer" hidden></p>
         <div class="city-guide-stop"><span class="city-guide-eyebrow">DESTINATION</span><strong id="city-stop-name">Destination</strong><span id="city-stop-context"></span><span id="city-stop-distance">Choose a stop.</span></div>
-        <button type="button" id="next-city-stop">Next stop <span aria-hidden="true">↗</span></button>
       </aside>
       <p id="vr-error" role="status" hidden></p>
       <section id="welcome" class="welcome" aria-labelledby="menu-title">

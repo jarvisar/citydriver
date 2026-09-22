@@ -59,7 +59,7 @@ test('Basic preloads collision strips in every direction, reuses them and dispos
       try {
         const at = (x, z, budgetMs = Infinity) => { const p = cityLayout(z, x); world.update(p.s, p.u, { budgetMs }); };
         at(56, 56);
-        for (let i = 1; i <= 30; i++) at(56 + dx * (12 + i), 56 + dz * (12 + i), 1000);
+        for (let i = 1; i <= 40; i++) at(56 + dx * (12 + i), 56 + dz * (12 + i), 1000);
         const cached = new Map(world.prefetchedDetails);
         assert.equal(cached.size, dx && dz ? 5 : 3);
         assert.equal(world.chunks.size, 9); assert.equal(world.prefetched.size, dx && dz ? 21 : 11);

@@ -2,12 +2,12 @@ import * as THREE from 'three';
 import { cityAssets, cityTrees } from './city-assets.js';
 import { seededRandom } from './route.js';
 import { residentWindow } from './resident.js';
-import { DistantCity, packDistantChunk } from './distant-city.js';
+import { DistantCity, packDistantSteps } from './distant-city.js';
 import { buildLandmark, buildDestinationSigns } from './city-landmarks.js';
 import { VENUE_NAMES } from './city-destinations.js';
 import { buildPublicSpace } from './city-public-spaces.js';
 import { buildGrassFringe } from './city-grass.js';
-import { buildCityBuildings, SHOP_NAMES, shopSignMaterial } from './city-buildings.js';
+import { buildCityBuildings, buildCityBuildingSteps, SHOP_NAMES, shopSignMaterial } from './city-buildings.js';
 import { blockStreets, buildStreets } from './city-streets.js';
 import { cityGreen } from '../city-junctions.js';
 import { CITY_PLACES } from './city-places.js';
@@ -30,7 +30,7 @@ const dryRoad = new THREE.Color('#666c70'), wetRoad = new THREE.Color('#424e58')
 const GREENS = ['#63924d', '#80a85c', '#4f8054', '#93ab65'];
 const pick = (items, random) => items[Math.floor(random() * items.length)];
 
-function renderBatches(group, batches, east = 0, start = 0) {
+function* renderBatchSteps(group, batches, east = 0, start = 0) {
   for (const [batchKey, { geometry, material, items, structure }] of batches) {
     const key = structure ? batchKey.slice('structure-'.length) : batchKey;
     if (!items.length) continue;
@@ -50,6 +50,7 @@ function renderBatches(group, batches, east = 0, start = 0) {
     mesh.computeBoundingSphere();
     if (key === 'water') mesh.boundingSphere.radius += .12;
     group.add(mesh);
+    yield;
   }
 }
 
@@ -86,21 +87,35 @@ function resources() {
 // A block owns one half of each boundary street. Its neighbour owns the other
 // half, so roads and bridge decks meet without overlaps, gaps or dead ends.
 export class CitydriverChunk {
-  constructor(ix, iz, materials, distant = false) {
+  constructor(ix, iz, materials, distant = false, deferred = false) {
     this.ix = ix; this.iz = iz; this.start = iz * CITY_BLOCK; this.east = ix * CITY_BLOCK;
     this.index = `${ix},${iz}`; this.plan = cityBlock(ix, iz); this.materials = materials; this.distant = distant;
     this.group = new THREE.Group(); this.group.name = `citydriver-block-${this.index}`;
     this.features = { colliders: [], bridges: [], buildings: [], discoveries: [], medians: [], junctions: [], signals: [] };
     this.batches = new Map(); this.random = seededRandom(this.plan.seed); this.layoutFrames = new Map();
-    this.buildGround(); this.buildRoads();
+    this.construction = this.buildSteps();
+    if (!deferred) this.buildUntil();
+  }
+  buildUntil(deadline = Infinity) {
+    // Prefetch can stop between roads, individual buildings and mesh batches.
+    // Startup and urgently needed collision blocks drain the same recipe.
+    while (this.construction && performance.now() < deadline) {
+      if (this.construction.next().done) this.construction = null;
+    }
+    return this.construction === null;
+  }
+  *buildSteps() {
+    this.buildGround(); yield;
+    this.buildRoads(); yield;
     if (this.plan.kind === 'river') this.buildRiver();
     else if (this.plan.landmark) buildLandmark(this);
     else if (this.plan.kind === 'park' || this.plan.kind === 'plaza') this.buildPark();
-    else this.buildBuildings();
-    if (!distant) { this.buildFurniture(); this.buildLife(); }
-    this.mapFeatures();
-    buildGrassFringe(this);
-    if (!distant) this.finish();
+    else yield* buildCityBuildingSteps(this);
+    yield;
+    if (!this.distant) { this.buildFurniture(); yield; this.buildLife(); yield; }
+    this.mapFeatures(); yield;
+    buildGrassFringe(this); yield;
+    if (!this.distant) yield* this.finishSteps();
     this.layoutFrames = null;
     this.surfacePoints = null;
     this.paths = this.plantedAreas = this.plantingExclusions = null;
@@ -284,7 +299,8 @@ export class CitydriverChunk {
     mesh.instanceMatrix.needsUpdate = true;
     if (this.boatMesh) this.boatMesh.position.y = Math.sin(time * .8 + this.plan.seed) * .08;
   }
-  finish() {
+  finish() { for (const _ of this.finishSteps()) { /* synchronous tools/startup */ } }
+  *finishSteps() {
     // Record the exact rigid lamp placement, including curved streets and
     // bridge furniture. Lighting reuses these points without scene traversal.
     this.features.lamps = (this.batches.get('lamp')?.items ?? []).map(item => {
@@ -293,7 +309,7 @@ export class CitydriverChunk {
       return { x: point.x + this.east, y: point.y, z: point.z - this.start,
         yaw: Math.atan2(matrix.elements[8], matrix.elements[10]) };
     });
-    renderBatches(this.group, this.batches, this.east, this.start);
+    yield* renderBatchSteps(this.group, this.batches, this.east, this.start);
     this.signalMesh = this.group.getObjectByName('citydriver-lit');
     this.peopleMesh = this.group.getObjectByName('citydriver-residents');
     if (this.peopleMesh) {
@@ -346,7 +362,10 @@ export class CitydriverChunk {
     for (const j of this.features.junctions) { const p = cityLayout(j.s, j.x); j.s = p.s; j.x = p.u; }
     for (const b of this.features.bridges) Object.assign(b, cityLayout(b.s, b.u));
   }
-  dispose() { this.group.removeFromParent(); for (const mesh of this.group.children) mesh.dispose(); }
+  dispose() {
+    this.construction?.return(); this.construction = null;
+    this.group.removeFromParent(); for (const mesh of this.group.children) mesh.dispose();
+  }
 }
 
 export class CitydriverWorld {
@@ -359,6 +378,7 @@ export class CitydriverWorld {
     this.distantCity = new DistantCity(this.distantGroup);
     this.prefetched = new Map(); this.prefetchPending = []; this.prefetchTarget = null;
     this.prefetchedDetails = new Map(); this.prefetchDetailPending = [];
+    this.prefetchedDemotions = new Map(); this.prefetchDemotionPending = []; this.prefetchBuild = null;
     this.prefetchDirection = { x: 0, z: 0 };
     this.animationFrustum = new THREE.Frustum(); this.animationMatrix = new THREE.Matrix4(); this.animationSphere = new THREE.Sphere();
   }
@@ -392,8 +412,9 @@ export class CitydriverWorld {
         const distance = Math.max(Math.abs(ix - cell.ix), Math.abs(iz - cell.iz));
         if (distance <= (Number.isFinite(budgetMs) ? 1 : radius)) continue;
         if (!this.chunks.has(key) && !this.distantChunks.has(key)) {
-          const chunk = this.prefetched.get(key) ?? new CitydriverChunk(ix, iz, this.materials, true);
+          const chunk = this.prefetched.get(key) ?? this.prefetchedDemotions.get(key) ?? this.requiredChunk(ix, iz, true);
           this.prefetched.delete(key);
+          this.prefetchedDemotions.delete(key);
           this.distantChunks.set(key, chunk); this.distantCity.add(chunk);
         }
       }
@@ -402,7 +423,7 @@ export class CitydriverWorld {
     while (this.pending.length) {
       if (this.pending[0].distance > 1 && built > 0 && performance.now() >= deadline) break;
       const next = this.pending.shift(), key = `${next.ix},${next.iz}`;
-      const chunk = this.prefetchedDetails.get(key) ?? new CitydriverChunk(next.ix, next.iz, this.materials);
+      const chunk = this.prefetchedDetails.get(key) ?? this.requiredChunk(next.ix, next.iz, false);
       this.prefetchedDetails.delete(key);
       this.chunks.set(chunk.index, chunk); this.scene.add(chunk.group);
       const distant = this.distantChunks.get(chunk.index);
@@ -418,10 +439,19 @@ export class CitydriverWorld {
     this.rebuildDistant();
     if (Number.isFinite(budgetMs) && !this.pending.length) this.prefetchDistant(cell, ds, du, deadline);
   }
+  requiredChunk(ix, iz, distant) {
+    // If the car reaches an unfinished block, finish its remaining work rather
+    // than throwing away the work already done. Collision coverage is urgent.
+    const chunk = this.prefetchBuild?.chunk;
+    if (chunk && chunk.ix === ix && chunk.iz === iz && chunk.distant === distant) {
+      this.prefetchBuild = null; chunk.buildUntil(); return chunk;
+    }
+    return new CitydriverChunk(ix, iz, this.materials, distant);
+  }
   prefetchDistant(cell, ds, du, deadline) {
-    // Prepare the next skyline strip while approaching an edge, one block per
-    // spare frame. The skyline cache owns no GPU objects and is limited to one
-    // future neighbourhood (at most 21 blocks, even on a diagonal).
+    // Prepare both sides of the detail transition and the next skyline strip.
+    // Work resumes within the frame budget, completing at most one block per
+    // frame. Packed distant caches own no GPU objects.
     const p = cityLogical(this.s, this.u), x = p.u - cell.ix * CITY_BLOCK, z = p.s - cell.iz * CITY_BLOCK;
     // Rendering can run faster than fixed-step physics. A repeated position is
     // not a turn: keep preparing the same strip instead of disposing and
@@ -437,6 +467,8 @@ export class CitydriverWorld {
     const key = `${cell.ix + dx},${cell.iz + dz}/${this.radius}`;
     if (key !== this.prefetchTarget) {
       this.prefetchTarget = key; this.prefetchPending = []; this.prefetchDetailPending = [];
+      this.prefetchBuild?.chunk.dispose(); this.prefetchBuild = null;
+      this.prefetchDemotionPending = [];
       // Prepare the whole next detail strip, including the outer detail at
       // higher quality. Basic needs at most five blocks; High needs thirteen.
       // They own buffers, so retire unused entries when the driver turns away.
@@ -452,6 +484,15 @@ export class CitydriverWorld {
       for (const [index, chunk] of this.prefetchedDetails) if (!detailWanted.has(index)) {
         chunk.dispose(); this.prefetchedDetails.delete(index);
       }
+      // The trailing detail strip also changes level at a crossing. Without
+      // preparing it, all of its distant models are regenerated in that frame.
+      const demotionWanted = new Set();
+      if (dx || dz) for (const chunk of this.chunks.values()) {
+        if (Math.abs(chunk.ix - cell.ix - dx) <= this.radius && Math.abs(chunk.iz - cell.iz - dz) <= this.radius) continue;
+        demotionWanted.add(chunk.index);
+        if (!this.prefetchedDemotions.has(chunk.index)) this.prefetchDemotionPending.push({ ix: chunk.ix, iz: chunk.iz, index: chunk.index });
+      }
+      for (const index of this.prefetchedDemotions.keys()) if (!demotionWanted.has(index)) this.prefetchedDemotions.delete(index);
       const wanted = new Set();
       if (dx || dz) for (let ix = cell.ix + dx - DISTANT_CITY_RADIUS; ix <= cell.ix + dx + DISTANT_CITY_RADIUS; ix++) {
         for (let iz = cell.iz + dz - DISTANT_CITY_RADIUS; iz <= cell.iz + dz + DISTANT_CITY_RADIUS; iz++) {
@@ -462,15 +503,25 @@ export class CitydriverWorld {
       }
       for (const index of this.prefetched.keys()) if (!wanted.has(index)) this.prefetched.delete(index);
     }
-    if (this.prefetchDetailPending.length && performance.now() < deadline) {
-      const next = this.prefetchDetailPending.shift();
-      if (!this.chunks.has(next.index)) this.prefetchedDetails.set(next.index, new CitydriverChunk(next.ix, next.iz, this.materials));
-      return;
+    if (performance.now() >= deadline) return;
+    if (!this.prefetchBuild) {
+      const detail = this.prefetchDetailPending.length > 0;
+      const demotion = !detail && this.prefetchDemotionPending.length > 0;
+      const next = (detail ? this.prefetchDetailPending : demotion ? this.prefetchDemotionPending : this.prefetchPending).shift();
+      if (!next) return;
+      const chunk = new CitydriverChunk(next.ix, next.iz, this.materials, !detail, true);
+      this.prefetchBuild = { chunk, cache: detail ? this.prefetchedDetails : demotion ? this.prefetchedDemotions : this.prefetched };
     }
-    if (this.prefetchPending.length && performance.now() < deadline) {
-      const next = this.prefetchPending.shift(), chunk = new CitydriverChunk(next.ix, next.iz, this.materials, true);
-      packDistantChunk(chunk); this.prefetched.set(next.index, chunk);
+    const work = this.prefetchBuild;
+    if (!work.chunk.buildUntil(deadline)) return;
+    if (work.chunk.distant) {
+      work.packing ??= packDistantSteps(work.chunk);
+      while (performance.now() < deadline) {
+        if (work.packing.next().done) { work.packing = null; break; }
+      }
+      if (work.packing) return;
     }
+    work.cache.set(work.chunk.index, work.chunk); this.prefetchBuild = null;
   }
   rebuildDistant() {
     this.distantCity.rebuild();
@@ -513,6 +564,8 @@ export class CitydriverWorld {
     this.prefetched.clear(); this.prefetchPending = [];
     for (const chunk of this.prefetchedDetails.values()) chunk.dispose();
     this.prefetchedDetails.clear(); this.prefetchDetailPending = [];
+    this.prefetchBuild?.chunk.dispose(); this.prefetchBuild = null;
+    this.prefetchedDemotions.clear(); this.prefetchDemotionPending = [];
     for (const material of Object.values(this.materials)) { material.map?.dispose(); material.dispose(); }
   }
 }

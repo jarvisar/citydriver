@@ -1,38 +1,18 @@
 # Citydriver
 
-Arcade taxi driving built with Three.js.
+Taxi driving game built with [Three.js](https://threejs.org/). The city generates as you drive.
 
-## Play
+## How to play
 
-Start a **Taxi run** with 90 seconds. Stop inside a pickup ring to board a passenger. Follow the arrow and map, then stop in the yellow drop-off ring before the fare timer expires.
+Start a **Taxi run** to pick up passengers and earn money. You start with 90 seconds. Stop in a pickup ring, follow the arrow, then stop in the yellow drop-off ring before the fare timer runs out.
 
-Customers appear at procedural street locations every few blocks throughout the endless city. Nearby customers load as you drive and distant ones unload. Choose a map dot, use **Next passenger**, or stop in any pickup ring. Carry one passenger at a time, then choose another after the trip.
+Completed fares add 18–30 seconds. Fast deliveries, drifts, and near misses earn tips; crashes halve your current tips. Boost recharges when released. Resetting costs 5 seconds.
 
-Returning to a pickup in the same seeded city recreates its destination, fare and colour. Collected customers have a 60-second cooldown before that pickup becomes available again.
+Choose your own fare by stopping in any passenger ring. Available fares never become navigation targets. Once the passenger boards, a green 3D arrow points directly to their destination and the map shows the road route. You can carry one passenger at a time. Your best score and fleet balance save locally. Pause or switch tabs to stop the clock.
 
-- Completed fares earn cash and add 18–30 seconds, with more time for longer trips.
-- Fast drop-offs, drifts, and near misses earn tips.
-- Combos multiply driving tips up to 3×. Crashes halve current tips; repeated contacts in one scrape count as one crash.
-- Boost recharges when released.
-- Resetting the cab costs 5 seconds.
-- Best cash total is saved locally. Pause and hidden tabs stop the clock.
-- Every completed fare also banks cash toward your taxi fleet. Buy the **GT Taxi ($1,500)** or **Formula Taxi ($4,500)** from **Pause → Taxi fleet** or the results screen. Purchases are permanent and selections apply to the next run; restarting keeps completed earnings.
+Buy the GT Taxi ($1,500) or Formula Taxi ($4,500) from **Pause → Taxi fleet** or the results screen. Completed fares stay banked even if you restart. Vehicle changes apply to the next run.
 
-**Free drive** has no timer and includes the garage, weather settings, and landmark map.
-
-All three taxis are free to use in the Free Drive garage. See [taxi fleet balance and checks](docs/taxi-fleet.md) for the upgrade stats and pricing.
-
-On the main menu, press forward to enter free drive, or press **R** to generate a new city. **Start run** starts a taxi run.
-
-Explore **17 discovery categories**, including a cinema, grand hotel, museum, railway station, library, hospital, observatory, jazz club, athletic club, and historic firehouse. Parks and city squares are destinations too. Passenger offers show the customer and destination, favor varied trips, and collect discovery stamps during taxi runs as well as free drive. Choose any destination from **Pause → City discoveries**; existing stamps stay saved.
-
-Blocks mix ten architectural styles: shops, brick buildings, balcony apartments, glass offices, Art Deco towers, warehouses, mansard townhouses, factory lofts, pavilions with butterfly roofs, and glazed atrium buildings. Neighborhood palettes, ten storefront signs, roof gardens and eight roof types give the streets distinct character. Weather defaults to Auto, starting at golden hour and cycling through conditions; your selected weather is saved.
-
-The [city improvement notes](docs/city-improvements.md) describe the destinations, art direction, and repeatable before/after screenshot tour.
-
-Side streets have stop signs. Avenues connect to wider boulevards with grass and trees in the medians. Traffic stops and yields at smaller junctions.
-
-Gridded neighborhoods blend into curved waterfront roads and looser districts. Rivers bend in both directions and meet at open confluences, with bridges on both street axes. Buildings retain their rectangular shapes; awkward lots become planted courtyards. [Layout design and research](docs/organic-city-design.md).
+**Free drive** has no timer. All three taxis are available in the garage, along with weather settings and city discoveries in the pause menu. Press forward on the main menu to enter free drive, or **R** to generate a new city.
 
 ## Controls
 
@@ -51,22 +31,24 @@ Gridded neighborhoods blend into curved waterfront roads and looser districts. R
 | Fullscreen | F | LB / L1 |
 | Sound | M | Pause menu |
 
-Touch: use the stick to drive and the Boost / Drift buttons. Release the stick to stop.
+On touch screens, use the stick to drive and hold Boost or Drift. Release the stick to stop.
 
-In a taxi run, holding brake brings the cab to a brief stop before reversing, giving passengers time to board or exit. Release and press brake again to reverse immediately. Steer while holding Drift for tight corners, then release it to regain grip.
+In taxi mode, holding brake briefly stops the cab before reversing so passengers can board or exit. Release and press brake again to reverse immediately.
 
 ## Run locally
 
-Node.js 22.12 or newer:
+Requires Node.js 22.12 or newer.
 
 ```sh
 npm install
 npm run dev
 ```
 
-Use `?seed=4817` for a repeatable city. Production build: `npm run build`.
+Use `?seed=4817` to load the same city again. Run `npm run build` for a production build.
 
-## Checks
+[Desktop setup](ELECTRON.md) · [Offline installation](PWA.md) · [Taxi stats](docs/taxi-fleet.md) · [Development notes](docs/)
+
+## Tests
 
 ```sh
 npm test
@@ -75,27 +57,22 @@ npm run test:browser
 npm run test:taxi
 npm run test:fleet
 npm run test:layout
+npm run test:spaces
 npm run test:performance
 npm run test:pwa
 ```
 
-Browser checks require a dev server. Set `TEST_URL` for a different URL and `CHROME_PATH` for a different Chrome executable.
+Browser tests require a running dev server. Set `TEST_URL` to use another URL or `CHROME_PATH` to use another Chrome executable.
 
-`npm run benchmark` captures repeatable rendering and streaming measurements at desktop and phone sizes. See [performance design, research, and measurements](docs/performance.md) for the methodology and device-testing limits.
-
-`npm run benchmark:cpu` profiles minimap updates, resident animation, traffic, and visible mesh workloads. The [mobile performance follow-up](docs/performance-overhaul.md) describes Basic's shorter detail range, prefetching, geometry compaction, and the latest regression checks.
-
-[Desktop setup](ELECTRON.md) · [Offline installation](PWA.md)
+Run `npm run benchmark` for rendering and streaming measurements, or `npm run benchmark:cpu` for CPU profiling. See [performance notes](docs/performance.md).
 
 ## GitHub Pages
 
-In repository **Settings → Pages**, set **Source** to **GitHub Actions**. The workflow tests and builds each pull request, then deploys successful builds from `main` to Pages. The production build uses `/citydriver/` as its base path.
+In **Settings → Pages**, set **Source** to **GitHub Actions**. The workflow tests pull requests and deploys successful builds from `main` using `/citydriver/` as the base path.
 
-Commit `package-lock.json` whenever dependencies change. If `npm ci` reports missing lockfile entries, regenerate the lockfile with a current npm 11 version:
+Commit `package-lock.json` when dependencies change. If `npm ci` reports missing lockfile entries:
 
 ```sh
 npx --yes --package=npm@11.19.1 npm install --package-lock-only --ignore-scripts
 npx --yes --package=npm@11.19.1 npm ci --dry-run --ignore-scripts
 ```
-
-Work stays in this directory. The original game and its repository are separate.

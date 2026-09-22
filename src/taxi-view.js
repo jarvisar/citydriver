@@ -1,15 +1,26 @@
 import * as THREE from 'three';
 import { cityWalker, walkerFloat } from './world/city-life.js';
 import { ROAD_LEVEL, PAVEMENT_LEVEL, cityStreetProfile, nearestCityStreet } from './world/city-grid.js';
-import { STOP_RADIUS, STOP_SECONDS, deliverySeconds, taxiRoute } from './taxi-run.js';
+import { STOP_RADIUS, STOP_SECONDS, taxiRoute } from './taxi-run.js';
 import { routeDistance } from './city-exploration.js';
+import { DestinationArrow } from './destination-arrow.js';
 
 const $ = id => document.getElementById(id);
 const money = value => `$${Math.round(value ?? 0).toLocaleString('en-US')}`;
+const compactCash = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', notation: 'compact', maximumFractionDigits: 1 });
+const text = (id, value) => { const element = $(id), next = String(value); if (element.textContent !== next) element.textContent = next; };
 const passengerFloat = {};
 const markerScale = 1.3;
 export class TaxiView {
   constructor(scene) {
+    this.navigation = new DestinationArrow(globalThis.document ? $('taxi-arrow') : null);
+    this.measureTask = () => {
+      const task = $('taxi-task');
+      if (!task.hidden) $('app').style.setProperty('--taxi-task-bottom', `${task.getBoundingClientRect().bottom}px`);
+    };
+    this.taskObserver = globalThis.ResizeObserver && globalThis.document ? new ResizeObserver(this.measureTask) : null;
+    this.taskObserver?.observe($('taxi-task'));
+    globalThis.window?.addEventListener('resize', this.measureTask);
     this.group = new THREE.Group(); this.group.name = 'taxi-markers'; scene.add(this.group);
     this.ring = new THREE.RingGeometry(6 * markerScale, 6.5 * markerScale, 40); this.ring.rotateX(-Math.PI / 2);
     this.beam = new THREE.CylinderGeometry(6.3 * markerScale, 6.3 * markerScale, 5, 32, 1, true);
@@ -30,14 +41,13 @@ export class TaxiView {
     const stops = run.status === 'pickup' ? run.customers : run.status === 'driving' ? [{ ...run.target, color: '#ffd240' }] : [];
     for (const stop of stops) {
       const street = cityStreetProfile(stop.axis, stop.index ?? nearestCityStreet(stop.s, stop.u).index);
-      const acrossScale = Math.min(.65, (street.halfWidth - street.lane - .4) / 6.5);
       const group = new THREE.Group(), solid = new THREE.MeshBasicMaterial({ color: stop.color, side: THREE.DoubleSide });
       group.rotation.y = -(stop.heading ?? (stop.axis === 'north' ? 0 : Math.PI / 2)) + (stop.axis === 'north' ? 0 : Math.PI / 2) + (stop.side < 0 ? Math.PI : 0);
       const glow = new THREE.MeshBasicMaterial({ color: stop.color, transparent: true, opacity: .08, depthWrite: false, side: THREE.DoubleSide });
       this.materials.push(solid, glow);
-      const ring = new THREE.Mesh(this.ring, solid); ring.position.y = ROAD_LEVEL + .07; group.add(ring);
+      // Keep the full radius across the street and visible over the adjacent curb.
+      const ring = new THREE.Mesh(this.ring, solid); ring.position.y = PAVEMENT_LEVEL + .07; group.add(ring);
       const beam = new THREE.Mesh(this.beam, glow); beam.position.y = ROAD_LEVEL + 2.5; group.add(beam);
-      if (stop.axis === 'north') beam.scale.x = acrossScale; else beam.scale.z = acrossScale;
       const arrow = new THREE.Mesh(this.cone, solid); arrow.position.y = ROAD_LEVEL + 7; group.add(arrow);
       let person = null;
       const float = { phase: this.markers.length * 2.4, speed: .2 };
@@ -50,7 +60,7 @@ export class TaxiView {
         group.add(person);
       }
       group.traverse(object => { object.userData.ambientOcclusion = false; });
-      this.markers.push({ group, stop, arrow, ring, beam, acrossScale, person, float }); this.group.add(group);
+      this.markers.push({ group, stop, arrow, ring, beam, person, float }); this.group.add(group);
     }
   }
   reset() { this.trails = []; this.trailIndex = 0; this.lastTrail = 0; this.skids.count = 0; this.revision = -1; }
@@ -60,7 +70,7 @@ export class TaxiView {
     if (this.revision !== run.revision) this.rebuild(run);
     this.group.position.z = origin;
     for (const marker of this.markers) {
-      const selected = run.status === 'driving' || marker.stop.id === run.target?.id;
+      const selected = run.status === 'driving' || marker.stop.id === run.boarding?.id;
       marker.group.position.set(marker.stop.u, 0, -marker.stop.s);
       if (marker.person) {
         const motion = walkerFloat(marker.float, time, passengerFloat);
@@ -72,7 +82,7 @@ export class TaxiView {
       marker.arrow.scale.setScalar(selected ? 1 : .65);
       marker.beam.visible = selected;
       const pulse = selected ? 1 + Math.sin(time * 4) * .035 : 1;
-      marker.ring.scale.set(marker.stop.axis === 'north' ? marker.acrossScale * pulse : pulse, 1, marker.stop.axis === 'east' ? marker.acrossScale * pulse : pulse);
+      marker.ring.scale.set(pulse, 1, pulse);
     }
     if (vehicle.drifting && time - this.lastTrail > .065) {
       this.lastTrail = time;
@@ -93,37 +103,54 @@ export class TaxiView {
   hud(run, vehicle) {
     $('taxi-hud').hidden = !run.running; $('taxi-nav').hidden = !run.running; $('taxi-task').hidden = !run.running;
     $('taxi-buttons').hidden = !run.running;
+    $('taxi-dash').hidden = !run.running;
     if (!run.running) return;
-    $('taxi-clock').textContent = Math.ceil(run.timeLeft); $('taxi-clock').dataset.urgent = String(run.timeLeft <= 15);
-    $('taxi-cash').textContent = money(run.cash); $('taxi-fares').textContent = `${run.delivered} fare${run.delivered === 1 ? '' : 's'}`;
-    $('taxi-speed').textContent = Math.round(Math.abs(vehicle.speed) * 2.23694);
+    text('taxi-clock', Math.ceil(run.timeLeft)); $('taxi-clock').dataset.urgent = String(run.timeLeft <= 15);
+    text('taxi-cash', run.cash >= 1000 ? compactCash.format(run.cash) : money(run.cash));
+    $('taxi-cash').setAttribute('aria-label', `Total earned ${money(run.cash)}`);
+    text('taxi-fares', `${run.delivered} fare${run.delivered === 1 ? '' : 's'}`);
+    text('taxi-speed', Math.round(Math.abs(vehicle.speed) * 2.23694));
     $('taxi-boost-fill').style.width = `${run.boost * 100}%`;
     $('taxi-boost').setAttribute('aria-valuenow', String(Math.round(run.boost * 100)));
+    $('taxi-controller-boost').value = run.boost;
+    text('taxi-boost-state', run.boostActive ? 'Boosting' : run.boost < .1 ? 'Release to fill' : 'Hold');
+    $('taxi-buttons').dataset.boosting = String(run.boostActive);
+    $('taxi-buttons').dataset.drifting = String(vehicle.drifting);
     const stop = run.target;
+    const pickup = run.status === 'pickup';
+    text('taxi-stage', pickup ? 'Pick up' : 'Drop off');
+    $('taxi-task').dataset.stage = run.status;
+    $('taxi-task').dataset.urgent = String(!pickup && run.fareLeft <= 10);
+    text('taxi-combo', !pickup && run.combo > 1 ? `Tip ×${run.combo}` : '');
+    const track = $('taxi-stop-progress').parentElement;
+    track.hidden = run.hold <= 0;
+    track.setAttribute('aria-label', pickup ? 'Passenger boarding' : 'Passenger drop-off');
+    track.setAttribute('aria-valuenow', String(Math.round(Math.min(1, run.hold / STOP_SECONDS) * 100)));
     $('taxi-nav').hidden = !stop;
     if (!stop) {
-      $('taxi-task-title').textContent = 'CHOOSE A PICKUP';
-      $('taxi-task-detail').textContent = 'Stop at any pickup ring or choose a passenger on the map';
-      $('taxi-stop-progress').style.width = '0%';
-      $('taxi-combo').textContent = '';
-      $('taxi-task').dataset.stage = run.status;
+      $('taxi-task').dataset.arriving = String(Boolean(run.boarding));
+      text('taxi-task-title', 'Find a passenger');
+      this.instruction(run.boarding ? 'Hold still · boarding…' : '');
+      text('taxi-fare-status', '');
+      $('taxi-stop-progress').style.width = `${Math.min(1, run.hold / STOP_SECONDS) * 100}%`;
       return;
     }
-    const angle = Math.atan2(stop.u - vehicle.u, stop.s - vehicle.s) - vehicle.heading;
-    $('taxi-arrow').style.transform = `rotate(${angle}rad)`;
     const length = routeDistance(taxiRoute(vehicle, stop));
-    $('taxi-nav-distance').textContent = `${Math.round(length / 10) * 10} m`;
-    $('taxi-task-title').textContent = run.status === 'pickup' ? 'CHOOSE A PICKUP' : stop.name;
-    const pickup = run.status === 'pickup', nearStop = Math.hypot(stop.s - vehicle.s, stop.u - vehicle.u) < STOP_RADIUS;
+    const nearStop = Math.hypot(stop.s - vehicle.s, stop.u - vehicle.u) < STOP_RADIUS;
+    text('taxi-nav-distance', nearStop ? 'Here' : `${Math.max(10, Math.round(length / 10) * 10)} m`);
+    $('taxi-nav').setAttribute('aria-label', `Drop-off ${Math.round(length)} meters by road; the green arrow points directly to the destination`);
+    text('taxi-task-title', stop.name);
+    text('taxi-fare-status', `Arrive in ${Math.ceil(run.fareLeft)}s · ${money(run.fare.fare + run.tips)}`);
     const instruction = nearStop
-      ? Math.abs(vehicle.speed) >= 2.5 ? 'Brake to stop' : pickup ? 'Boarding…' : 'Dropping off…'
-      : pickup ? 'Choose any pickup ring' : 'Stop in the yellow ring';
-    $('taxi-task-detail').textContent = pickup
-      ? `${stop.name} → ${stop.destination.name} · ${money(stop.fare)} · +${deliverySeconds(stop.length)}s · ${instruction}`
-      : `${Math.ceil(run.fareLeft)}s · ${money(run.fare.fare + run.tips)} · ${instruction}`;
+      ? Math.abs(vehicle.speed) >= 2.5 ? 'Brake to drop off' : 'Hold still · dropping off…'
+      : '';
+    this.instruction(instruction);
+    $('taxi-task').dataset.arriving = String(nearStop);
     $('taxi-stop-progress').style.width = `${Math.min(1, run.hold / STOP_SECONDS) * 100}%`;
-    $('taxi-combo').textContent = run.status === 'driving' && run.combo > 1 ? `TIP ×${run.combo}` : '';
-    $('taxi-task').dataset.stage = run.status;
+  }
+  instruction(text) {
+    // Announce state changes, not every HUD refresh or countdown tick.
+    if ($('taxi-task-detail').textContent !== text) $('taxi-task-detail').textContent = text;
   }
   results(run) {
     $('taxi-result-cash').textContent = money(run.cash);
@@ -132,6 +159,8 @@ export class TaxiView {
     $('taxi-results').hidden = false;
   }
   dispose() {
+    this.navigation.dispose();
+    this.taskObserver?.disconnect(); globalThis.window?.removeEventListener('resize', this.measureTask);
     for (const material of this.materials) material.dispose();
     for (const resource of [this.ring, this.beam, this.cone, this.people, this.skidGeometry, this.skidMaterial]) resource.dispose();
     this.skids.dispose(); this.group.removeFromParent();

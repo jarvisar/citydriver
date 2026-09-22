@@ -20,7 +20,7 @@ class PublicSpaceChunk extends CitydriverChunk {
   buildRoads() {}
   buildFurniture() {}
   buildLife() {}
-  finish() {}
+  *finishSteps() {}
 }
 function samples() {
   const result = new Map();

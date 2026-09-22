@@ -11,32 +11,30 @@ export class CityGuide {
     let storage; try { storage = localStorage; } catch { /* Optional storage. */ }
     this.exploration = new CityExploration(storage); this.notify = notify; this.position = position;
     this.mapCache = new CityMapCache();
-    this.canvas = $('city-map'); this.ctx = this.canvas.getContext('2d'); this.expanded = true;
-    this.canvas.addEventListener('click', event => {
-      if (this.taxi?.status !== 'pickup') return;
-      const rect = this.canvas.getBoundingClientRect(), vehicle = this.position();
-      const x = (event.clientX - rect.left) * 208 / rect.width, y = (event.clientY - rect.top) * 144 / rect.height;
-      let closest = null, radius = 12;
-      for (const customer of this.taxi.customers) {
-        const cx = 104 + (customer.u - vehicle.u) * MAP_SCALE, cy = 72 - (customer.s - vehicle.s) * MAP_SCALE;
-        if (cx < 5 || cy < 5 || cx > 203 || cy > 139) continue;
-        const d = Math.hypot(cx - x, cy - y);
-        if (d < radius) { closest = customer; radius = d; }
-      }
-      if (closest && this.taxi.select(closest.id)) this.updateTaxi();
+    this.canvas = $('city-map'); this.ctx = this.canvas.getContext('2d');
+    this.compactQuery = matchMedia('(max-width: 760px), (max-height: 560px)');
+    this.setExpanded(!this.compactQuery.matches);
+    this.compactQuery.addEventListener('change', () => {
+      if (!this.mapPreferenceSet) this.setExpanded(!this.compactQuery.matches);
     });
     $('city-notebook').innerHTML = PLACE_TYPES.map(type => `<div class="notebook-place" data-place-type="${type}" title="${CITY_PLACES[type].description}" style="--place-color:${CITY_PLACES[type].color}"><span class="notebook-stamp">${CITY_PLACES[type].symbol}</span><span><strong>${CITY_PLACES[type].name}</strong><small>${CITY_PLACES[type].short}</small></span><span class="notebook-check" aria-hidden="true">○</span></div>`).join('');
-    $('next-city-stop').addEventListener('click', () => { this.next(); $('next-city-stop').blur(); });
     $('city-map-toggle').addEventListener('click', () => {
-      this.expanded = !this.expanded; this.canvas.hidden = !this.expanded;
-      $('city-map-toggle').setAttribute('aria-expanded', String(this.expanded));
-      $('city-map-toggle').textContent = this.expanded ? 'Hide map' : 'Show map';
-      $('city-map-toggle').blur();
+      this.mapPreferenceSet = true;
+      this.setExpanded(!this.expanded);
     });
     this.refreshNotebook();
   }
-  next() {
-    if (this.taxi?.running) { this.taxi.next(); this.updateTaxi(); }
+  setExpanded(expanded) {
+    this.expanded = expanded; this.canvas.hidden = !expanded;
+    $('city-guide').dataset.expanded = String(expanded);
+    $('city-map-toggle').setAttribute('aria-expanded', String(expanded));
+    $('city-map-toggle').textContent = expanded ? 'Close map' : 'Map';
+    $('taxi-offer').hidden = !expanded || !this.taxi?.running;
+    // Draw immediately so opening the map never exposes an empty canvas.
+    if (expanded) {
+      if (this.taxi?.running) this.updateTaxi();
+      else this.draw(this.position(), [], [], null);
+    }
   }
   refreshNotebook() {
     const found = this.exploration.found;
@@ -60,17 +58,21 @@ export class CityGuide {
     }
     if (this.taxi?.running) { this.updateTaxi(); return; }
     this.canvas.title = 'Local street map';
+    $('taxi-offer').hidden = true;
     this.canvas.setAttribute('aria-label', 'Local street map. North is up; the white arrow is your car.');
     if (this.expanded) this.draw(vehicle, [], [], null);
   }
   updateTaxi() {
     const run = this.taxi, vehicle = this.position(), target = run.target;
-    $('next-city-stop').disabled = run.status !== 'pickup';
-    $('next-city-stop').textContent = run.status === 'pickup'
-      ? target ? `Next passenger · $${target.fare}` : 'Choose passenger'
-      : `Fare $${run.fare.fare + run.tips}`;
-    this.canvas.title = run.status === 'pickup' ? 'Tap a customer dot to choose your pickup' : 'Route to the drop-off';
-    this.canvas.setAttribute('aria-label', 'Local street map. North is up; the white arrow is your car, gold marks your route, and colored dots mark taxi stops.');
+    $('taxi-offer').hidden = !this.expanded;
+    const offer = run.status === 'pickup'
+      ? 'Choose a passenger by stopping in their pickup ring'
+      : `To ${target.name} · Follow the gold route`;
+    if ($('taxi-offer').textContent !== offer) $('taxi-offer').textContent = offer;
+    this.canvas.title = run.status === 'pickup' ? 'Nearby passengers' : 'Route to the drop-off';
+    this.canvas.setAttribute('aria-label', run.status === 'pickup'
+      ? 'Local street map. North is up; the white arrow is your car and colored dots mark waiting passengers.'
+      : 'Local street map. North is up; the white arrow is your car and gold marks the route to your drop-off.');
     if (this.expanded) this.draw(vehicle, taxiRoute(vehicle, target), run.status === 'pickup' ? run.customers : [{ ...target, color: '#ffd238' }], target);
   }
   draw(vehicle, route, places = this.exploration.places, target = this.exploration.target) {

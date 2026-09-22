@@ -9,7 +9,7 @@ export class CarSilhouette {
     this.group.name = 'car-silhouette';
     scene.add(this.group);
     this.material = new THREE.MeshBasicMaterial({
-      color: '#35434f', depthFunc: THREE.GreaterDepth, depthWrite: false,
+      color: '#506678', depthFunc: THREE.GreaterDepth, depthWrite: false,
       toneMapped: false, fog: false,
     });
     this.parts = new Map();

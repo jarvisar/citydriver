@@ -91,24 +91,24 @@ export class TaxiRun {
     try { const best = Number(storage?.getItem('citydriver-taxi-best')); if (Number.isFinite(best) && best > 0) this.best = Math.floor(best); } catch { /* Optional storage. */ }
   }
   get running() { return this.status === 'pickup' || this.status === 'driving'; }
-  get target() { return this.status === 'driving' ? this.fare.destination : this.customers?.[this.selected] ?? null; }
+  get target() { return this.status === 'driving' ? this.fare.destination : null; }
   start(player) {
     this.status = 'pickup'; this.timeLeft = SHIFT_SECONDS; this.cash = 0; this.delivered = 0; this.failed = 0;
     this.boost = 1; this.boostActive = false; this.elapsed = 0; this.combo = 1; this.comboTime = 0;
     this.tips = 0; this.hold = 0; this.fare = null; this.events = []; this.driftTime = 0; this.crashCooldown = 0;
-    this.recentDestinations = []; this.customers = []; this.selected = 0; this.blockedPickup = null;
+    this.recentDestinations = []; this.customers = []; this.boarding = null; this.blockedPickup = null;
     this.servedCustomers = new Map();
     this.lastImpact = player.audioTelemetry?.impactSerial ?? 0; this.makeCustomers(player);
+    // Starting inside a ring must not choose the first fare for the driver.
+    this.blockedPickup = this.customers.find(p => distance(p, player) < STOP_RADIUS) ?? null;
   }
-  stop() { this.status = 'idle'; this.customers = []; this.servedCustomers?.clear(); this.fare = null; this.boostActive = false; this.revision++; }
-  makeCustomers(player, chooseAhead = true) {
-    const selected = !chooseAhead ? this.target : null, previous = this.customers;
+  stop() { this.status = 'idle'; this.customers = []; this.servedCustomers?.clear(); this.fare = null; this.boarding = null; this.hold = 0; this.boostActive = false; this.revision++; }
+  makeCustomers(player) {
+    const previous = this.customers;
     for (const [id, until] of this.servedCustomers) if (until <= this.elapsed) this.servedCustomers.delete(id);
     const waiting = new Map(previous.map(customer => [customer.id, customer]));
     const stops = nearbyCustomerStops(player).filter(stop => !this.servedCustomers.has(stop.id))
       .map(stop => waiting.get(stop.id) ?? stop);
-    // Keep the driver's chosen customer a little beyond the streaming edge.
-    if (selected && distance(selected, player) <= CUSTOMER_RANGE * 1.5 && !stops.some(stop => stop.id === selected.id)) stops.push(selected);
     this.customers = stops.map(stop => {
       if (stop.destination) return stop;
       // Derive the entire offer from this pickup, not the driver's approach
@@ -132,26 +132,10 @@ export class TaxiRun {
         fare: Math.round(40 + length * .28), limit: Math.ceil(18 + length / 14),
         color: CUSTOMER_COLORS[Math.floor(randomAt(stop.fareSeed, 19910) * CUSTOMER_COLORS.length)] };
     });
-    this.selected = selected ? Math.max(0, this.customers.findIndex(stop => stop.id === selected.id)) : -1;
-    if (chooseAhead) {
-      const ahead = this.customers.findIndex(stop => (stop.s - player.s) * Math.cos(player.heading)
-        + (stop.u - player.u) * Math.sin(player.heading) > 20 && !this.recentDestinations.includes(stop.destination.type));
-      this.selected = Math.max(0, ahead);
-    }
-    if (chooseAhead) this.hold = 0;
     this.customerCenter = { s: player.s, u: player.u };
     this.nextCustomerRefresh = this.elapsed + 1;
     if (previous.length !== this.customers.length || previous.some((stop, i) => stop !== this.customers[i])) this.revision++;
   }
-  select(id) {
-    if (this.status !== 'pickup') return false;
-    const index = this.customers.findIndex(customer => customer.id === id);
-    if (index < 0) return false;
-    if (this.blockedPickup?.id === id) this.blockedPickup = null;
-    if (index !== this.selected) this.hold = 0;
-    this.selected = index; return true;
-  }
-  next() { if (this.status === 'pickup' && this.customers.length) this.select(this.customers[(this.selected + 1) % this.customers.length].id); }
   controls(dt, input) {
     const gas = input.forward > 0 || input.touchDrive?.amount > .1;
     this.boostActive = this.running && Boolean(input.boost) && gas && !input.brake && !input.handbrake && this.boost > .01;
@@ -164,7 +148,7 @@ export class TaxiRun {
     this.combo = Math.min(3, this.combo + 1); this.comboTime = 4;
   }
   finish() {
-    this.status = 'over'; this.boostActive = false; this.hold = 0; this.revision++;
+    this.status = 'over'; this.boostActive = false; this.boarding = null; this.hold = 0; this.revision++;
     this.best = Math.max(this.best, this.cash);
     try { this.storage?.setItem('citydriver-taxi-best', String(this.best)); } catch { /* Optional storage. */ }
     this.events.push({ kind: 'over' });
@@ -192,17 +176,18 @@ export class TaxiRun {
     if (this.status === 'pickup') {
       if (this.elapsed >= this.nextCustomerRefresh) {
         this.nextCustomerRefresh = this.elapsed + 1;
-        if (distance(player, this.customerCenter) > B / 2) this.makeCustomers(player, false);
+        if (distance(player, this.customerCenter) > B / 2) this.makeCustomers(player);
       }
-      // Passing another ring should not replace the driver's chosen route.
-      // Only switch customers when slow enough to begin boarding.
+      // The driver chooses a fare by stopping in its ring. Boarding is never
+      // a navigation target and cannot carry progress between passengers.
       if (this.blockedPickup && distance(this.blockedPickup, player) >= STOP_RADIUS) this.blockedPickup = null;
       const passenger = Math.abs(player.speed) < 2.5
         ? this.customers.find(p => p.id !== this.blockedPickup?.id && distance(p, player) < STOP_RADIUS) : null;
-      if (passenger && passenger.id !== this.target?.id) { this.selected = this.customers.indexOf(passenger); this.hold = 0; }
+      if (passenger?.id !== this.boarding?.id) this.hold = 0;
+      this.boarding = passenger;
       this.hold = passenger ? this.hold + dt : 0;
       if (this.hold >= STOP_SECONDS) {
-        this.fare = passenger; this.fareLeft = passenger.limit; this.status = 'driving';
+        this.fare = passenger; this.fareLeft = passenger.limit; this.status = 'driving'; this.boarding = null;
         this.customers = this.customers.filter(customer => customer !== passenger);
         this.servedCustomers.set(passenger.id, this.elapsed + 60);
         this.hold = 0; this.tips = 0; this.combo = 1; this.driftTime = 0; this.passed = new WeakSet(); this.revision++;
@@ -212,7 +197,7 @@ export class TaxiRun {
     }
     this.fareLeft = Math.max(0, this.fareLeft - dt);
     if (this.fareLeft <= 0) {
-      this.failed++; this.status = 'pickup'; this.tips = 0; this.combo = 1; this.makeCustomers(player);
+      this.failed++; this.status = 'pickup'; this.fare = null; this.hold = 0; this.tips = 0; this.combo = 1; this.revision++; this.makeCustomers(player);
       this.events.push({ kind: 'missed', text: 'Fare lost' }); return;
     }
     if (player.drifting && Math.abs(player.speed) > 10 && this.crashCooldown === 0) {
@@ -241,8 +226,8 @@ export class TaxiRun {
       this.recentDestinations = [...this.recentDestinations, this.fare.destination.type].slice(-3);
       this.events.push({ kind: 'paid', text: `+$${paid} · +${seconds}s`, paid });
       this.status = 'pickup'; this.fare = null; this.tips = 0; this.combo = 1; this.hold = 0;
-      this.selected = -1; this.makeCustomers(player, false);
-      // Overlapping pickups wait until the driver leaves the ring or chooses them.
+      this.revision++; this.makeCustomers(player);
+      // Overlapping pickups wait until the driver leaves the ring.
       this.blockedPickup = this.customers.find(p => distance(p, player) < STOP_RADIUS) ?? null;
     }
   }

@@ -10,6 +10,8 @@ test('new cities default to automatic weather, starting in golden hour before cy
   assert.equal(weather.mode, 'auto');
   assert.equal(weather.state.label, 'Golden hour');
   weather.update(WEATHER_INTERVAL);
+  assert.equal(weather.state.id, WEATHER_CYCLE[1]);
+  weather.update(WEATHER_INTERVAL * (WEATHER_CYCLE.length - 1));
   assert.equal(weather.state.id, 'night');
   weather.update(WEATHER_INTERVAL * WEATHER_CYCLE.length);
   assert.equal(weather.state.id, 'sunset');
@@ -27,6 +29,9 @@ test('automatic weather covers every condition, repeats, and stays continuous at
   assert.equal(sampleCityWeather(0, 'clear').lightLevel, 0);
   assert.equal(sampleCityWeather(0, 'night').lightLevel, 1);
   const period = WEATHER_CYCLE.length * WEATHER_INTERVAL;
+  assert.equal(WEATHER_CYCLE[0], 'sunset');
+  assert.equal(WEATHER_CYCLE.at(-1), 'night');
+  assert.deepEqual(WEATHER_CYCLE.slice(1, -1).sort(), ['clear', 'clear', 'overcast', 'rain', 'rain', 'storm']);
   assert.deepEqual(new Set(WEATHER_CYCLE), new Set(Object.keys(WEATHER_PRESETS)));
   for (let phase = 0; phase < WEATHER_CYCLE.length; phase++) {
     const start = phase * WEATHER_INTERVAL;
@@ -45,13 +50,14 @@ test('the clock makes weather independent of frame delivery and leaves paused ra
   const first = new CityWeather(new THREE.Scene(), { mode: 'auto' });
   const second = new CityWeather(new THREE.Scene(), { mode: 'auto' });
   const car = { u: 500, s: -320, car: { position: { y: 24 } } };
-  for (let tick = 0; tick <= 1200; tick++) first.update(tick / 2, car, -1024);
-  second.update(600, car, -1024);
+  const rainTime = WEATHER_INTERVAL * WEATHER_CYCLE.indexOf('rain');
+  for (let tick = 0; tick <= rainTime * 2; tick++) first.update(tick / 2, car, -1024);
+  second.update(rainTime, car, -1024);
   assert.deepEqual(first.state, second.state);
   assert.ok(first.state.rain > 0);
   const drops = first.rainfall.geometry.attributes.position.array.slice();
   const sky = first.state.background.clone();
-  first.update(600, car, -1024);
+  first.update(rainTime, car, -1024);
   assert.deepEqual(first.rainfall.geometry.attributes.position.array, drops);
   assert.deepEqual(first.state.background, sky);
   first.dispose(); second.dispose();

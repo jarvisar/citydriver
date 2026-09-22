@@ -9,6 +9,7 @@ import './pause.css';
 import './city-ui.css';
 import './taxi.css';
 import './taxi-fleet.css';
+import './city-theme.css';
 import { setupTaxiFleet } from './taxi-fleet-view.js';
 import { createRendering } from './rendering.js';
 import { Graphics } from './graphics.js';
@@ -65,7 +66,14 @@ try { const saved = localStorage.getItem(carStorageKey); if (saved && CARS[saved
 // It lasts the visit and is not stored: the fleet's own finishes are the thing
 // worth keeping, and Default hands them straight back.
 let paint = null;
-const toast = message => { $('#toast').textContent = message; $('#toast').classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => $('#toast').classList.remove('show'), 2200); };
+const toast = message => {
+  const element = $('#toast');
+  // Taxi feedback shares the instruction slot, keeping notifications off the road.
+  const parent = gameMode === 'taxi' && started && !paused ? $('.taxi-task-copy') : $('#app');
+  if (element.parentElement !== parent) parent.append(element);
+  element.textContent = message; element.classList.add('show'); clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => element.classList.remove('show'), 2200);
+};
 
 async function boot() {
   try {
@@ -75,7 +83,8 @@ async function boot() {
     // be in place before the first world is streamed.
     setResidentWindow(graphics.settings.chunks);
     graphics.onChange(settings => setResidentWindow(settings.chunks));
-    const rendering = createRendering($('#scene'), graphics, { showCarSilhouette: () => started });
+    const rendering = createRendering($('#scene'), graphics, { showCarSilhouette: () => started,
+      beforeDraw: camera => taxiView.navigation.update(taxi, vehicle, camera) });
     const { renderer, scene } = rendering;
     let vr;
     const vrStatus = new VRStatus(rendering.vrCamera.camera);
@@ -211,7 +220,6 @@ async function boot() {
       taxi.start(vehicle); taxiView.reset(); $('#taxi-results').hidden = true; $('#welcome').classList.add('hidden');
       rendering.setView(4); updateViewUi(); setPaused(false); modeUi(); updateHud();
       taxiView.render(taxi, vehicle, world.origin, time); rendering.update(vehicle.car, 1, world.origin);
-      toast('Stop in a ring to pick up');
     }
     function beginFree({ preserveInput = false } = {}) {
       if (changingJourney) return;
@@ -696,6 +704,7 @@ async function boot() {
       const densityPercent = Math.round(settings.density * 100);
       $('#graphics-summary').textContent = `${graphics.auto ? 'Auto' : settings.label} · ${densityPercent}%`;
       pixelDensity.value = String(densityPercent);
+      pixelDensity.style.setProperty('--control-level', `${(densityPercent - 50) * 2}%`);
       pixelDensityValue.textContent = `${densityPercent}%${settings.customDensity ? (densityPercent === 100 ? ' · Native' : '') : ' · Preset limit'}`;
       pixelDensity.setAttribute('aria-valuetext', `${densityPercent}% of native resolution${settings.customDensity ? '' : ', capped by the preset'}`);
       // The drawing buffer is the thing the quality level actually changes, so
@@ -803,7 +812,7 @@ async function boot() {
           if (event.kind === 'over') {
             vehicle.speed = 0; vehicle.knock.x = vehicle.knock.z = vehicle.knock.spin = 0; vehicle.update(0, {});
             setPaused(true); pauseOverlay.hidden = true; taxiView.hud(taxi, vehicle); taxiView.results(taxi); fleetView.render(); $('#taxi-retry').focus();
-          } else toast(event.text);
+          } else if (event.kind !== 'pickup') toast(event.text);
         }
       }
     };

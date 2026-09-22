@@ -9,12 +9,15 @@ import { XRCameraRig } from './xr-camera.js';
 import { sampleCityWeather } from './world/city-weather.js';
 import { CITY_BLOCK, DISTANT_CITY_RADIUS } from './world/city-grid.js';
 
-// How fast the overhead views close on the car, per second. Ground is what the
-// player reads as responsiveness, so it settles in about an eighth of a second;
-// height keeps the older, gentler rate so the view does not bob over terrain.
-const FOLLOW_GROUND = 8, FOLLOW_HEIGHT = 3;
+export function fitFogDistance(camera, fog) {
+  if (!camera.isPerspectiveCamera || !fog?.isFog) return;
+  // Linear fog has already replaced every pixel with sky at this depth.
+  // Clipping there saves hidden draws without shortening the visible horizon.
+  const far = Math.max(camera.near + 1, Math.ceil(fog.far) + 1);
+  if (camera.far !== far) { camera.far = far; camera.updateProjectionMatrix(); }
+}
 
-export function createRendering(canvas, graphics = new Graphics(), { showCarSilhouette = () => true } = {}) {
+export function createRendering(canvas, graphics = new Graphics(), { showCarSilhouette = () => true, beforeDraw = () => {} } = {}) {
   stabilizeShadowFiltering();
   // Multisampling belongs to the context and cannot be changed later, so the
   // level this page starts on decides it.
@@ -72,10 +75,8 @@ export function createRendering(canvas, graphics = new Graphics(), { showCarSilh
   }
   applyQuality(graphics.settings);
   graphics.onChange(applyQuality);
-  const follow = new THREE.Vector3(); const target = new THREE.Vector3();
+  const target = new THREE.Vector3();
   const cameraOffset = new THREE.Vector3(-220, 245, 260);
-  const cameraRight = new THREE.Vector3(cameraOffset.z, 0, -cameraOffset.x).normalize();
-  const framingOffset = new THREE.Vector3();
   const touchScreen = window.matchMedia('(any-pointer: coarse)');
   const sunOffset = new THREE.Vector3(-110, 240, 100);
   const views = [{ height: 235, label: 'Scenic view' }, { height: 165, label: 'Medium view' }, { height: 115, label: 'Close view' }, { height: 75, label: 'Extra close view' }, { height: 115, label: 'Third-person view', thirdPerson: true }, { height: 115, label: 'First-person view', firstPerson: true }];
@@ -100,9 +101,8 @@ export function createRendering(canvas, graphics = new Graphics(), { showCarSilh
     const horizonDistance = (CITY_BLOCK * DISTANT_CITY_RADIUS - 20) / Math.hypot(1, slope, slope * lens.aspect);
     scene.fog.far = Math.min(profile.thirdFar, loadedDistance, horizonDistance);
     scene.fog.near = weatherFog ? Math.min(profile.thirdNear, scene.fog.far * .5) : profile.thirdNear;
+    fitFogDistance(lens, scene.fog);
   }
-  const lookAhead = new THREE.Vector3(-24, 0, -46);
-  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   function resize() {
     const width = window.innerWidth, height = window.innerHeight;
     const aspect = width / height;
@@ -116,29 +116,12 @@ export function createRendering(canvas, graphics = new Graphics(), { showCarSilh
   }
   function update(car, dt, origin) {
     followedCar = car;
-    const originShift = origin - previousOrigin; follow.z += originShift; previousOrigin = origin;
-    if (!initialized) { follow.copy(car.position); initialized = true; }
-    // Follow the car across the ground quickly and up the hill slowly. The two
-    // used to share one rate, and the slow one won: a steering input moved the
-    // car at once but took a third of a second to move the world, which reads
-    // as the car itself being late. Height is the one that has to stay gentle,
-    // because most of it is terrain rather than driving, and tracking every
-    // rise makes the whole miniature view bob. Reduced motion pins both, as
-    // before, which leaves the car nearly still on screen.
-    const groundRate = 1 - Math.exp(-dt * FOLLOW_GROUND);
-    follow.x += (car.position.x - follow.x) * groundRate;
-    follow.z += (car.position.z - follow.z) * groundRate;
-    follow.y += (car.position.y - follow.y) * (1 - Math.exp(-dt * (reducedMotion ? FOLLOW_GROUND : FOLLOW_HEIGHT)));
+    previousOrigin = origin; initialized = true;
     const nextHeight = THREE.MathUtils.damp(viewHeight, views[view].height, 4, dt);
     if (Math.abs(nextHeight - viewHeight) > .01) { viewHeight = nextHeight; resize(); }
-    // Shorten the look-ahead in close view so the car stays onscreen in portrait layouts.
-    const framing = Math.min(1, viewHeight / 165);
-    target.copy(follow).addScaledVector(lookAhead, framing);
-    if (touchScreen.matches || window.innerWidth < window.innerHeight) {
-      // Ease the desktop framing slightly toward center without changing vertical look-ahead.
-      const lateralOffset = framingOffset.copy(target).sub(follow).dot(cameraRight);
-      target.addScaledVector(cameraRight, -lateralOffset * .30);
-    }
+    // The car is already interpolated for this frame. Following that position
+    // directly keeps it centered while driving, zooming and rebasing the world.
+    target.copy(car.position);
     // A fixed azimuth and elevation keep the miniature city easy to read.
     camera.position.copy(target).add(cameraOffset); camera.lookAt(target);
     camera.userData.focusDistance = cameraOffset.length();
@@ -184,6 +167,7 @@ export function createRendering(canvas, graphics = new Graphics(), { showCarSilh
     updateFog();
   }
   function draw(viewCamera, stereo = false) {
+    beforeDraw(viewCamera);
     carSilhouette.update(followedCar, showCarSilhouette() && !stereo && viewCamera.isOrthographicCamera);
     // Hide the player's exterior for the whole first-person draw, including
     // shadows and AO. Restore it for other views and after render failures.
