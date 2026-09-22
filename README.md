@@ -6,6 +6,10 @@ Arcade taxi driving built with Three.js.
 
 Start a **Taxi run** with 90 seconds. Stop inside a pickup ring to board a passenger. Follow the arrow and map, then stop in the yellow drop-off ring before the fare timer expires.
 
+Customers appear at procedural street locations every few blocks throughout the endless city. Nearby customers load as you drive and distant ones unload. Choose a map dot, use **Next passenger**, or stop in any pickup ring. Carry one passenger at a time, then choose another after the trip.
+
+Returning to a pickup in the same seeded city recreates its destination, fare and colour. Collected customers have a 60-second cooldown before that pickup becomes available again.
+
 - Completed fares earn cash and add 18–30 seconds, with more time for longer trips.
 - Fast drop-offs, drifts, and near misses earn tips.
 - Combos multiply driving tips up to 3×. Crashes halve current tips; repeated contacts in one scrape count as one crash.

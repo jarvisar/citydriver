@@ -49,7 +49,7 @@ export class TaxiView {
         group.add(person);
       }
       group.traverse(object => { object.userData.ambientOcclusion = false; });
-      this.markers.push({ group, stop, arrow, ring, acrossScale, person, float }); this.group.add(group);
+      this.markers.push({ group, stop, arrow, ring, beam, acrossScale, person, float }); this.group.add(group);
     }
   }
   reset() { this.trails = []; this.trailIndex = 0; this.lastTrail = 0; this.skids.count = 0; this.revision = -1; }
@@ -59,6 +59,7 @@ export class TaxiView {
     if (this.revision !== run.revision) this.rebuild(run);
     this.group.position.z = origin;
     for (const marker of this.markers) {
+      const selected = run.status === 'driving' || marker.stop.id === run.target?.id;
       marker.group.position.set(marker.stop.u, 0, -marker.stop.s);
       if (marker.person) {
         const motion = walkerFloat(marker.float, time, passengerFloat);
@@ -67,8 +68,9 @@ export class TaxiView {
         marker.person.scale.y = 1.25 * motion.stretch;
       }
       marker.arrow.position.y = ROAD_LEVEL + 7 + Math.sin(time * 3) * .35;
-      marker.arrow.visible = run.status === 'driving' || marker.stop.id === run.target?.id;
-      const pulse = 1 + Math.sin(time * 4) * .035;
+      marker.arrow.scale.setScalar(selected ? 1 : .65);
+      marker.beam.visible = selected;
+      const pulse = selected ? 1 + Math.sin(time * 4) * .035 : 1;
       marker.ring.scale.set(marker.stop.axis === 'north' ? marker.acrossScale * pulse : pulse, 1, marker.stop.axis === 'east' ? marker.acrossScale * pulse : pulse);
     }
     if (vehicle.drifting && time - this.lastTrail > .065) {
@@ -100,11 +102,11 @@ export class TaxiView {
     $('taxi-arrow').style.transform = `rotate(${angle}rad)`;
     const length = routeDistance(taxiRoute(vehicle, stop));
     $('taxi-nav-distance').textContent = `${Math.round(length / 10) * 10} m`;
-    $('taxi-task-title').textContent = run.status === 'pickup' ? 'PICK UP' : stop.name;
+    $('taxi-task-title').textContent = run.status === 'pickup' ? 'CHOOSE A PICKUP' : stop.name;
     const pickup = run.status === 'pickup', nearStop = Math.hypot(stop.s - vehicle.s, stop.u - vehicle.u) < STOP_RADIUS;
     const instruction = nearStop
       ? Math.abs(vehicle.speed) >= 2.5 ? 'Brake to stop' : pickup ? 'Boarding…' : 'Dropping off…'
-      : pickup ? 'Stop in the ring' : 'Stop in the yellow ring';
+      : pickup ? 'Choose any pickup ring' : 'Stop in the yellow ring';
     $('taxi-task-detail').textContent = pickup
       ? `${stop.name} → ${stop.destination.name} · ${money(stop.fare)} · +${deliverySeconds(stop.length)}s · ${instruction}`
       : `${Math.ceil(run.fareLeft)}s · ${money(run.fare.fare + run.tips)} · ${instruction}`;

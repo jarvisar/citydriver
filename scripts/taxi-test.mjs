@@ -23,6 +23,18 @@ async function placeAtTarget(page) {
     v.render(1, a.world.origin); a.rendering.snap(); a.rendering.update(v.car, 1, a.world.origin);
   });
 }
+async function chooseCustomerOnMap(page, touch = false) {
+  const point = await page.evaluate(() => {
+    const a = window.__citydriver, rect = document.querySelector('#city-map').getBoundingClientRect();
+    const dots = a.taxi.customers.map(customer => ({ id: customer.id,
+      x: 104 + (customer.u - a.vehicle.u) * .36, y: 72 - (customer.s - a.vehicle.s) * .36 }));
+    const dot = dots.find(dot => dot.id !== a.taxi.target.id && dot.x > 15 && dot.x < 193 && dot.y > 20 && dot.y < 129);
+    if (!dot) throw new Error('No alternative customer visible on the local map');
+    return { id: dot.id, x: rect.left + dot.x * rect.width / 208, y: rect.top + dot.y * rect.height / 144 };
+  });
+  if (touch) await page.touchscreen.tap(point.x, point.y); else await page.mouse.click(point.x, point.y);
+  await page.waitForFunction(id => window.__citydriver.taxi.target.id === id, point.id);
+}
 try {
   const page = await openPage({ viewport: { width: 1440, height: 960 } });
   await page.screenshot({ path: '.artifacts/taxi/menu.png' });
@@ -30,6 +42,17 @@ try {
   await page.waitForFunction(() => getComputedStyle(document.querySelector('#welcome')).visibility === 'hidden');
   assert.equal(await page.evaluate(() => window.__citydriver.vehicle.carId), 'taxi');
   assert.equal(await page.evaluate(() => window.__citydriver.rendering.viewLabel), 'Third-person view');
+  const customers = await page.evaluate(() => {
+    const a = window.__citydriver;
+    return { offers: a.taxi.customers.length, markers: a.taxiView.markers.length,
+      arrows: a.taxiView.markers.filter(marker => marker.arrow.visible).length,
+      beams: a.taxiView.markers.filter(marker => marker.beam.visible).length, target: a.taxi.target.id };
+  });
+  assert.ok(customers.offers > 3); assert.equal(customers.markers, customers.offers); assert.equal(customers.arrows, customers.offers); assert.equal(customers.beams, 1);
+  await page.click('#next-city-stop');
+  assert.notEqual(await page.evaluate(() => window.__citydriver.taxi.target.id), customers.target);
+  await chooseCustomerOnMap(page);
+  assert.equal(await page.locator('#taxi-task-title').textContent(), 'CHOOSE A PICKUP');
   await page.screenshot({ path: '.artifacts/taxi/pickup.png' });
   await page.keyboard.down('KeyW'); await page.keyboard.down('ShiftLeft');
   await page.waitForFunction(() => window.__citydriver.taxi.boost < .85 && window.__citydriver.vehicle.speed > 10);
@@ -40,6 +63,9 @@ try {
   await page.evaluate(() => window.__citydriver.traffic.setEnabled(false, window.__citydriver.vehicle));
   await placeAtTarget(page); await page.click('#resume');
   await page.waitForFunction(() => window.__citydriver.taxi.status === 'driving');
+  await page.waitForFunction(() => window.__citydriver.taxiView.markers.length === 1);
+  await page.waitForFunction(() => document.querySelector('#next-city-stop').disabled);
+  assert.equal(await page.evaluate(() => window.__citydriver.taxiView.markers[0].person), null);
   assert.ok(await page.evaluate(() => window.__citydriver.taxi.fareLeft > 0));
   await page.screenshot({ path: '.artifacts/taxi/fare.png' });
   const deliveredType = await page.evaluate(() => window.__citydriver.taxi.target.type);
@@ -70,6 +96,7 @@ try {
   const mobile = await openPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
   await mobile.tap('#start'); await mobile.waitForFunction(() => window.__citydriver.taxi.running);
   await mobile.waitForFunction(() => getComputedStyle(document.querySelector('#welcome')).visibility === 'hidden');
+  await chooseCustomerOnMap(mobile, true);
   assert.ok(await mobile.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
   const boost = await mobile.locator('[data-drive-button=boost]').boundingBox(), stick = await mobile.locator('#touch-stick').boundingBox();
   assert.ok(boost.x + boost.width < stick.x || boost.y + boost.height < stick.y, 'boost and joystick must not overlap');

@@ -5,11 +5,25 @@ import { CityExploration, placeRoute, routeDistance } from './city-exploration.j
 import { taxiRoute } from './taxi-run.js';
 
 const $ = id => document.getElementById(id);
+const MAP_SCALE = .36;
 export class CityGuide {
   constructor(notify, position) {
     let storage; try { storage = localStorage; } catch { /* Optional storage. */ }
     this.exploration = new CityExploration(storage); this.notify = notify; this.position = position;
     this.canvas = $('city-map'); this.ctx = this.canvas.getContext('2d'); this.expanded = true;
+    this.canvas.addEventListener('click', event => {
+      if (this.taxi?.status !== 'pickup') return;
+      const rect = this.canvas.getBoundingClientRect(), vehicle = this.position();
+      const x = (event.clientX - rect.left) * 208 / rect.width, y = (event.clientY - rect.top) * 144 / rect.height;
+      let closest = null, radius = 12;
+      for (const customer of this.taxi.customers) {
+        const cx = 104 + (customer.u - vehicle.u) * MAP_SCALE, cy = 72 - (customer.s - vehicle.s) * MAP_SCALE;
+        if (cx < 5 || cy < 5 || cx > 203 || cy > 139) continue;
+        const d = Math.hypot(cx - x, cy - y);
+        if (d < radius) { closest = customer; radius = d; }
+      }
+      if (closest && this.taxi.select(closest.id)) this.updateTaxi();
+    });
     $('city-notebook').innerHTML = PLACE_TYPES.map(type => `<button type="button" class="notebook-place" data-place-type="${type}" title="${CITY_PLACES[type].description}" style="--place-color:${CITY_PLACES[type].color}"><span class="notebook-stamp">${CITY_PLACES[type].symbol}</span><span><strong>${CITY_PLACES[type].name}</strong><small>${CITY_PLACES[type].short}</small></span><span class="notebook-check" aria-hidden="true">○</span></button>`).join('');
     for (const button of document.querySelectorAll('[data-place-type]')) button.addEventListener('click', () => this.next(button.dataset.placeType));
     $('next-city-stop').addEventListener('click', () => { this.next(); $('next-city-stop').blur(); });
@@ -60,10 +74,11 @@ export class CityGuide {
     const run = this.taxi, vehicle = this.position(), target = run.target;
     $('next-city-stop').disabled = run.status !== 'pickup';
     $('next-city-stop').textContent = run.status === 'pickup' ? `Next passenger · $${target.fare}` : `Fare $${run.fare.fare + run.tips}`;
+    this.canvas.title = run.status === 'pickup' ? 'Tap a customer dot to choose your pickup' : 'Route to the drop-off';
     if (this.expanded) this.draw(vehicle, taxiRoute(vehicle, target), run.status === 'pickup' ? run.customers : [{ ...target, color: '#ffd238' }], target);
   }
   draw(vehicle, route, places = this.exploration.places, target = this.exploration.target) {
-    const ctx = this.ctx, width = 208, height = 144, scale = .36;
+    const ctx = this.ctx, width = 208, height = 144, scale = MAP_SCALE;
     const ratio = Math.min(window.devicePixelRatio || 1, 2);
     if (this.canvas.width !== width * ratio || this.canvas.height !== height * ratio) { this.canvas.width = width * ratio; this.canvas.height = height * ratio; }
     ctx.setTransform(ratio, 0, 0, ratio, 0, 0); ctx.clearRect(0, 0, width, height);

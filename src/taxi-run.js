@@ -1,10 +1,13 @@
-import { CITY_BLOCK as B, nearestCityStreet, cityStreetProfile } from './world/city-grid.js';
+import { CITY_BLOCK as B, nearestCityStreet, cityStreetProfile, cityStreetAt } from './world/city-grid.js';
 import { nearbyPlaces, routeDistance } from './city-exploration.js';
 import { cityLayout, cityLogical, cityLanePose, cityRoutePoints } from './world/city-layout.js';
+import { randomAt } from './world/route.js';
 
 export const SHIFT_SECONDS = 90;
 export const STOP_RADIUS = 8;
 export const STOP_SECONDS = .45;
+const CUSTOMER_RANGE = B * 3;
+const CUSTOMER_COLORS = ['#a4f264', '#54dfe0', '#f8ba55', '#d6adff', '#ffaaa1', '#9dcaff'];
 // Long trips should earn back more of their travel time, without making the
 // shift self-sustaining simply by completing every fare before its deadline.
 export const deliverySeconds = length => 18 + Math.min(12, Math.round(Math.max(0, length - 400) / 60));
@@ -15,6 +18,7 @@ const PASSENGERS = {
   hospital: 'Hospital visitor', observatory: 'Stargazer', music: 'Jazz fan', sports: 'Club member', firehouse: 'Firefighter',
   park: 'Park visitor', plaza: 'Cafe regular',
 };
+const PASSENGER_TYPES = Object.keys(PASSENGERS);
 
 export function taxiRoute(player, target) {
   if (!target) return [];
@@ -55,6 +59,27 @@ const placeStop = place => {
   return { ...cityLanePose('east', center - street.lane, p.u), axis: 'east', index, side: 1, name: place.name, type: place.type, district: place.district };
 };
 
+// Stable street addresses make pickups agree across overlapping neighborhoods.
+// Only the nearby window is materialized; the city has no finite offer list.
+function nearbyCustomerStops(player) {
+  const address = cityLogical(player.s, player.u), ix = Math.floor(address.u / B), iz = Math.floor(address.s / B);
+  const stops = [];
+  for (let x = ix - 3; x <= ix + 3; x++) for (let z = iz - 3; z <= iz + 3; z++) {
+    // One pickup site per two blocks, with a seeded street, curb and position.
+    if ((x + z) % 2 !== 0) continue;
+    const axis = randomAt(x, z + 19110) < .5 ? 'north' : 'east';
+    const north = axis === 'north', index = north ? x : z, segment = north ? z : x;
+    const variation = randomAt(x, z + (north ? 19210 : 19310));
+    const side = variation < .5 ? -1 : 1, street = cityStreetProfile(axis, index);
+    const along = (segment + .3 + randomAt(x, z + (north ? 19410 : 19510)) * .4) * B;
+    const lane = index * B + (north ? 1 : -1) * street.lane * side;
+    const stop = { ...cityLanePose(axis, lane, along, side), axis, index, side, id: `${axis}:${index}:${segment}`,
+      fareSeed: Math.floor(randomAt(x, z + 19610) * 0xffffffff) };
+    if (distance(stop, player) <= CUSTOMER_RANGE && !cityStreetAt(stop.s, stop.u).bridge) stops.push(stop);
+  }
+  return stops.sort((a, b) => distance(a, player) - distance(b, player) || a.id.localeCompare(b.id));
+}
+
 export class TaxiRun {
   constructor(storage = null) {
     this.storage = storage; this.best = 0; this.status = 'idle'; this.events = []; this.revision = 0;
@@ -66,41 +91,61 @@ export class TaxiRun {
     this.status = 'pickup'; this.timeLeft = SHIFT_SECONDS; this.cash = 0; this.delivered = 0; this.failed = 0;
     this.boost = 1; this.boostActive = false; this.elapsed = 0; this.combo = 1; this.comboTime = 0;
     this.tips = 0; this.hold = 0; this.fare = null; this.events = []; this.driftTime = 0; this.crashCooldown = 0;
-    this.recentDestinations = [];
+    this.recentDestinations = []; this.customers = []; this.selected = 0;
+    this.servedCustomers = new Map();
     this.lastImpact = player.audioTelemetry?.impactSerial ?? 0; this.makeCustomers(player);
   }
-  stop() { this.status = 'idle'; this.customers = []; this.fare = null; this.boostActive = false; this.revision++; }
-  makeCustomers(player) {
-    const places = nearbyPlaces(player.s, player.u, 6);
-    const stops = [leadStop(player)];
-    for (const place of places) {
-      const stop = placeStop(place);
-      if (stops.every(other => distance(stop, other) > STOP_RADIUS * 3)) stops.push(stop);
-      if (stops.length === 3) break;
-    }
-    const offered = new Set();
-    this.customers = stops.map((stop, i) => {
-      const choices = places.map(place => ({ ...placeStop(place), id: place.id }))
-        .map(destination => ({ destination, length: routeDistance(taxiRoute(stop, destination)) }))
-        .filter(route => route.length >= 280 && route.length <= 1100);
-      // Prefer different kinds of trips, even where several nearby blocks are parks.
-      const fresh = choices.filter(({ destination }) => !offered.has(destination.type) && !this.recentDestinations.includes(destination.type));
-      const diverse = choices.filter(({ destination }) => !offered.has(destination.type));
-      const options = fresh.length ? fresh : diverse.length ? diverse : choices;
-      const types = [...new Set(options.map(({ destination }) => destination.type))];
-      const type = types[(this.delivered * 3 + this.failed + i * 2) % types.length];
-      const routes = options.filter(({ destination }) => destination.type === type);
-      const route = routes[(this.delivered + i) % routes.length];
+  stop() { this.status = 'idle'; this.customers = []; this.servedCustomers?.clear(); this.fare = null; this.boostActive = false; this.revision++; }
+  makeCustomers(player, chooseAhead = true) {
+    const selected = !chooseAhead ? this.target : null, previous = this.customers;
+    for (const [id, until] of this.servedCustomers) if (until <= this.elapsed) this.servedCustomers.delete(id);
+    const waiting = new Map(previous.map(customer => [customer.id, customer]));
+    const stops = nearbyCustomerStops(player).filter(stop => !this.servedCustomers.has(stop.id))
+      .map(stop => waiting.get(stop.id) ?? stop);
+    // Keep the driver's chosen customer a little beyond the streaming edge.
+    if (selected && distance(selected, player) <= CUSTOMER_RANGE * 1.5 && !stops.some(stop => stop.id === selected.id)) stops.push(selected);
+    this.customers = stops.map(stop => {
+      if (stop.destination) return stop;
+      // Derive the entire offer from this pickup, not the driver's approach
+      // or trip history, so unloading and revisiting recreates the same fare.
+      const destinations = nearbyPlaces(stop.s, stop.u, 6).map(place => ({ ...placeStop(place), id: place.id }));
+      // Rank cheaply before tracing any streets. Usually only one or two
+      // routes need sampling, even when many new blocks enter the window.
+      const choices = destinations.filter(destination => distance(stop, destination) <= 1100)
+        .map((destination, j) => ({ destination, variety: randomAt(stop.fareSeed, j + 19710),
+          rank: randomAt(stop.fareSeed, PASSENGER_TYPES.indexOf(destination.type) + 19810) }))
+        .sort((a, b) => a.rank - b.rank || a.variety - b.variety);
+      let route;
+      for (const { destination } of choices) {
+        const length = routeDistance(taxiRoute(stop, destination));
+        if (length >= 280 && length <= 1100) { route = { destination, length }; break; }
+      }
       const address = cityLogical(stop.s, stop.u);
       const destination = route?.destination ?? placeStop({ ...cityLayout(Math.round(address.s / B) * B + B / 2, Math.round(address.u / B) * B + 3.5 * B), name: 'Downtown' });
       const length = route?.length ?? routeDistance(taxiRoute(stop, destination));
-      offered.add(destination.type);
-      return { ...stop, id: `${this.revision}-${i}`, name: PASSENGERS[destination.type] ?? 'Passenger', destination, length,
-        fare: Math.round(40 + length * .28), limit: Math.ceil(18 + length / 14), color: i === 0 ? '#a4f264' : i === 1 ? '#54dfe0' : '#f8ba55' };
+      return { ...stop, name: PASSENGERS[destination.type] ?? 'Passenger', destination, length,
+        fare: Math.round(40 + length * .28), limit: Math.ceil(18 + length / 14),
+        color: CUSTOMER_COLORS[Math.floor(randomAt(stop.fareSeed, 19910) * CUSTOMER_COLORS.length)] };
     });
-    this.selected = 0; this.hold = 0; this.revision++;
+    this.selected = Math.max(0, this.customers.findIndex(stop => stop.id === selected?.id));
+    if (chooseAhead) {
+      const ahead = this.customers.findIndex(stop => (stop.s - player.s) * Math.cos(player.heading)
+        + (stop.u - player.u) * Math.sin(player.heading) > 20 && !this.recentDestinations.includes(stop.destination.type));
+      if (ahead >= 0) this.selected = ahead;
+    }
+    if (chooseAhead) this.hold = 0;
+    this.customerCenter = { s: player.s, u: player.u };
+    this.nextCustomerRefresh = this.elapsed + 1;
+    if (previous.length !== this.customers.length || previous.some((stop, i) => stop !== this.customers[i])) this.revision++;
   }
-  next() { if (this.status === 'pickup') this.selected = (this.selected + 1) % this.customers.length; }
+  select(id) {
+    if (this.status !== 'pickup') return false;
+    const index = this.customers.findIndex(customer => customer.id === id);
+    if (index < 0) return false;
+    if (index !== this.selected) this.hold = 0;
+    this.selected = index; return true;
+  }
+  next() { if (this.status === 'pickup' && this.customers.length) this.select(this.customers[(this.selected + 1) % this.customers.length].id); }
   controls(dt, input) {
     const gas = input.forward > 0 || input.touchDrive?.amount > .1;
     this.boostActive = this.running && Boolean(input.boost) && gas && !input.brake && !input.handbrake && this.boost > .01;
@@ -139,11 +184,17 @@ export class TaxiRun {
       }
     }
     if (this.status === 'pickup') {
+      if (this.elapsed >= this.nextCustomerRefresh) {
+        this.nextCustomerRefresh = this.elapsed + 1;
+        if (distance(player, this.customerCenter) > B / 2) this.makeCustomers(player, false);
+      }
       const passenger = this.customers.find(p => distance(p, player) < STOP_RADIUS);
-      if (passenger) this.selected = this.customers.indexOf(passenger);
+      if (passenger && passenger.id !== this.target?.id) { this.selected = this.customers.indexOf(passenger); this.hold = 0; }
       this.hold = passenger && Math.abs(player.speed) < 2.5 ? this.hold + dt : 0;
       if (this.hold >= STOP_SECONDS) {
         this.fare = passenger; this.fareLeft = passenger.limit; this.status = 'driving';
+        this.customers = this.customers.filter(customer => customer !== passenger);
+        this.servedCustomers.set(passenger.id, this.elapsed + 60);
         this.hold = 0; this.tips = 0; this.combo = 1; this.driftTime = 0; this.passed = new WeakSet(); this.revision++;
         this.events.push({ kind: 'pickup', text: passenger.destination.name });
       }

@@ -50,8 +50,8 @@ test('pickup and payment require stopping; successful fares add cash and time on
 test('expanded destinations offer distinct customers, reachable stops and varied successive fares', () => {
   const car = player(), run = new TaxiRun(), visited = new Set(); run.start(car);
   for (let trip = 0; trip < 24; trip++) {
-    assert.equal(run.customers.length, 3);
-    assert.equal(new Set(run.customers.map(c => c.destination.type)).size, 3);
+    assert.ok(run.customers.length > 3 && run.customers.length <= 26);
+    assert.ok(new Set(run.customers.map(c => c.destination.type)).size >= 3);
     for (const customer of run.customers) {
       assert.notEqual(customer.name, 'Passenger');
       assert.ok(customer.length >= 280 && customer.length <= 1100);
@@ -59,13 +59,97 @@ test('expanded destinations offer distinct customers, reachable stops and varied
       assert.equal(cityStreetAt(customer.destination.s, customer.destination.u).median, false);
       for (const other of run.customers) if (other !== customer) assert.ok(Math.hypot(other.s - customer.s, other.u - customer.u) > 24);
     }
-    assert.ok(!run.recentDestinations.includes(run.target.destination.type), 'recent destinations are avoided when alternatives exist');
+    assert.ok(run.customers.some(c => !run.recentDestinations.includes(c.destination.type)), 'fresh destinations remain available alongside persistent offers');
     pickup(run, car); visited.add(run.target.type);
     Object.assign(car, { s: run.target.s, u: run.target.u, speed: 0 });
     run.update(.5, car);
     assert.equal(run.delivered, trip + 1);
   }
   assert.ok(visited.size >= 10, `a shift explores many different destinations: ${[...visited]}`);
+});
+
+test('customers keep appearing across an unbounded city with a bounded nearby population', () => {
+  const car = player(), run = new TaxiRun(), seen = new Set(), counts = new Set(); run.start(car);
+  for (const [s, u] of [[25, 3], [137, 3], [249, 3], [10025, -10077], [-25063, 32003], [-120000, -139997], [400025, 550003]]) {
+    Object.assign(car, cityLayout(s, u), { speed: 12 });
+    run.update(1.1, car);
+    assert.equal(run.status, 'pickup');
+    assert.ok(run.customers.length > 3 && run.customers.length <= 26, 'only the spatial neighborhood is loaded');
+    counts.add(run.customers.length);
+    assert.ok(run.target);
+    assert.equal(new Set(run.customers.map(c => c.id)).size, run.customers.length);
+    assert.ok(run.customers.filter(c => Math.hypot(c.s - car.s, c.u - car.u) < 224).length >= 3, 'several choices stay within a couple of blocks');
+    for (const customer of run.customers) {
+      seen.add(customer.id);
+      assert.ok(Math.hypot(customer.s - car.s, customer.u - car.u) <= 504);
+      const street = cityStreetAt(customer.s, customer.u);
+      assert.ok(street.onRoad && !street.median && !street.bridge);
+    }
+  }
+  assert.ok(seen.size > 40, 'exploration generates new offers instead of moving the original three');
+  assert.ok(counts.size > 1, 'the available population follows the streets, not a fixed offer count');
+});
+
+test('nearby offers and a selected passenger survive streaming without rebuilding while stationary', () => {
+  const car = player(), run = new TaxiRun(); run.start(car);
+  const selected = run.customers[3]; assert.equal(run.select(selected.id), true);
+  const before = new Map(run.customers.map(c => [c.id, c]));
+  car.speed = 12; run.update(1.1, car);
+  const revision = run.revision;
+  for (let i = 0; i < 120; i++) run.update(1 / 60, car);
+  assert.equal(run.revision, revision, 'standing still does not regenerate routes or rebuild markers');
+  Object.assign(car, cityLayout(90, 3)); run.update(1.1, car);
+  assert.equal(run.target, selected);
+  for (const customer of run.customers) if (before.has(customer.id)) assert.equal(customer, before.get(customer.id));
+  assert.ok(run.customers.filter(c => before.has(c.id)).length >= 6, 'nearby waiting passengers remain in place');
+});
+
+test('unloaded fares regenerate identically regardless of approach, trip history or run restart', () => {
+  for (const [s, u] of [[25, 3], [-221, -890]]) {
+    const home = cityLayout(s, u), car = player(home.s, home.u), run = new TaxiRun(); run.start(car);
+    const original = new Map(run.customers.map(customer => [customer.id, customer]));
+    Object.assign(car, cityLayout(s + 20000, u - 20000), { speed: 12 }); run.update(1.1, car);
+    assert.ok(run.customers.every(customer => !original.has(customer.id)), 'the original offers have actually unloaded');
+    run.delivered = 7; run.failed = 3;
+    run.recentDestinations = [...new Set([...original.values()].map(customer => customer.destination.type))];
+    Object.assign(car, cityLayout(s + 65, u - 45), { heading: Math.PI }); run.update(1.1, car);
+    const returning = run.customers.filter(customer => original.has(customer.id));
+    assert.ok(returning.length >= 5);
+    for (const customer of returning) {
+      assert.notEqual(customer, original.get(customer.id), 'a new object was generated');
+      assert.deepEqual(customer, original.get(customer.id), 'all offer details agree, including destination, price, timer and colour');
+    }
+    Object.assign(car, home); run.start(car);
+    for (const customer of run.customers) assert.deepEqual(customer, original.get(customer.id));
+  }
+});
+
+test('collected fares keep their cooldown and regenerate the seeded offer after it expires', () => {
+  const car = player(), run = new TaxiRun(); run.start(car);
+  const original = run.target; pickup(run, car);
+  run.fareLeft = .01; run.update(.02, car);
+  assert.ok(!run.customers.some(customer => customer.id === original.id));
+  Object.assign(car, cityLayout(20025, -19997), { speed: 12 }); run.update(1.1, car);
+  run.update(60, car);
+  Object.assign(car, { s: original.s, u: original.u }); run.update(1.1, car);
+  assert.deepEqual(run.customers.find(customer => customer.id === original.id), original);
+});
+
+test('any waiting customer can board but an active fare cannot be replaced or stacked', () => {
+  const car = player(), run = new TaxiRun(); run.start(car);
+  const passenger = run.customers[4], others = run.customers.filter(c => c !== passenger);
+  Object.assign(car, { s: passenger.s, u: passenger.u, speed: 0 });
+  run.update(.5, car);
+  assert.equal(run.fare, passenger); assert.equal(run.status, 'driving');
+  assert.ok(!run.customers.includes(passenger));
+  assert.equal(run.select(others[0].id), false); run.next();
+  Object.assign(car, { s: others[0].s, u: others[0].u }); run.update(.5, car);
+  assert.equal(run.fare, passenger); assert.equal(run.target, passenger.destination);
+  assert.equal(run.drainEvents().filter(e => e.kind === 'pickup').length, 1);
+  run.fareLeft = .01; run.update(.02, car);
+  assert.equal(run.status, 'pickup'); assert.ok(run.customers.length > 1);
+  assert.ok(!run.customers.some(c => c.id === passenger.id), 'a boarded passenger does not immediately respawn');
+  run.stop(); assert.equal(run.customers.length, 0); assert.equal(run.servedCustomers.size, 0);
 });
 
 test('late fares fail, shift expiry ends the run, and restart clears state but retains best', () => {
