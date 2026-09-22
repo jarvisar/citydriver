@@ -73,6 +73,12 @@ try {
   await page.waitForFunction(() => window.__citydriver.taxi.delivered === 1);
   await page.waitForFunction(type => window.__citydriver.cityGuide.exploration.found.has(type), deliveredType);
   const cash = await page.evaluate(() => window.__citydriver.taxi.cash); assert.ok(cash > 0);
+  assert.equal(await page.evaluate(() => window.__citydriver.taxi.target), null);
+  await page.waitForFunction(() => document.querySelector('#taxi-nav').hidden);
+  assert.equal(await page.locator('#next-city-stop').textContent(), 'Choose passenger');
+  assert.equal(await page.evaluate(() => window.__citydriver.taxiView.markers.filter(marker => marker.beam.visible).length), 0);
+  await page.click('#next-city-stop');
+  await page.waitForFunction(() => window.__citydriver.taxi.target && !document.querySelector('#taxi-nav').hidden);
   await placeAtTarget(page); await page.waitForFunction(() => window.__citydriver.taxi.status === 'driving');
   await page.evaluate(() => { window.__citydriver.taxi.fareLeft = .05; });
   await page.waitForFunction(() => window.__citydriver.taxi.failed === 1);

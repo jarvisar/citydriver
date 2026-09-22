@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
+import { CITY_HALL_BLOCK } from '../src/world/city-places.js';
 import { cityBlock, CITY_BLOCK, PAVEMENT_LEVEL } from '../src/world/city-grid.js';
 import { cityLogical, cityLayout, cityRigidFrame } from '../src/world/city-layout.js';
 import { blockStreets } from '../src/world/city-streets.js';
@@ -9,6 +10,7 @@ import { publicSpacePlan, SPACE_NAMES, entrancePath } from '../src/world/city-pu
 import { pathPanels, signedArea, subtractPolygon, distanceToPath, insetPolygon, containsPoint } from '../src/world/city-surfaces.js';
 import { ellipsePoints, pondOutline, roundDisk, basinRim, pondRim, basinWater, pondWater, canopy, planet } from '../src/world/city-public-space-geometry.js';
 import { grassGeometry, MAX_GRASS_TUFTS } from '../src/world/city-grass.js';
+import { donutDough, donutGlaze } from '../src/world/city-donut.js';
 import { cityAffinePoint } from '../src/world/city-layout-render.js';
 
 // Retain generated instances so near/far structures can be compared directly.
@@ -30,13 +32,15 @@ function samples() {
     const blocks = result.get(key), ordinary = type === 'park' || type === 'plaza';
     if (blocks.length < (ordinary ? 4 : 3) && (!ordinary || blocks.every(other => publicSpacePlan(other).orientation !== design.orientation))) blocks.push(b);
   }
+  const hall = cityBlock(CITY_HALL_BLOCK.ix, CITY_HALL_BLOCK.iz);
+  result.set('cityhall-0', [hall]);
   return result;
 }
 test('public spaces cover every destination design and neighbouring ordinary spaces never duplicate their layout', () => {
   const found = samples(); assert.equal(found.size, Object.values(SPACE_NAMES).reduce((n, designs) => n + designs.length, 0));
   for (const blocks of found.values()) {
     const ordinary = blocks[0].kind === 'park' || blocks[0].kind === 'plaza';
-    assert.equal(blocks.length, ordinary ? 4 : 3);
+    assert.equal(blocks.length, blocks[0].landmark === 'cityhall' ? 1 : ordinary ? 4 : 3);
     if (ordinary) assert.equal(new Set(blocks.map(b => publicSpacePlan(b).orientation)).size, 4);
     for (const block of blocks) {
       const design = publicSpacePlan(block);
@@ -141,6 +145,60 @@ test('large round silhouettes stay rounded within a small shared geometry budget
     assert.ok((geometry.index?.count ?? geometry.attributes.position.count) / 3 <= budget);
     assert.ok([...geometry.attributes.position.array, ...geometry.attributes.normal.array].every(Number.isFinite));
   }
+});
+
+test('new venues join their actual door thresholds and stay within a small near/far geometry budget', () => {
+  const entries = {
+    postoffice: { anchor: [56, 70], edge: [56, 50.25], width: 8 },
+    bathhouse: { anchor: [56, 79], edge: [56, 67.25], width: 8 },
+    farmersmarket: { anchor: [36, 74], edge: [36, 59.75], width: 5 },
+    donut: { anchor: [56, 68], edge: [56, 52.25], width: 7 },
+    cityhall: { anchor: [56, 71], edge: [56, 42.5], width: 10 },
+  };
+  const world = new CitydriverWorld(new THREE.Scene());
+  try {
+    for (const [key, blocks] of samples()) for (const block of blocks) {
+      const entry = entries[block.landmark]; if (!entry) continue;
+      for (const distant of [false, true]) {
+        const c = new PublicSpaceChunk(block.ix, block.iz, world.materials, distant);
+        try {
+          const triangles = [...c.batches.values()].reduce((n, b) => n + (b.geometry.index?.count ?? b.geometry.attributes.position.count) / 3 * b.items.length, 0);
+          assert.ok(triangles < (distant ? 4000 : 6000), `${key}: ${triangles} triangles`);
+          assert.ok(!distant || !c.batches.has('structure-market-produce'), 'small produce is omitted at a distance');
+          const walk = c.features.walkways.find(p => p.endSection);
+          assert.ok(walk, `${key}: a continuous entry walk`);
+          const frame = cityRigidFrame(c.start + entry.anchor[1], c.east + entry.anchor[0]);
+          const anchor = { s: c.start + entry.anchor[1], u: c.east + entry.anchor[0] };
+          for (const [i, sign] of [[0, -1], [1, 1]]) {
+            const [x, s] = walk.endSection[i], actual = cityLayout(c.start + s, c.east + x);
+            const expected = cityAffinePoint(c.start + entry.edge[1] + .12, c.east + entry.edge[0] + sign * entry.width / 2, anchor, frame);
+            assert.ok(Math.hypot(actual.u - expected.u, actual.s - expected.s) < 1e-6, `${key}: paving overlaps the whole door sill`);
+          }
+        } finally { c.dispose(); }
+      }
+    }
+  } finally { world.dispose(); }
+});
+
+test('the rooftop donut has an open hole and continuous frosting within a shared geometry budget', () => {
+  const material = new THREE.MeshBasicMaterial();
+  try {
+    const dough = new THREE.Mesh(donutDough, material), icing = new THREE.Mesh(donutGlaze, material);
+    const ray = new THREE.Raycaster(new THREE.Vector3(0, 0, 10), new THREE.Vector3(0, 0, -1));
+    assert.equal(ray.intersectObjects([dough, icing]).length, 0, 'the central hole remains open');
+    let triangles = 0;
+    for (const geometry of [donutDough, donutGlaze]) {
+      triangles += geometry.index.count / 3;
+      assert.ok([...geometry.attributes.position.array, ...geometry.attributes.normal.array].every(Number.isFinite));
+    }
+    assert.ok(triangles <= 1440, 'the entire giant donut shares just two modest meshes');
+    for (let i = 0; i < 80; i++) for (const radius of [7, 9, 11]) {
+      const a = (i + .3) / 80 * Math.PI * 2;
+      ray.ray.origin.set(Math.cos(a) * radius, Math.sin(a) * radius, 10);
+      const top = ray.intersectObject(icing)[0], base = ray.intersectObject(dough)[0];
+      assert.ok(top && base && top.distance < base.distance, 'icing faces outward and never cuts through the dough');
+    }
+  } finally { material.dispose(); }
 });
 
 test('basin water is recessed inside visible coping with no solid cap over the water', () => {

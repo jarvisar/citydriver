@@ -100,6 +100,15 @@ export class TaxiView {
     $('taxi-boost-fill').style.width = `${run.boost * 100}%`;
     $('taxi-boost').setAttribute('aria-valuenow', String(Math.round(run.boost * 100)));
     const stop = run.target;
+    $('taxi-nav').hidden = !stop;
+    if (!stop) {
+      $('taxi-task-title').textContent = 'CHOOSE A PICKUP';
+      $('taxi-task-detail').textContent = 'Stop at any pickup ring or choose a passenger on the map';
+      $('taxi-stop-progress').style.width = '0%';
+      $('taxi-combo').textContent = '';
+      $('taxi-task').dataset.stage = run.status;
+      return;
+    }
     const angle = Math.atan2(stop.u - vehicle.u, stop.s - vehicle.s) - vehicle.heading;
     $('taxi-arrow').style.transform = `rotate(${angle}rad)`;
     const length = routeDistance(taxiRoute(vehicle, stop));

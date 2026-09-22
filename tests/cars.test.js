@@ -45,7 +45,8 @@ test('every car builds a solid, steerable model', () => {
 // two racers by being quicker at everything, the specials by being lopsided.
 const RACERS = ['sports', 'formula'];
 const SPECIALS = ['buggy', 'monster', 'hotrod', 'rig', 'micro'];
-const CHOOSER_ONLY = [...RACERS, ...SPECIALS, 'taxi'];
+const TAXIS = CAR_IDS.filter(id => CARS[id].taxi);
+const CHOOSER_ONLY = [...RACERS, ...SPECIALS, ...TAXIS];
 
 test('every car can reverse from rest and after braking off road', () => {
   for (const id of CAR_IDS) for (const fps of [30, 60, 144]) for (const startingSpeed of [0, 12]) {
@@ -83,7 +84,7 @@ test('the coastal wagon keeps the original handling and every car stays close to
   // and the order is the character: off-roaders keep most, racers least.
   // The specials sit outside that band on purpose, in both directions.
   const share = id => carStats(id).offRoad / carStats(id).topSpeed;
-  const looseShare = { formula: [.35, .45], hotrod: [.5, .6], buggy: [.88, .95], monster: [.88, .95] };
+  const looseShare = { taxiFormula: [.55, .57], formula: [.35, .45], hotrod: [.5, .6], buggy: [.88, .95], monster: [.88, .95] };
   for (const id of CAR_IDS) {
     const [least, most] = looseShare[id] ?? [.6, .7];
     assert.ok(share(id) >= least && share(id) <= most, `${id} keeps ${(share(id) * 100).toFixed(0)}% off the tarmac`);
@@ -99,7 +100,7 @@ test('each special is the best in the garage at one thing and pays for it', () =
   const worst = (key, ids = road) => Math.min(...ids.map(id => carStats(id)[key]));
   const { buggy, monster, hotrod, rig, micro } = Object.fromEntries(SPECIALS.map(id => [id, carStats(id)]));
   // The buggy is the quickest thing across open ground, racers included.
-  assert.ok(buggy.offRoad > best('offRoad', CAR_IDS.filter(id => !['buggy', 'taxi'].includes(id))));
+  assert.ok(buggy.offRoad > best('offRoad', CAR_IDS.filter(id => !['buggy', ...TAXIS].includes(id))));
   assert.ok(buggy.acceleration > best('acceleration') && buggy.topSpeed < worst('topSpeed'));
   // The monster truck gives up the least when the road ends, and is clumsy on it.
   assert.ok(monster.offRoad > best('offRoad', [...road, ...RACERS]) && monster.topSpeed - monster.offRoad <= 2);
@@ -273,10 +274,10 @@ test('the racers and specials stay in the chooser, and traffic keeps its own fiv
   assert.ok(carMeters('formula').slice(0, 3).every(({ level }) => level === 100));
   assert.ok(looseMeter.label === 'Off road' && looseMeter.level < 80);
   for (const [index, meter] of carMeters('sports').entries()) {
-    const road = CAR_IDS.filter(id => !['formula', 'taxi', ...SPECIALS].includes(id));
+    const road = CAR_IDS.filter(id => !['formula', ...TAXIS, ...SPECIALS].includes(id));
     assert.ok(road.every(id => carMeters(id)[index].level <= meter.level), `${meter.label} should top out at the coupe`);
   }
-  for (const id of CAR_IDS.filter(id => !['formula', 'taxi'].includes(id))) for (const { label, level } of carMeters(id)) {
+  for (const id of CAR_IDS.filter(id => !['formula', ...TAXIS].includes(id))) for (const { label, level } of carMeters(id)) {
     assert.ok(level > 6 && level < 100, `${id} is off the ${label} scale`);
   }
   assert.ok(carMeters('buggy')[3].level > 90 && carMeters('hotrod')[0].level > 90 && carMeters('micro')[2].level > 90);

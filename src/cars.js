@@ -34,7 +34,16 @@ const BASE = { topSpeed: 28, acceleration: 11.3, braking: 20, grip: 1, offRoad: 
 export const CARS = {
   taxi: {
     name: 'Taxi', kind: 'built', taxi: true, paint: '#f5c42e', shape: { ...shape('sedan'), name: 'taxi' },
-    stats: { topSpeed: 42, acceleration: 22, braking: 32, grip: 1.5, offRoad: 28 },
+    stats: { topSpeed: 40, acceleration: 21, braking: 32, grip: 1.4, offRoad: 28 },
+  },
+  taxiGT: {
+    name: 'GT Taxi', kind: 'built', taxi: true, paint: '#f5c42e', shape: SPORTS_MODEL,
+    stats: { topSpeed: 46, acceleration: 29, braking: 34, grip: 1.55, offRoad: 28 },
+  },
+  taxiFormula: {
+    name: 'Formula Taxi', mass: .95, kind: 'formula', taxi: true, paint: '#f5c42e',
+    shape: { ...FORMULA_SHAPE, name: 'taxi-formula', cabin: [1.12, .34, 1.1], eye: [-.28, .88, -.76] },
+    stats: { topSpeed: 50, acceleration: 40, braking: 36, grip: 1.7, offRoad: 28 },
   },
   auto: {
     name: 'Default',

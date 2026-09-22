@@ -16,7 +16,10 @@ try {
   const sites = await page.evaluate(async () => {
     const { cityBlock } = await import('/src/world/city-grid.js');
     const { publicSpacePlan, SPACE_NAMES } = await import('/src/world/city-public-space-kit.js');
+    const { CITY_HALL_BLOCK } = await import('/src/world/city-places.js');
     const found = new Map();
+    const hall = cityBlock(CITY_HALL_BLOCK.ix, CITY_HALL_BLOCK.iz);
+    found.set('cityhall-0', { key: 'cityhall-0', ...CITY_HALL_BLOCK, ...publicSpacePlan(hall) });
     for (let ix = -40; ix <= 40; ix++) for (let iz = -40; iz <= 40; iz++) {
       const b = cityBlock(ix, iz); if (!SPACE_NAMES[b.landmark || b.kind]) continue;
       const plan = publicSpacePlan(b), key = `${plan.type}-${plan.variant}`;
@@ -28,7 +31,7 @@ try {
     window.__citydriver.rendering.renderer.domElement.style.visibility = 'visible';
     return [...found.values()].sort((a, b) => Object.keys(SPACE_NAMES).indexOf(a.type) - Object.keys(SPACE_NAMES).indexOf(b.type) || a.variant - b.variant);
   });
-  assert.equal(sites.length, 53);
+  assert.equal(sites.length, 66);
   const cases = sites.concat([
     { key: 'north-river-join', name: 'North–south river bank', type: 'river', ix: 3, iz: 2, focus: [28, 12.6] },
     { key: 'east-river-join', name: 'East–west river bank', type: 'river', ix: 2, iz: 5, focus: [12.6, 84.4] },
@@ -62,6 +65,7 @@ try {
         park: [[58, 78], [65, 58], [74, 37], [56, 56]], plaza: [[54, 52], [42, 48], [56, 74], [45, 44]],
         clock: [[56, 32], [31, 39], [29, 62]], market: [[33, 50], [56, 50], [50, 50]],
         garden: [[39, 35], [56, 47], [73, 50]], depot: [[56, 61], [56, 60], [72, 69]], art: [[56, 56], [56, 56], [56, 56]],
+        donut: [[56, 68], [56, 68], [56, 68]],
       };
       let [fx, fs] = focus ?? locations[type]?.[variant] ?? [56, 40];
       if (type === 'park' || type === 'plaza') {
@@ -69,17 +73,30 @@ try {
       }
       const detail = cityLayout(chunk.start + fs, chunk.east + fx), px = detail.u - chunk.east, pz = chunk.start - detail.s;
       Object.assign(camera, { left: -35, right: 35, top: 30.14, bottom: -30.14 }); camera.updateProjectionMatrix();
-      camera.position.set(px + 135, 185, pz + 145); camera.lookAt(px, 24, pz);
+      camera.position.set(px + 135, 185, pz + 145); camera.lookAt(px, type === 'donut' ? 39 : 24, pz);
       renderer.render(scene, camera); result.detailPng = renderer.domElement.toDataURL('image/png');
+      if (['postoffice', 'bathhouse', 'farmersmarket', 'donut', 'cityhall'].includes(type)) {
+        result.review = {};
+        Object.assign(camera, { left: -68, right: 68, top: 58.6, bottom: -58.6 }); camera.updateProjectionMatrix();
+        for (const [view, dx, height, dz] of [['entrance', 15, 64, 170], ['rear', -130, 115, -140], ['evening', 115, 155, 135]]) {
+          if (view === 'evening') {
+            scene.background.set('#687e8a'); scene.children.find(o => o.isHemisphereLight).intensity = .65;
+            sun.intensity = .65; sun.color.set('#e4b68e');
+          }
+          camera.position.set(x + dx, height, z + dz); camera.lookAt(x, type === 'cityhall' ? 24 : 12, z);
+          renderer.render(scene, camera); result.review[view] = renderer.domElement.toDataURL('image/png');
+        }
+      }
       // Keep this scene alive until the screenshot is captured.
       window.spacePreview?.chunk.dispose(); window.spacePreview?.sun.shadow.map?.dispose();
       window.spacePreview = { chunk, sun };
       return result;
     }, site);
-    const { png, detailPng, ...geometry } = counts;
+    const { png, detailPng, review, ...geometry } = counts;
     assert.ok(geometry.triangles > 500);
     await writeFile(`${output}/${site.key}.png`, Buffer.from(png.split(',')[1], 'base64'));
     await writeFile(`${output}/${site.key}-detail.png`, Buffer.from(detailPng.split(',')[1], 'base64'));
+    for (const [view, data] of Object.entries(review ?? {})) await writeFile(`${output}/${site.key}-${view}.png`, Buffer.from(data.split(',')[1], 'base64'));
     report.push({ ...site, ...geometry });
   }
   await page.setViewportSize({ width: 1440, height: 1000 });

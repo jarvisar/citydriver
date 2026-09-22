@@ -16,8 +16,11 @@ Returning to a pickup in the same seeded city recreates its destination, fare an
 - Boost recharges when released.
 - Resetting the cab costs 5 seconds.
 - Best cash total is saved locally. Pause and hidden tabs stop the clock.
+- Every completed fare also banks cash toward your taxi fleet. Buy the **GT Taxi ($1,500)** or **Formula Taxi ($4,500)** from **Pause → Taxi fleet** or the results screen. Purchases are permanent and selections apply to the next run; restarting keeps completed earnings.
 
 **Free drive** has no timer and includes the garage, weather settings, and landmark map.
+
+All three taxis are free to use in the Free Drive garage. See [taxi fleet balance and checks](docs/taxi-fleet.md) for the upgrade stats and pricing.
 
 On the main menu, press forward to enter free drive, or press **R** to generate a new city. **Start run** starts a taxi run.
 
@@ -43,7 +46,7 @@ Gridded neighborhoods blend into curved waterfront roads and looser districts. R
 | Camera | V | X / Square |
 | Pause | P / Escape | Start / Menu |
 | Reset | R | Y / Triangle |
-| Garage (free drive) | C / G | L3 |
+| Garage / Taxi fleet | C / G | L3 |
 | Autodrive (free drive) | H | D-pad Up |
 | Fullscreen | F | LB / L1 |
 | Sound | M | Pause menu |
@@ -70,6 +73,7 @@ npm test
 npm run build
 npm run test:browser
 npm run test:taxi
+npm run test:fleet
 npm run test:layout
 npm run test:performance
 npm run test:pwa

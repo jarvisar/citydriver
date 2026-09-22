@@ -2,6 +2,7 @@ import { CITY_BLOCK as B, nearestCityStreet, cityStreetProfile, cityStreetAt } f
 import { nearbyPlaces, routeDistance } from './city-exploration.js';
 import { cityLayout, cityLogical, cityLanePose, cityRoutePoints } from './world/city-layout.js';
 import { randomAt } from './world/route.js';
+import { TaxiFleet } from './taxi-fleet.js';
 
 export const SHIFT_SECONDS = 90;
 export const STOP_RADIUS = 8;
@@ -17,6 +18,9 @@ const PASSENGERS = {
   cinema: 'Moviegoer', hotel: 'Hotel guest', museum: 'Museum visitor', station: 'Rail commuter', library: 'Reader',
   hospital: 'Hospital visitor', observatory: 'Stargazer', music: 'Jazz fan', sports: 'Club member', firehouse: 'Firefighter',
   park: 'Park visitor', plaza: 'Cafe regular',
+  postoffice: 'Postal worker', bathhouse: 'Morning swimmer', farmersmarket: 'Market gardener',
+  donut: 'Coffee regular',
+  cityhall: 'City clerk',
 };
 const PASSENGER_TYPES = Object.keys(PASSENGERS);
 
@@ -82,6 +86,7 @@ function nearbyCustomerStops(player) {
 
 export class TaxiRun {
   constructor(storage = null) {
+    this.fleet = new TaxiFleet(storage);
     this.storage = storage; this.best = 0; this.status = 'idle'; this.events = []; this.revision = 0;
     try { const best = Number(storage?.getItem('citydriver-taxi-best')); if (Number.isFinite(best) && best > 0) this.best = Math.floor(best); } catch { /* Optional storage. */ }
   }
@@ -91,7 +96,7 @@ export class TaxiRun {
     this.status = 'pickup'; this.timeLeft = SHIFT_SECONDS; this.cash = 0; this.delivered = 0; this.failed = 0;
     this.boost = 1; this.boostActive = false; this.elapsed = 0; this.combo = 1; this.comboTime = 0;
     this.tips = 0; this.hold = 0; this.fare = null; this.events = []; this.driftTime = 0; this.crashCooldown = 0;
-    this.recentDestinations = []; this.customers = []; this.selected = 0;
+    this.recentDestinations = []; this.customers = []; this.selected = 0; this.blockedPickup = null;
     this.servedCustomers = new Map();
     this.lastImpact = player.audioTelemetry?.impactSerial ?? 0; this.makeCustomers(player);
   }
@@ -127,11 +132,11 @@ export class TaxiRun {
         fare: Math.round(40 + length * .28), limit: Math.ceil(18 + length / 14),
         color: CUSTOMER_COLORS[Math.floor(randomAt(stop.fareSeed, 19910) * CUSTOMER_COLORS.length)] };
     });
-    this.selected = Math.max(0, this.customers.findIndex(stop => stop.id === selected?.id));
+    this.selected = selected ? Math.max(0, this.customers.findIndex(stop => stop.id === selected.id)) : -1;
     if (chooseAhead) {
       const ahead = this.customers.findIndex(stop => (stop.s - player.s) * Math.cos(player.heading)
         + (stop.u - player.u) * Math.sin(player.heading) > 20 && !this.recentDestinations.includes(stop.destination.type));
-      if (ahead >= 0) this.selected = ahead;
+      this.selected = Math.max(0, ahead);
     }
     if (chooseAhead) this.hold = 0;
     this.customerCenter = { s: player.s, u: player.u };
@@ -142,6 +147,7 @@ export class TaxiRun {
     if (this.status !== 'pickup') return false;
     const index = this.customers.findIndex(customer => customer.id === id);
     if (index < 0) return false;
+    if (this.blockedPickup?.id === id) this.blockedPickup = null;
     if (index !== this.selected) this.hold = 0;
     this.selected = index; return true;
   }
@@ -190,7 +196,9 @@ export class TaxiRun {
       }
       // Passing another ring should not replace the driver's chosen route.
       // Only switch customers when slow enough to begin boarding.
-      const passenger = Math.abs(player.speed) < 2.5 ? this.customers.find(p => distance(p, player) < STOP_RADIUS) : null;
+      if (this.blockedPickup && distance(this.blockedPickup, player) >= STOP_RADIUS) this.blockedPickup = null;
+      const passenger = Math.abs(player.speed) < 2.5
+        ? this.customers.find(p => p.id !== this.blockedPickup?.id && distance(p, player) < STOP_RADIUS) : null;
       if (passenger && passenger.id !== this.target?.id) { this.selected = this.customers.indexOf(passenger); this.hold = 0; }
       this.hold = passenger ? this.hold + dt : 0;
       if (this.hold >= STOP_SECONDS) {
@@ -229,9 +237,13 @@ export class TaxiRun {
       const speedBonus = Math.round(this.fare.fare * .5 * this.fareLeft / this.fare.limit);
       const paid = this.fare.fare + this.tips + speedBonus, seconds = deliverySeconds(this.fare.length);
       this.cash += paid; this.delivered++; this.timeLeft = Math.min(120, this.timeLeft + seconds);
+      this.fleet.credit(paid);
       this.recentDestinations = [...this.recentDestinations, this.fare.destination.type].slice(-3);
       this.events.push({ kind: 'paid', text: `+$${paid} · +${seconds}s`, paid });
-      this.status = 'pickup'; this.fare = null; this.tips = 0; this.combo = 1; this.makeCustomers(player);
+      this.status = 'pickup'; this.fare = null; this.tips = 0; this.combo = 1; this.hold = 0;
+      this.selected = -1; this.makeCustomers(player, false);
+      // Overlapping pickups wait until the driver leaves the ring or chooses them.
+      this.blockedPickup = this.customers.find(p => distance(p, player) < STOP_RADIUS) ?? null;
     }
   }
   drainEvents() { return this.events.splice(0); }

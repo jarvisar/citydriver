@@ -11,6 +11,7 @@
     "test": "node --import ./tests/world-seed.js --test tests/*.test.js",
     "test:browser": "node scripts/citydriver-test.mjs",
     "test:taxi": "node scripts/taxi-test.mjs",
+    "test:fleet": "node scripts/taxi-fleet-test.mjs",
     "test:city": "node scripts/citydriver-test.mjs",
     "test:layout": "node scripts/city-layout-test.mjs",
     "test:spaces": "node scripts/public-spaces-test.mjs",

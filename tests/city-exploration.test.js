@@ -3,11 +3,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { cityBlock, cityStreetAt, cityRiverAt, CITY_BLOCK, ROAD_HALF_WIDTH } from '../src/world/city-grid.js';
-import { landmarkForBlock, PLACE_TYPES, LANDMARK_TYPES, LANDMARK_SPACING, destinationType } from '../src/world/city-places.js';
+import { landmarkForBlock, PLACE_TYPES, REPEATING_LANDMARK_TYPES, CITY_HALL_BLOCK, LANDMARK_SPACING, destinationType } from '../src/world/city-places.js';
 import { cityRiverAxes } from '../src/world/city-waterways.js';
 import { randomAt } from '../src/world/route.js';
 import { CitydriverWorld } from '../src/world/citydriver-world.js';
-import { CityExploration, nearbyPlaces, placeRoute, routeDistance } from '../src/city-exploration.js';
+import { CityExploration, placeForBlock, nearbyPlaces, placeRoute, routeDistance } from '../src/city-exploration.js';
 import { walkerPose } from '../src/world/city-life.js';
 import { cityLayout, cityLogical } from '../src/world/city-layout.js';
 
@@ -25,9 +25,11 @@ test('every four-by-four neighbourhood has one reproducible landmark on dry land
         assert.equal(cityRiverAt(p.u, p.s), null);
       }
     }
-    assert.equal(landmarks.length, 1, `neighbourhood ${rx},${rz}`);
+    const civicRegion = Math.floor(CITY_HALL_BLOCK.ix / LANDMARK_SPACING) === rx && Math.floor(CITY_HALL_BLOCK.iz / LANDMARK_SPACING) === rz;
+    if (civicRegion) assert.ok(landmarks.length === 1 || landmarks.length === 2, 'City Hall may replace a park in the same region');
+    else assert.equal(landmarks.length, 1, `neighbourhood ${rx},${rz}`);
   }
-  assert.equal(types.size, LANDMARK_TYPES.length);
+  assert.equal([...types].filter(t => t !== 'cityhall').length, REPEATING_LANDMARK_TYPES.length);
 });
 
 test('ordinary building blocks increase by roughly 30 percent while parks and plazas remain varied', () => {
@@ -76,7 +78,7 @@ test('suggested routes stay on connected streets and bridge decks across all qua
 
 test('landmark stamps require an active drive near the road and persist once per type', () => {
   const memory = new Map(), storage = { getItem: k => memory.get(k), setItem: (k, v) => memory.set(k, v) };
-  const guide = new CityExploration(storage), places = nearbyPlaces(0, 0, 20);
+  const guide = new CityExploration(storage), places = nearbyPlaces(0, 0, 20).filter(p => p.type !== 'cityhall').concat(placeForBlock(cityBlock(CITY_HALL_BLOCK.ix, CITY_HALL_BLOCK.iz)));
   for (const type of PLACE_TYPES) {
     const place = places.find(p => p.type === type); assert.ok(place);
     const { s, u } = cityLayout(place.logicalS - 59, place.logicalU);
@@ -113,8 +115,17 @@ test('destinations can be cycled, selected by type, and refreshed after resettin
 });
 
 test('the expanded notebook preserves old stamps and can route to every new destination category', () => {
-  const guide = new CityExploration({ getItem: () => '["clock","market","garden","depot","art"]' });
-  assert.equal(guide.found.size, 5);
+  const existing = ['clock', 'market', 'garden', 'depot', 'art', 'cinema', 'hotel', 'museum', 'station', 'library', 'hospital', 'observatory', 'music', 'sports', 'firehouse', 'park', 'plaza'];
+  const guide = new CityExploration({ getItem: () => JSON.stringify(existing) });
+  assert.equal(PLACE_TYPES.length, 22);
+  assert.deepEqual([...guide.found], existing, 'all seventeen existing stamps survive');
+  for (const type of ['postoffice', 'bathhouse', 'farmersmarket', 'donut', 'cityhall']) assert.ok(!guide.found.has(type), 'new stamps start uncollected');
+  const completed = new CityExploration({ getItem: () => JSON.stringify([...existing, 'postoffice', 'bathhouse', 'farmersmarket']) });
+  assert.equal(completed.found.size, 20, 'the completed twenty-place notebook survives the donut shop addition');
+  assert.ok(!completed.found.has('donut'));
+  const beforeCityHall = new CityExploration({ getItem: () => JSON.stringify([...completed.found, 'donut']) });
+  assert.equal(beforeCityHall.found.size, 21, 'all twenty-one stamps survive the City Hall addition');
+  assert.ok(!beforeCityHall.found.has('cityhall'));
   const destinations = nearbyPlaces(0, 3);
   assert.ok(destinations.some(p => p.type === 'park'));
   assert.ok(destinations.some(p => p.type === 'plaza'));
@@ -129,7 +140,7 @@ test('the expanded notebook preserves old stamps and can route to every new dest
 });
 
 test('all landmark geometry streams with colliders clear of roads and stable distant silhouettes', () => {
-  const world = new CitydriverWorld(new THREE.Scene()), places = nearbyPlaces(0, 0, 20);
+  const world = new CitydriverWorld(new THREE.Scene()), places = nearbyPlaces(0, 0, 20).filter(p => p.type !== 'cityhall').concat(placeForBlock(cityBlock(CITY_HALL_BLOCK.ix, CITY_HALL_BLOCK.iz)));
   try {
     for (const type of PLACE_TYPES) {
       const place = places.find(p => p.type === type);

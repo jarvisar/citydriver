@@ -1,20 +1,21 @@
 import { CITY_BLOCK, cityBlock, cityCell, cityStreetAt, nearestCityStreet } from './world/city-grid.js';
-import { CITY_PLACES, PLACE_TYPES, destinationType } from './world/city-places.js';
+import { CITY_PLACES, PLACE_TYPES, CITY_HALL_BLOCK, destinationType } from './world/city-places.js';
 import { publicSpacePlan } from './world/city-public-space-kit.js';
 import { cityLayout, cityLogical, cityRoutePoints } from './world/city-layout.js';
 
+export function placeForBlock(block) {
+  const type = destinationType(block); if (!type) return null;
+  const { ix, iz } = block, logicalS = (iz + .5) * CITY_BLOCK, logicalU = (ix + .5) * CITY_BLOCK;
+  const design = publicSpacePlan(block);
+  return { id: block.key, type, ...CITY_PLACES[type], design: design.name, district: block.district,
+    name: block.landmark ? CITY_PLACES[type].name : design.name, logicalS, logicalU,
+    ...cityLayout(logicalS, logicalU), entrance: cityLayout(iz * CITY_BLOCK, logicalU) };
+}
 export function nearbyPlaces(s, u, radius = 8) {
   const cell = cityCell(s, u), places = [];
   for (let ix = cell.ix - radius; ix <= cell.ix + radius; ix++) for (let iz = cell.iz - radius; iz <= cell.iz + radius; iz++) {
-    const block = cityBlock(ix, iz);
-    const type = destinationType(block);
-    if (type) {
-      const logicalS = (iz + .5) * CITY_BLOCK, logicalU = (ix + .5) * CITY_BLOCK;
-      const design = publicSpacePlan(block);
-      places.push({ id: block.key, type, ...CITY_PLACES[type], design: design.name, district: block.district,
-        name: block.landmark ? CITY_PLACES[type].name : design.name, logicalS, logicalU,
-        ...cityLayout(logicalS, logicalU), entrance: cityLayout(iz * CITY_BLOCK, logicalU) });
-    }
+    const place = placeForBlock(cityBlock(ix, iz));
+    if (place) places.push(place);
   }
   return places.sort((a, b) => Math.hypot(a.s - s, a.u - u) - Math.hypot(b.s - s, b.u - u) || a.id.localeCompare(b.id));
 }
@@ -55,7 +56,7 @@ export class CityExploration {
     const cell = cityCell(s, u).key;
     if (this.cell !== cell) {
       this.cell = cell; this.places = nearbyPlaces(s, u);
-      if (this.target && Math.hypot(this.target.s - s, this.target.u - u) > CITY_BLOCK * 36) this.target = null;
+      if (this.target && this.target.type !== 'cityhall' && Math.hypot(this.target.s - s, this.target.u - u) > CITY_BLOCK * 36) this.target = null;
     }
     if (!this.target) this.target = this.places.find(p => !this.found.has(p.type)) ?? this.places[0] ?? null;
   }
@@ -63,7 +64,8 @@ export class CityExploration {
     this.refresh(s, u);
     const choices = [...this.places].sort((a, b) => Math.hypot(a.s - s, a.u - u) - Math.hypot(b.s - s, b.u - u));
     // A specific notebook entry can be farther away than the local map window.
-    const selected = type ? choices.find(p => p.type === type) ?? (PLACE_TYPES.includes(type) ? nearbyPlaces(s, u, 24).find(p => p.type === type) : null)
+    const selected = type === 'cityhall' ? placeForBlock(cityBlock(CITY_HALL_BLOCK.ix, CITY_HALL_BLOCK.iz))
+      : type ? choices.find(p => p.type === type) ?? (PLACE_TYPES.includes(type) ? nearbyPlaces(s, u, 24).find(p => p.type === type) : null)
       : choices[(choices.findIndex(p => p.id === this.target?.id) + 1) % choices.length];
     if (!selected) return null;
     this.target = selected;

@@ -31,7 +31,7 @@ occupy one dry block per four-by-four neighborhood, and 3% of the remaining dry
 blocks become parks/squares. Parks retain 65% of that allocation. This produces
 about 30% more normal building blocks than the former three-by-three / 20%
 distribution, without increasing individual building footprints or changing
-streets. All 17 discovery categories and 53 designs remain available.
+streets. There are now 22 discovery categories and 66 designs; the added categories share the existing landmark allocation.
 
 All choices occur during chunk construction. Planting uses an independent seeded
 stream; detail-only flowers, benches and produce cannot change the main layout.
@@ -87,7 +87,7 @@ stripes from a shallow raised disk.
 
 ## Silhouette, entrance and contrast audit
 
-The refinement pass covers all 53 current public-space/destination designs:
+The original refinement pass covered all 53 then-existing public-space/destination designs:
 rounded fountains and paving, softly sampled pond/meadow/conservatory walks,
 properly shaped caf√© umbrellas, and round observatory walls and sculpture bases.
 Trees, angular sculptures and rectilinear architecture keep their deliberate
@@ -134,7 +134,7 @@ grassy block; distant batches are unchanged.
 
 ## Verification
 
-- Generate all 53 designs at three real addresses each, with a fourth address
+- Generate all 66 designs at three real addresses each, with a fourth address
   for ordinary parks and plazas to cover every orientation. Check deterministic
   revisits, matching near/far structures, orthogonal transforms, street
   clearance and bounded instance counts. Verify planting clears paths, other
@@ -142,7 +142,7 @@ grassy block; distant batches are unchanged.
   beside walking routes.
 - Run the complete unit suite with multiple world seeds and build production.
 - `npm run test:spaces` renders all designs in the real browser renderer and
-  saves a labelled visual gallery, a close-up gallery of all 53 designs and three
+  saves a labelled visual gallery, a close-up gallery of all 66 designs and three
   river junctions, plus geometry counts under
   `.artifacts/public-spaces/`. Set `TEST_URL` for a non-default dev-server port.
 - Inspect both the design gallery and the spaces within the surrounding city.
@@ -158,3 +158,59 @@ grassy block; distant batches are unchanged.
 The variants are authored families, not a promise that no two parks anywhere
 in the infinite city will ever resemble one another. Distinct adjacent layouts
 and a consistent visual language are the intended balance.
+
+## Three additional discoveries
+
+Central Post Office combines a brick sorting hall with sawtooth skylights, an
+envelope crest, mailboxes, parked vans and a sheltered entrance. Mosaic Baths
+uses three closed terracotta vaults, glazed lunettes, contrasting tiled pool
+edges, entry rails, seating and a colonnaded terrace. Harvest Market is an
+open-air produce fair: a bakery, striped gabled stalls, flower displays, cafe
+tables, and variants with a shaded seating pavilion or flower cart.
+
+The additional venues have three designs each. They use existing city materials
+and instanced boxes/roofs; only a twelve-triangle vault end and twenty-triangle
+produce model add shared geometry. Produce, flowers, labels and small crates
+are near-only. The landmark allocation and ordinary-building density remain
+unchanged. A regression test limits each venue (excluding roads and street
+furniture) to 6,000 nearby triangles and 4,000 distant triangles, and verifies
+the entire entrance walk width overlaps its rigid doorway sill across sampled
+curved blocks. Existing tests cover road clearance, planting, deterministic
+revisits, and stable detail transitions.
+
+The public-space browser review also captures entrance, rear and evening views
+of each of the nine new designs, alongside the full 66-design gallery.
+
+## Lucky Donut
+
+The twenty-first discovery is a compact retro donut shop with a freestanding
+rooftop donut, strawberry/chocolate/maple icing, sprinkles, a sheltered storefront,
+pastry-box windows and cafe tables. Its narrower 42 m shopfront opens onto a
+curved forecourt with round seating pads and subtle teal tile inlays, instead
+of the axial cross used by many other landmarks. Every walking route connects
+to the perimeter paving or the actual door sill.
+
+The giant donut uses two shared meshes: a 40-by-10-section dough torus and a
+six-row frosting surface with uneven inner/outer edges and closed lips. Together
+they contain 1,440 triangles. Sprinkles reuse the city box batch and disappear
+at distance; the ring, frosting, roof and supports keep the same silhouettes.
+Ray tests verify the open hole and continuous outward-facing icing. The whole
+venue uses the same 6,000 nearby / 4,000 distant triangle budgets as the previous
+three additions. Review images cover each flavor from above, the entrance,
+the rear and in evening light.
+
+## One civic landmark
+
+City Hall uses a single design at one seeded address near the original spawn.
+It replaces an existing POI randomly selected 4ñ6 blocks away, expanding the
+search if necessary. It is excluded from recurring landmark selection. The
+visual gallery explicitly includes its unique address, which may be far from
+logical (0, 0); unlike repeating designs, it has only one sample per world.
+
+Columns use the shared 24-section cylinder, roofs use the shared gable and
+mansard geometries, and facade details reuse box instances. The six entrance
+risers meet the portico floor and raised doorway. The same entrance-width,
+road-clearance, stable-LOD and 6,000/4,000 triangle budgets cover City Hall.
+Placement tests verify different offsets across eight seeds, one copy, actual
+POI replacement, the expanding-search fallback and notebook selection from
+outside the local neighborhood.

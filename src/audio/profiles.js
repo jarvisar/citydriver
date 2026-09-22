@@ -23,7 +23,8 @@ export const ENGINES = {
   rig: voice({ idle: 600, redline: 2300, cylinders: 6, gearing: .42, body: 2, rasp: .9, intake: .25, harmonics: [1, .8, .35, .3, .1, .05] }),
   micro: voice({ idle: 1100, redline: 6000, gearing: 1.7, body: .45, rasp: 1.1, intake: .7, harmonics: [1, .3, .5, .12, .2, .05] }),
 };
-export const engineFor = (car, journey = 'coast') => ENGINES[car === 'auto' ? journey : car] ?? ENGINES.coast;
+const TAXI_ENGINES = { taxiGT: 'sports', taxiFormula: 'formula' };
+export const engineFor = (car, journey = 'coast') => ENGINES[car === 'auto' ? journey : TAXI_ENGINES[car] ?? car] ?? ENGINES.coast;
 
 export const AMBIENCE = {
   coast: { low: 430, high: 2700, bed: .16, swell: .2, air: .025, wash: .14, rough: 1100, wildlife: 'gull', interval: [8, 18], root: 57 },

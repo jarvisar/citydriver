@@ -2,13 +2,17 @@ import * as THREE from 'three';
 import { PAVEMENT_LEVEL as G } from './city-grid.js';
 import { bed, cafeTable, disk, path, entrancePath, pergola, pool, reserve } from './city-public-space-kit.js';
 import { rectanglePolygon } from './city-surfaces.js';
-import { planet } from './city-public-space-geometry.js';
-import { barrelRoof } from './city-roofs.js';
+import { planet, basinRim, curvedPath, ellipsePoints } from './city-public-space-geometry.js';
+import { barrelRoof, pitchedRoof, sawtoothRoof, mansardRoof } from './city-roofs.js';
+import { donutDough, donutGlaze, sprinklePosition } from './city-donut.js';
 
 // Shared instances keep the new venues as inexpensive to stream as a city block.
 const lettering = new THREE.PlaneGeometry(1, 1);
 const dome = new THREE.SphereGeometry(1, 24, 10, Math.PI / 2 + .16, Math.PI * 2 - .32, 0, Math.PI / 2);
-export const VENUE_NAMES = ['RIVOLI', 'RIVOLI TOWER', 'GRAND HOTEL', 'MUSEUM', 'UNION', 'LIBRARY', 'HOSPITAL', 'PLANETARIUM', 'BLUE NOTE', 'ATHLETIC CLUB', 'FIRE STATION'];
+export const VENUE_NAMES = ['RIVOLI', 'RIVOLI TOWER', 'GRAND HOTEL', 'MUSEUM', 'UNION', 'LIBRARY', 'HOSPITAL', 'PLANETARIUM', 'BLUE NOTE', 'ATHLETIC CLUB', 'FIRE STATION', 'POST OFFICE', 'MOSAIC BATHS', 'FARMERS MARKET', 'BAKERY', 'LUCKY DONUT', 'CITY HALL'];
+// Two small shared primitives; produce has just twenty faces and is near-only.
+const vaultEnd = new THREE.CircleGeometry(1, 12, 0, Math.PI);
+const produce = new THREE.IcosahedronGeometry(1, 0);
 const cream = '#ede0bf', dark = '#354e58', copper = '#62958b';
 
 function sign(c, label, x, s, y, width, height = 2.4, yaw = 0) {
@@ -317,4 +321,335 @@ function firehouse(c, { variant: v, palette: p }) {
   pool(c, 76, 28, 13, 10, p.stone);
 }
 
-export const DESTINATION_BUILDERS = { cinema, hotel, museum, station, library, hospital, observatory, music, sports, firehouse };
+function postalVan(c, x, s, color) {
+  c.rigid(x, s, () => {
+    c.box(x, G + 1.7, s + 1, 4.6, 3, 7.4, color);
+    c.box(x, G + 1.6, s - 4, 4.5, 2.7, 3.3, color);
+    c.box(x, G + 2.3, s - 5.72, 3.6, 1.05, .15, '#91b5b2', 'glass');
+    c.box(x, G + 3.28, s + 1, 4.7, .25, 7.6, cream);
+    for (const dx of [-2.3, 2.3]) {
+      for (const ds of [-3.6, 3.4]) c.box(x + dx, G + .7, s + ds, .55, 1.4, 1.4, dark);
+      c.box(x + dx * 1.015, G + 1.9, s + 1, .08, 1.1, 3.2, cream);
+    }
+    c.box(x, G + .65, s - 5.8, 4.6, .35, .35, cream);
+    for (const dx of [-1.5, 1.5]) c.box(x + dx, G + 1.35, s - 5.83, .65, .5, .1, '#ffe0a0', 'lit');
+    if (!c.distant) {
+      c.box(x, G + 1.8, s + 4.74, .1, 2.4, .1, cream);
+      for (const dx of [-1.9, 1.9]) c.box(x + dx, G + 1.1, s + 4.76, .35, .7, .1, '#b85e4e');
+    }
+    c.solid(x, s, 5.2, 12);
+  });
+}
+function postoffice(c, { variant: v, palette: p }) {
+  const brick = ['#b77c61', '#bf9d7b', '#ad8070'][v], postal = ['#557f80', '#a75949', '#4f738b'][v];
+  hall(c, 56, 70, 58, 38, 16, brick, 2);
+  c.structure(56, 70, () => {
+    sawtoothRoof(c, { x: 56, s: 72, width: 54, depth: 30, wall: brick, roof: '#71938c' }, G + 16.3);
+    for (const x of [28, 43, 69, 84]) c.box(x, G + 8, 50.65, .9, 16, .65, cream);
+    c.box(56, G + 12.8, 50.3, 24, 4.5, .8, postal);
+    sign(c, 'POST OFFICE', 56, 49.86, 12.8, 21, 2.6);
+    // The envelope crest is readable even when lettering disappears at distance.
+    c.box(56, G + 19, 53, 15, 7, 6, brick);
+    c.box(56, G + 22.7, 53, 16, .7, 7, cream);
+    c.box(56, G + 19, 49.9, 8.4, 4.4, .3, cream);
+    for (const side of [-1, 1]) c.box(56 + side * 2, G + 19.5, 49.68, 4.7, .19, .12, postal, 'solid', 0, side * .48);
+    c.box(56, G + 5.25, 48.5, 15, .6, 5, postal);
+    if (!c.distant) for (const x of [48.5, 63.5]) {
+      c.box(x, G + 3.1, 50.1, .7, 1.4, .4, '#f1d9a0', 'lit');
+      c.box(x, G + 3.9, 50.1, 1, .2, .7, dark);
+    }
+  });
+  entrancePath(c, [[56, 16], [56, 50.25]], 8, p.path, [56, 70], [56, 50.25]);
+  path(c, [[16, 43], [96, 43]], 4, p.path);
+  for (const x of v === 1 ? [32] : [32, 80]) postalVan(c, x, 30, postal);
+  if (v === 1) { pergola(c, 80, 29, 12, 15); c.prop('bench', 80, 29); }
+  for (const x of [45, 67]) c.rigid(x, 24, () => {
+    c.box(x, G + 1.1, 24, .45, 2.2, .45, dark);
+    c.box(x, G + 2.3, 24, 2.3, 2.1, 1.5, postal);
+    c.box(x, G + 3.43, 24, 2.6, .25, 1.8, cream);
+    c.box(x, G + 2.6, 23.21, 1.6, .17, .08, dark); c.post(x, 24, 1.2);
+  });
+  gardenEdge(c, p, [22, 90], [55, 88]);
+  for (const x of [24, 88]) c.prop('bench', x, 39);
+}
+function bathhouse(c, { variant: v, palette: p }) {
+  const tile = ['#5a9997', '#65918a', '#618ca6'][v], terracotta = ['#be8066', '#cfab87', '#b57b69'][v];
+  // Three closed vaults, with inset glazed end panels and cream ribs.
+  hall(c, 56, 79, 62, 22, 10, '#dcccb0', 1);
+  c.structure(56, 79, () => {
+    for (const x of [35, 56, 77]) {
+      barrel(c, x, 79, 20, 24, 11.3, terracotta);
+      for (const side of [-1, 1]) {
+        c.item('venue-vault-end', vaultEnd, c.materials.solid, [x, G + 11.3, -(79 + side * 11)], [10, 5.5, 1], cream, side === 1 ? Math.PI : 0);
+        c.item('venue-vault-end', vaultEnd, c.materials.glass, [x, G + 11.45, -(79 + side * 11.08)], [7.8, 4, 1], tile, side === 1 ? Math.PI : 0);
+        for (const dx of [-4, 0, 4]) c.box(x + dx, G + 12.9, 79 + side * 11.15, .17, 3, .15, cream);
+      }
+      // High, opaque skylight caps use the existing shared glass material.
+      c.box(x, G + 16.9, 79, 3.5, .5, 10, '#9bc5bf', 'glass');
+    }
+    for (const x of [26, 42, 70, 86]) {
+      c.box(x, G + 3.3, 64.5, .7, 6.6, .7, cream); c.post(x, 64.5, .4);
+    }
+    c.box(56, G + 6.7, 65, 62, .6, 5.5, tile);
+    sign(c, 'MOSAIC BATHS', 56, 62.2, 6.7, 23, 1.8);
+    for (const x of [27, 39, 73, 85]) {
+      c.box(x, G + 1.2, 67.8, 2, 2.4, .3, tile);
+      if (!c.distant) for (const y of [.5, 1.3, 2.1]) c.box(x, G + y, 67.59, 1, .35, .12, cream);
+    }
+  });
+  entrancePath(c, [[56, 16], [56, 67.25]], 8, p.path, [56, 79], [56, 67.25]);
+  path(c, [[16, 60], [96, 60]], 4, p.path);
+  for (const x of [34, 78]) {
+    const w = v === 2 ? 24 : 22, d = v === 2 ? 24 : 29;
+    pool(c, x, 39, w, d, cream, v === 1);
+    c.rigid(x, 39, () => {
+      c.item('public-basin-rim', basinRim, c.materials.solid, [x, G + .11, -39], [w / 2 + .65, .12, d / 2 + .65], tile);
+      const edge = 39 - d / 2;
+      // Low entry rails and underwater rungs distinguish baths from fountains.
+      for (const dx of [-1.1, 1.1]) {
+        for (const ds of [-1.1, 1.8]) c.box(x + dx, G + .88, edge + ds, .13, 1.65, .13, '#b7c9be');
+        c.box(x + dx, G + 1.7, edge + .35, .13, .13, 3.1, '#b7c9be');
+      }
+      for (const y of [.3, .65, 1]) c.box(x, G + y, edge + 1.8, 2.2, .13, .35, '#b7c9be');
+      c.solid(x, edge + .35, 2.5, 3.1);
+    });
+    // A narrow tiled surround is punctuated by diamond inlays, away from walks.
+    if (!c.distant) for (const dx of [-7, 0, 7]) c.box(x + dx, G + .07, 21, .85, .05, .85, tile, 'solid', Math.PI / 4);
+    for (const s of [30, 45]) c.prop('bench', x === 34 ? 19.5 : 92.5, s, x === 34 ? Math.PI / 2 : -Math.PI / 2);
+  }
+  gardenEdge(c, p, [23, 89], [92]);
+  for (const x of [35, 77]) bed(c, x, 93, 12, 4, v === 1 ? p.flower : p.green, p.stone);
+}
+function farmStall(c, x, s, accent, flowers = false) {
+  reserve(c, rectanglePolygon(x, s, 14, 11));
+  c.structure(x, s, () => {
+    // A taut striped gable, open on all sides, over a timber display counter.
+    // Roof strips run front-to-back so the stripes stay readable from above.
+    const pitch = .28, run = 6.5;
+    for (const side of [-1, 1]) for (let stripe = 0; stripe < 4; stripe++) {
+      const r = (stripe + .5) * run / 4;
+      c.box(x + side * r, G + 5.1 + (run - r) * Math.tan(pitch), s,
+        run / 4 / Math.cos(pitch), .16, 9.5, stripe % 2 ? cream : accent, 'solid', 0, -side * pitch);
+    }
+    c.box(x, G + 7.02, s, .24, .18, 9.7, cream);
+    for (const dx of [-5.5, 5.5]) {
+      c.box(x + dx, G + 5.1, s, .24, .28, 9.7, '#8e7859');
+      for (const ds of [-3.7, 3.7]) {
+        c.box(x + dx, G + 2.55, s + ds, .24, 5.1, .24, '#8e7859'); c.post(x + dx, s + ds, .2);
+      }
+    }
+    c.box(x, G + .9, s - 2, 10, 1.8, 3.4, '#a98c64');
+    c.box(x, G + 1.9, s - 2, 10.5, .2, 3.8, '#d3b58a'); c.solid(x, s - 2, 10.5, 3.8);
+    for (const dx of [-3.3, 0, 3.3]) {
+      c.box(x + dx, G + 2.15, s - 2, 2.7, .4, 2.7, '#735d46');
+      c.box(x + dx, G + 2.4, s - 2, 2.3, .2, 2.3, flowers ? '#738957' : dx === 0 ? '#d9aa58' : dx < 0 ? '#bd7756' : '#8caa66');
+      if (!c.distant) {
+        if (flowers) for (const ds of [-.6, .6]) {
+          c.box(x + dx, G + 2.85, s - 2 + ds, .1, .9, .1, '#728359');
+          c.box(x + dx, G + 3.3, s - 2 + ds, .8, .35, .8, dx === 0 ? '#dcb977' : '#c68caa');
+        } else for (const a of [-.65, .65]) for (const b of [-.65, .65]) {
+          c.item('market-produce', produce, c.materials.solid, [x + dx + a, G + 2.65, -(s - 2 + b)], [.35, .3, .35], dx === 0 ? '#e5b65c' : dx < 0 ? '#c26b4d' : '#92b36d');
+        }
+      }
+    }
+    if (!c.distant) {
+      c.box(x, G + 3.1, s - 3.95, 2, 1.2, .18, cream);
+      c.box(x, G + 3.1, s - 4.06, 1.65, .9, .08, '#425c55');
+      for (const dx of [-4, 4]) {
+        c.box(x + dx, G + .65, s + 2, 2, 1.3, 2, '#b99b70');
+        c.box(x + dx, G + .8, s + 2, 2.1, .12, 2.1, '#786f58'); c.solid(x + dx, s + 2, 2.1, 2.1);
+      }
+    }
+  });
+}
+function farmersmarket(c, { variant: v, palette: p }) {
+  // A small bakery anchors one edge; the rest is an open-air neighborhood fair.
+  hall(c, 36, 74, 26, 27, 9, ['#c89974', '#c4a282', '#b88368'][v], 1);
+  c.structure(36, 74, () => {
+    pitchedRoof(c, 36, 74, 29, 30, G + 9.8, '#739184', '#c89974', .43, { wallWidth: 26, wallDepth: 27 });
+    c.box(28, G + 14, 81, 3, 8, 3, '#aa765f');
+    c.box(28, G + 18.2, 81, 3.8, .5, 3.8, cream);
+    c.box(36, G + 6.6, 60.2, 23, 2.1, .5, dark);
+    sign(c, 'BAKERY', 36, 59.9, 6.6, 17, 1.7);
+    for (let i = 0; i < 8; i++) c.box(25.5 + i * 3, G + 4.8, 58.3, 3, .25, 4.5, i % 2 ? cream : p.accent);
+  });
+  path(c, [[56, 16], [56, 96]], 6, p.path);
+  path(c, [[16, 43], [96, 43]], 5, p.path);
+  path(c, [[56, 71], [96, 71]], 4, p.path);
+  entrancePath(c, [[36, 43], [36, 59.75]], 5, p.path, [36, 74], [36, 59.75]);
+  const stalls = v === 1 ? [[70, 58], [86, 58]] : v === 2 ? [[70, 58], [86, 58], [70, 84]] : [[70, 58], [86, 58], [70, 84], [86, 84]];
+  for (const [i, [x, s]] of stalls.entries()) farmStall(c, x, s, i % 2 ? '#c89762' : '#769777', v === 1 || (v === 2 && i === 2));
+  if (v === 1) {
+    pergola(c, 78, 85, 25, 12, '#bda27e');
+    for (const x of [72, 84]) c.prop('bench', x, 85);
+  } else if (v === 2) c.rigid(87, 84, () => {
+    // A flower cart finishes the smaller harvest layout.
+    c.box(87, G + 1.1, 84, 4, 1.3, 6, '#b89a70'); c.solid(87, 84, 4.6, 6);
+    for (const dx of [-2.1, 2.1]) for (const ds of [-2, 2]) c.box(87 + dx, G + .6, 84 + ds, .4, 1.2, 1.2, dark);
+    for (const s of [82.5, 85.5]) {
+      c.box(87, G + 2.1, s, 2.8, 1, 2, '#82935d');
+      c.box(87, G + 2.7, s, 2.9, .3, 2.1, p.flower);
+    }
+  });
+  c.structure(56, 21, () => {
+    for (const x of [50, 62]) { c.box(x, G + 2.9, 21, .45, 5.8, .45, '#887154'); c.post(x, 21, .3); }
+    c.box(56, G + 5.6, 21, 15, 2.1, .5, '#526e5b');
+    c.box(56, G + 6.75, 21, 15.5, .25, .8, cream);
+    sign(c, 'FARMERS MARKET', 56, 20.72, 5.6, 14, 1.5);
+  });
+  for (const [x, s] of [[29, 28], [80, 29]]) cafeTable(c, x, s, p.accent);
+  gardenEdge(c, p, [22, 92], [49]);
+  for (const x of [27, 43]) { bed(c, x, 94, 10, 3, p.green, p.stone); }
+  for (const x of [41, 68]) bed(c, x, 31, 5, 10, p.flower, p.stone);
+}
+
+function donut(c, { variant: v, palette: p }) {
+  const icing = ['#d98faa', '#805344', '#d4ab71'][v], trim = ['#649d99', '#8ca797', '#789aa4'][v];
+  reserve(c, rectanglePolygon(56, 68, 45, 33));
+  c.structure(56, 68, () => {
+    c.box(56, G + 4.5, 68, 42, 9, 30, '#e9d8b5');
+    c.box(56, G + .65, 68, 42.4, 1.3, 30.4, trim);
+    roof(c, 56, 68, 43, 31, 9.4, trim);
+    c.solid(56, 68, 43, 31);
+    for (const x of [44, 68]) {
+      c.box(x, G + 3.3, 52.86, 11.5, 4.4, .2, '#557f83', 'glass');
+      for (const dx of [-5.85, 0, 5.85]) c.box(x + dx, G + 3.3, 52.7, .18, 4.7, .18, cream);
+      for (const y of [1, 5.6]) c.box(x, G + y, 52.7, 12, .2, .3, cream);
+      c.box(x, G + 1.4, 52.52, 11.5, .22, .55, '#d5bd93');
+      if (!c.distant) for (let i = 0; i < 5; i++) {
+        // Warm pastry-box displays sit against the glass, below eye level.
+        c.box(x - 4.4 + i * 2.2, G + 1.75, 52.53, 1.5, .45, .45, i % 2 ? '#d6a873' : '#e8c7b1');
+      }
+    }
+    for (const side of [-1, 1]) for (const s of [61, 74]) {
+      c.box(56 + side * 21.12, G + 3.3, s, .18, 4.4, 9, '#557f83', 'glass');
+      c.box(56 + side * 21.25, G + 1, s, .32, .22, 9.4, cream);
+      c.box(56 + side * 21.25, G + 3.3, s, .18, 4.5, .18, cream);
+    }
+    for (const x of [42, 70]) c.box(x, G + 4, 83.12, 7, 3, .18, '#557f83', 'glass');
+    frontDoor(c, 56, 53, 0, 5.2);
+    c.box(56, G + 7.25, 52.65, 38, 2.5, .6, trim);
+    sign(c, 'LUCKY DONUT', 56, 52.29, 7.25, 27, 2);
+    for (const y of [5.95, 8.55]) c.box(56, G + y, 52.25, 38.5, .13, .18, '#f1c1b8', 'lit');
+    // A broad cantilever with a lit underside shelters the whole shopfront.
+    c.box(56, G + 5.65, 49.5, 43, .42, 7, cream);
+    c.box(56, G + 5.54, 45.98, 43, .35, .15, icing);
+    for (const x of [42, 56, 70]) c.box(x, G + 5.42, 49.3, 3, .06, 1, '#f4dda9', 'lit');
+    // The 24.6 m donut faces the street, with a real hole and visible supports.
+    c.box(56, G + 10.45, 70, 16, .6, 5, '#b9b29c');
+    for (const x of [51, 61]) {
+      c.box(x, G + 12.7, 70, .7, 4.5, .8, '#71857e');
+      c.box(x, G + 11.7, 72, .45, 4, .45, '#71857e', 'solid', Math.PI / 2, -.48);
+    }
+    c.item('donut-dough', donutDough, c.materials.solid, [56, G + 25, -70], [1, 1, 1], '#cf9c60');
+    c.item('donut-glaze', donutGlaze, c.materials.solid, [56, G + 25, -70], [1, 1, 1], icing);
+    if (!c.distant) for (let i = 0; i < 28; i++) {
+      const q = sprinklePosition(i), colors = ['#f3d887', '#a6cbc1', '#eeccc3', '#f0e3bd', '#9b738a'];
+      c.box(56 + q.x, G + 25 + q.y, 70 - q.z, 1.05, .26, .22, colors[(i + v) % colors.length], 'solid', 0, q.roll);
+    }
+    c.box(71, G + 10.6, 77, 5, 1.7, 4, '#a4b3a6');
+    if (!c.distant) for (const x of [69.5, 71, 72.5]) c.box(x, G + 11.5, 77, .25, .15, 3.5, '#6e827c');
+  });
+  // A looping coffee terrace replaces the usual axial cross. Its two round
+  // seating pads join the curved walks, while the last leg meets the real sill.
+  const arrival = curvedPath([[56, 16], [51, 23], [50, 32], [56, 43], [56, 48]], 4);
+  entrancePath(c, [...arrival, [56, 52.25]], 7, p.path, [56, 68], [56, 52.25]);
+  path(c, curvedPath([[16, 32], [24, 37], [38, 39], [50, 32]], 4), 3.5, p.path);
+  path(c, curvedPath([[56, 43], [69, 42], [83, 40], [96, 32]], 4), 3.5, p.path);
+  for (const [x, s] of v === 1 ? [[33, 30], [79, 32], [86, 65]] : [[33, 30], [79, 32]]) {
+    // Flexible paving follows the ground; furnishings keep their rigid shape.
+    c.polygon(ellipsePoints(x, s, 17, 17), G + .065, .045, p.path);
+    c.polygon(ellipsePoints(x, s, 15.6, 15.6), G + .09, .035, '#e7d5b6');
+    cafeTable(c, x, s, v === 2 ? '#c4a574' : icing);
+    if (!c.distant) for (let i = 0; i < 12; i++) {
+      const angle = i / 12 * Math.PI * 2;
+      c.surface(x + Math.cos(angle) * 7.1, G + .12, s + Math.sin(angle) * 7.1, .65, .02, .65, trim, 'solid', Math.PI / 4);
+    }
+  }
+  gardenEdge(c, p, [23, 89], [49, 88]);
+  for (const x of [40, 72]) bed(c, x, 92, 15, 5, v === 0 ? p.flower : p.green, p.stone);
+  // A freestanding menu sits beside the entrance without blocking it.
+  c.rigid(65, 48, () => {
+    c.box(65, G + 1.3, 48, 2.2, 2.6, .3, '#b89a72');
+    c.box(65, G + 1.5, 47.8, 1.8, 1.9, .12, dark);
+    if (!c.distant) for (const y of [1, 1.5, 2]) c.box(65, G + y, 47.7, 1.1, .1, .08, cream);
+    c.solid(65, 48, 2.2, .8);
+  });
+}
+
+function cityhall(c, { palette: p }) {
+  const limestone = '#d7c6a7', bronze = '#577e77';
+  reserve(c, rectanglePolygon(56, 71, 65, 37));
+  reserve(c, rectanglePolygon(56, 49.75, 53, 14.5));
+  c.structure(56, 71, () => {
+    // A raised limestone hall, with finished facades on all four sides.
+    c.box(56, G + .75, 71, 64, 1.5, 36, '#b9ab90');
+    c.box(56, G + 10.25, 71, 62, 17.5, 34, limestone);
+    c.solid(56, 71, 64, 36);
+    for (const y of [2, 10, 18.8]) c.box(56, G + y, 71, 63, .5, 35, cream);
+    for (const side of [-1, 1]) {
+      for (const x of [31, 40, 49, 63, 72, 81]) for (const y of [5.8, 14]) {
+        c.box(x, G + y, 71 + side * 17.12, 3.5, 5, .2, dark, 'glass');
+        c.box(x, G + y - 2.65, 71 + side * 17.28, 4.2, .3, .5, cream);
+        if (!c.distant) c.box(x, G + y, 71 + side * 17.26, .14, 5, .15, cream);
+      }
+      for (const s of [60, 71, 82]) for (const y of [5.8, 14]) {
+        c.box(56 + side * 31.12, G + y, s, .2, 5, 3.5, dark, 'glass');
+        c.box(56 + side * 31.28, G + y - 2.65, s, .5, .3, 4.2, cream);
+      }
+      for (const x of [25.5, 86.5]) c.box(x, G + 10, 71 + side * 16.9, 1.2, 18, .7, cream);
+    }
+    mansardRoof(c, 56, 71, 65, 37, G + 19.1, 5.5, bronze);
+    c.box(56, G + 24.7, 71, 45.5, .35, 25.9, bronze);
+    // Six low risers lead continuously onto the portico landing.
+    for (let i = 0; i < 6; i++) {
+      const front = 42.5 + i * .6, back = 56;
+      c.box(56, G + (i + 1) * .125, (front + back) / 2, 52 - i * .7, (i + 1) * .25, back - front, cream);
+    }
+    c.solid(56, 49.25, 52, 13.5);
+    frontDoor(c, 56, 54, 1.5, 6.6);
+    for (const x of [35, 43, 49, 63, 69, 77]) {
+      c.box(x, G + 1.8, 50, 2.1, .6, 2.1, limestone);
+      disk(c, x, 50, 1.35, 1.35, G + 7.65, 11.1, cream);
+      c.box(x, G + 13.4, 50, 2.2, .5, 2.2, limestone);
+    }
+    c.box(56, G + 14.1, 51.5, 49, 1, 12, cream);
+    sign(c, 'CITY HALL', 56, 45.44, 14.1, 18, .9);
+    pitchedRoof(c, 56, 51.5, 51, 13.5, G + 14.65, bronze, cream, .22, { wallWidth: 49, wallDepth: 12 });
+    // A small civic medallion in the triangular pediment.
+    c.box(56, G + 17.3, 45.35, 2, 2, .3, '#b69a64', 'solid', 0, Math.PI / 4);
+    // Copper clocktower, open belfry and a compact hipped crown.
+    c.box(56, G + 26, 72, 15, 13, 14, limestone);
+    for (const y of [25, 32.5]) c.box(56, G + y, 72, 16.5, .6, 15.5, cream);
+    for (let side = 0; side < 4; side++) {
+      const a = side * Math.PI / 2, dx = Math.sin(a), ds = -Math.cos(a), r = side % 2 ? 7.65 : 7.15;
+      c.box(56 + dx * r, G + 29, 72 + ds * r, 5.2, 5.2, .2, bronze, 'solid', a);
+      c.box(56 + dx * (r + .14), G + 29, 72 + ds * (r + .14), 4.6, 4.6, .13, '#efdcaa', 'lit', a);
+      c.box(56 + dx * (r + .23), G + 29.7, 72 + ds * (r + .23), .18, 1.7, .12, dark, 'solid', a);
+      c.box(56 + dx * (r + .25) + Math.cos(a) * .7, G + 29, 72 + ds * (r + .25) + Math.sin(a) * .7, 1.6, .18, .12, dark, 'solid', a);
+    }
+    for (const dx of [-5, 5]) for (const ds of [-4.5, 4.5]) c.box(56 + dx, G + 35, 72 + ds, .9, 4.5, .9, cream);
+    c.box(56, G + 35.3, 72, 2.2, 2.6, 2.2, '#ad915e');
+    c.box(56, G + 37.4, 72, 14, .6, 13, cream);
+    mansardRoof(c, 56, 72, 15, 14, G + 37.7, 3.3, bronze);
+    c.box(56, G + 41.1, 72, 10.5, .3, 9.8, bronze);
+    c.box(56, G + 43, 72, .3, 3.8, .3, '#c6ad73');
+  });
+  entrancePath(c, [[56, 16], [56, 42.5]], 10, p.path, [56, 71], [56, 42.5]);
+  for (const side of [-1, 1]) {
+    const x = 56 + side * 21;
+    entrancePath(c, curvedPath([[side < 0 ? 16 : 96, 35], [56 + side * 30, 39], [x, 42.5]]), 4, p.path, [56, 71], [x, 42.5]);
+    bed(c, 56 + side * 21, 26, 15, 11, p.flower, cream);
+    c.prop('bench', 56 + side * 20, 35);
+    c.rigid(56 + side * 33, 28, () => {
+      const x = 56 + side * 33;
+      disk(c, x, 28, 3, 3, G + .3, .6, limestone);
+      c.box(x, G + 7, 28, .2, 14, .2, '#9ea99b'); c.post(x, 28, .5);
+      c.box(x + 1.5, G + 12.3, 28, 3, 2, .12, side < 0 ? bronze : '#b98b68');
+      c.box(x + 3.1, G + 12.15, 28.3, 1.5, 1.7, .12, side < 0 ? '#7e9e8e' : '#d2af80', 'solid', -.35);
+    });
+  }
+  gardenEdge(c, p, [21, 91], [62, 91]);
+}
+
+export const DESTINATION_BUILDERS = { cinema, hotel, museum, station, library, hospital, observatory, music, sports, firehouse, postoffice, bathhouse, farmersmarket, donut, cityhall };

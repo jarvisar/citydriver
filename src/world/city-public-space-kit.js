@@ -22,6 +22,11 @@ export const SPACE_NAMES = {
   music: ['Jazz courtyard', 'Garden sessions', 'Blue Note stage'],
   sports: ['Tennis club', 'Basketball club', 'Neighborhood courts'],
   firehouse: ['Heritage engine house', 'Station garden', 'Hose tower'],
+  postoffice: ['Royal mail court', 'Letter garden', 'Parcel exchange'],
+  bathhouse: ['Twin bathing pools', 'Mineral springs', 'Mosaic courtyard'],
+  farmersmarket: ['Orchard market', 'Flower & produce fair', 'Harvest yard'],
+  donut: ['Strawberry sprinkle', 'Chocolate dip', 'Maple morning'],
+  cityhall: ['Civic clocktower'],
 };
 const PALETTES = [
   { stone: '#d5c7ad', path: '#e3d2ae', plazaPath: '#a58a68', green: '#819668', accent: '#bd785b', flower: '#c597ab' },
@@ -34,7 +39,7 @@ export function publicSpacePlan(block) {
   // from sharing a layout. Seeded palettes and planting soften the repetition.
   const variant = type === 'park' || type === 'plaza'
     ? (((block.ix % 2 + 2) % 2) * 2 + ((block.iz % 2 + 2) % 2) + Math.floor(randomAt(391, 812) * 4)) % 4
-    : Math.floor(randomAt(block.seed, 813) * 3);
+    : Math.floor(randomAt(block.seed, 813) * SPACE_NAMES[type].length);
   const palette = PALETTES[Math.floor(randomAt(block.seed, 814) * PALETTES.length)];
   return { type, variant, name: SPACE_NAMES[type][variant],
     orientation: Math.floor(randomAt(block.seed, 816) * 4),

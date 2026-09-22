@@ -45,6 +45,39 @@ test('pickup and payment require stopping; successful fares add cash and time on
   assert.equal(run.status, 'pickup'); assert.equal(run.delivered, 1); assert.ok(run.cash >= fare);
   assert.ok(run.timeLeft > before + 17); assert.equal(run.drainEvents().filter(e => e.kind === 'paid').length, 1);
   assert.equal(run.drainEvents().length, 0);
+  assert.equal(run.target, null, 'payment leaves the next passenger unselected');
+  assert.equal(run.hold, 0);
+});
+
+test('after drop-off, cruising keeps navigation clear until the driver chooses or boards a passenger', () => {
+  for (const method of ['next', 'map', 'ring']) {
+    const car = player(), run = new TaxiRun(); run.start(car); pickup(run, car);
+    Object.assign(car, { s: run.target.s, u: run.target.u }); run.update(.5, car);
+    assert.equal(run.target, null);
+    Object.assign(car, cityLayout(20025, -19997), { speed: 12 }); run.update(1.1, car);
+    assert.ok(run.customers.length > 0);
+    assert.equal(run.target, null, 'streaming customers must not select another fare');
+    assert.deepEqual(taxiRoute(car, run.target), []);
+    const passenger = run.customers[0];
+    if (method === 'next') run.next();
+    if (method === 'map') assert.equal(run.select(passenger.id), true);
+    if (method !== 'ring') assert.equal(run.target, passenger);
+    Object.assign(car, { s: passenger.s, u: passenger.u, speed: 0 }); run.update(.5, car);
+    assert.equal(run.status, 'driving'); assert.equal(run.fare, passenger);
+    assert.equal(run.target, passenger.destination);
+  }
+});
+
+test('a pickup overlapping the drop-off waits for the cab to leave and return', () => {
+  const car = player(), run = new TaxiRun(); run.start(car); pickup(run, car);
+  const waiting = run.customers[0]; run.fare.destination = waiting;
+  Object.assign(car, { s: waiting.s, u: waiting.u }); run.update(.5, car);
+  run.update(1, car);
+  assert.equal(run.delivered, 1); assert.equal(run.status, 'pickup');
+  assert.equal(run.target, null); assert.equal(run.hold, 0);
+  car.s += 20; car.speed = 12; run.update(.1, car);
+  Object.assign(car, { s: waiting.s, u: waiting.u, speed: 0 }); run.update(.5, car);
+  assert.equal(run.status, 'driving'); assert.equal(run.fare.id, waiting.id);
 });
 
 test('expanded destinations offer distinct customers, reachable stops and varied successive fares', () => {
@@ -60,6 +93,7 @@ test('expanded destinations offer distinct customers, reachable stops and varied
       for (const other of run.customers) if (other !== customer) assert.ok(Math.hypot(other.s - customer.s, other.u - customer.u) > 24);
     }
     assert.ok(run.customers.some(c => !run.recentDestinations.includes(c.destination.type)), 'fresh destinations remain available alongside persistent offers');
+    if (!run.target) run.select(run.customers.find(c => !run.recentDestinations.includes(c.destination.type)).id);
     pickup(run, car); visited.add(run.target.type);
     Object.assign(car, { s: run.target.s, u: run.target.u, speed: 0 });
     run.update(.5, car);

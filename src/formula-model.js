@@ -19,6 +19,7 @@ const CARBON = '#2e3538', DARK = '#161b1d', SUIT = '#e7e3d5';
 
 export function createFormulaCar(entry) {
   const parts = { paint: [], details: [], taillights: [] };
+  if (entry.taxi) parts.headlights = [];
   function add(geometry, location, category = 'paint', color) {
     geometry.deleteAttribute('uv');
     geometry.translate(...location);
@@ -45,17 +46,28 @@ export function createFormulaCar(entry) {
   box([.86, .22, .34], [0, .21, 2.25], 'details', CARBON);
   // Nose cone, tub and the raised cockpit sides.
   tapered([.56, .3, 1.25], [0, .42, -2], { at: -1, x: .5, y: .5, lift: -.05 });
-  box([.66, .34, 2.5], [0, .37, -.15]);
-  for (const side of [-1, 1]) box([.1, .22, 1.3], [side * .3, .63, .05]);
-  box([.52, .06, 1.3], [0, .57, .05], 'details', DARK);
+  const halfCabin = entry.taxi ? .57 : .3;
+  box([halfCabin * 2 + .06, .34, 2.5], [0, .37, -.15]);
+  for (const side of [-1, 1]) box([.1, .22, 1.3], [side * halfCabin, .63, .05]);
+  box([halfCabin * 2 - .08, .06, 1.3], [0, .57, .05], 'details', DARK);
   // Driver: a helmet and visor sunk into the opening.
-  const helmet = new THREE.SphereGeometry(.16, 8, 6);
-  add(helmet, [0, .84, -.04], 'details', SUIT);
-  box([.25, .07, .04], [0, .85, -.2], 'details', DARK);
+  const driverX = entry.taxi ? -.28 : 0;
+  add(new THREE.SphereGeometry(.16, 8, 6), [driverX, .84, -.04], 'details', SUIT);
+  box([.25, .07, .04], [driverX, .85, -.2], 'details', DARK);
+  if (entry.taxi) {
+    // A real second seat beside the driver, with its own back and headrest.
+    box([.4, .09, .64], [.28, .61, -.02], 'details', CARBON);
+    box([.4, .33, .12], [.28, .74, .32], 'details', CARBON);
+    box([.23, .16, .12], [.28, .97, .32], 'details', SUIT);
+    for (const side of [-1, 1]) for (let i = 0; i < 8; i++) {
+      box([.018, .1, .13], [side * .615, .4 + (i % 2) * .1, -.7 + i * .14], 'details', DARK);
+    }
+    box([.68, .2, .25], [0, 1.1, .85]);
+  }
   // Halo: two side rails meeting a single pillar ahead of the driver.
   box([.09, .28, .09], [0, .75, -.62], 'details', CARBON);
-  box([.64, .07, .09], [0, .89, -.6], 'details', CARBON);
-  for (const side of [-1, 1]) box([.07, .07, 1.3], [side * .31, .89, -.03], 'details', CARBON);
+  box([halfCabin * 2 + .04, .07, .09], [0, .89, -.6], 'details', CARBON);
+  for (const side of [-1, 1]) box([.07, .07, 1.3], [side * (halfCabin + .01), .89, -.03], 'details', CARBON);
   // Sidepods with dark radiator inlets, and mirrors on their leading edge.
   for (const side of [-1, 1]) {
     tapered([.4, .38, 1.5], [side * .42, .38, .45], { at: 1, x: .45, y: .6 });
@@ -83,19 +95,37 @@ export function createFormulaCar(entry) {
   }
   // A rear rain light keeps the racer visible on the midnight route.
   box([.14, .12, .05], [0, .92, 2.28], 'taillights');
+  if (entry.taxi) for (const side of [-1, 1]) box([.2, .1, .05], [side * .54, .39, -2.57], 'headlights');
 
   const mat = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: .58, flatShading: true, ...extra });
   const paint = mat(entry.paint);
   const trim = mat('#ffffff', { vertexColors: true });
   const rear = mat('#8e3328', { emissive: '#e02a12', emissiveIntensity: .15 });
+  const front = entry.taxi ? mat('#fff0b6', { emissive: '#ffe997', emissiveIntensity: .3 }) : null;
   const tireMaterial = mat('#23282b', { roughness: .9 }), hubMaterial = mat('#c8ccbe', { metalness: .25 });
   const shells = Object.entries(parts).map(([key, geometries]) => [key, mergeGeometries(geometries)]);
   for (const geometries of Object.values(parts)) for (const geometry of geometries) geometry.dispose();
 
-  const car = new THREE.Group(); car.name = 'car-formula';
+  const car = new THREE.Group(); car.name = `car-${entry.shape.name}`;
+  car.userData.seats = entry.taxi ? 2 : 1;
   const body = new THREE.Group(); car.add(body);
+  const signResources = [];
+  if (entry.taxi && globalThis.document) {
+    const canvas = document.createElement('canvas'); canvas.width = 128; canvas.height = 40;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#fff0b6'; ctx.fillRect(0, 0, 128, 40);
+    ctx.fillStyle = '#172229'; ctx.font = 'bold 32px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('TAXI', 64, 32);
+    const texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace;
+    const material = new THREE.MeshBasicMaterial({ map: texture });
+    const geometry = new THREE.PlaneGeometry(.66, .19);
+    signResources.push(texture, material, geometry);
+    for (const side of [-1, 1]) {
+      const sign = new THREE.Mesh(geometry, material); sign.name = 'taxi-sign';
+      sign.position.set(0, 1.1, .85 + side * .126); sign.rotation.y = side < 0 ? Math.PI : 0; body.add(sign);
+    }
+  }
   for (const [key, geometry] of shells) {
-    const mesh = new THREE.Mesh(geometry, { paint, details: trim, taillights: rear }[key]);
+    const mesh = new THREE.Mesh(geometry, { paint, details: trim, taillights: rear, headlights: front }[key]);
     mesh.castShadow = true; mesh.receiveShadow = true; body.add(mesh);
   }
   const { radius, width, rearWidth, hubRadius, x } = FORMULA_WHEEL;
@@ -114,7 +144,7 @@ export function createFormulaCar(entry) {
   car.traverse(stableShadowDepth);
   return {
     car, body, wheels,
-    nightLights: [{ material: rear, day: .15, night: 2.6 }],
+    nightLights: [{ material: rear, day: .15, night: 2.6 }, ...(front ? [{ material: front, day: .3, night: 2.2 }] : [])],
     // A chosen car keeps its own paint and kit on every route.
     applyTrim() {},
     paintCar(color) { paint.color.set(color || entry.paint); },
@@ -122,6 +152,8 @@ export function createFormulaCar(entry) {
       for (const [, geometry] of shells) geometry.dispose();
       for (const geometry of [frontTire, rearTire, hubGeometry]) geometry.dispose();
       for (const material of [paint, trim, rear, tireMaterial, hubMaterial]) material.dispose();
+      front?.dispose();
+      for (const resource of signResources) resource.dispose();
     },
   };
 }

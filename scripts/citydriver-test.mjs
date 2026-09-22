@@ -88,12 +88,14 @@ try {
   const discoveries = await page.evaluate(async () => {
     const a = window.__citydriver, v = a.vehicle, guide = a.cityGuide;
     const { nearbyPlaces } = await import('/src/city-exploration.js');
-    const { PLACE_TYPES } = await import('/src/world/city-places.js');
+    const { PLACE_TYPES, CITY_HALL_BLOCK } = await import('/src/world/city-places.js');
+    const { cityBlock } = await import('/src/world/city-grid.js');
+    const { placeForBlock } = await import('/src/city-exploration.js');
     const { collideScenery } = await import('/src/collision.js');
     const { cityLanePose } = await import('/src/world/city-layout.js');
     const { cityStreetProfile } = await import('/src/world/city-grid.js');
     const { CityAutodrive } = await import('/src/city-autodrive.js');
-    const places = nearbyPlaces(0, 0, 20);
+    const places = nearbyPlaces(0, 0, 20).filter(p => p.type !== 'cityhall').concat(placeForBlock(cityBlock(CITY_HALL_BLOCK.ix, CITY_HALL_BLOCK.iz)));
     guide.exploration.found.clear();
     for (const type of PLACE_TYPES) {
       const place = places.find(p => p.type === type);

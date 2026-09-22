@@ -99,6 +99,7 @@ function formulaParts(entry) {
     slab(-2.64, -2.5, .34, .46, '#ffeec2', 2),
     slab(2.18, 2.32, 1, 1.14, '#c4483a', 2),
     wheel(-wheelZ), wheel(wheelZ),
+    ...(entry.taxi ? [slab(.5, 1.08, 1.12, 1.37, '#fff0b6'), '<text x="100" y="52" text-anchor="middle" font-size="8" font-weight="900" fill="#172229">TAXI</text>'] : []),
   ];
 }
 
@@ -206,6 +207,11 @@ const SPECIAL_ART = {
 
 function accessories(entry, draw) {
   const { slab, shape2d, disc, px, py, size, l, cz, cabinLength, roofY, radius } = draw;
+  if (entry.taxi) return [
+    slab(-.25, .25, roofY + .04, roofY + .49, '#fff0b6'),
+    `<text x="${px(0)}" y="${py(roofY + .18)}" text-anchor="middle" font-size="7" font-weight="900" fill="#172229">TAXI</text>`,
+    ...Array.from({ length: 10 }, (_, i) => slab(-.8 + i * .17, -.64 + i * .17, .88 + (i % 2) * .14, 1.02 + (i % 2) * .14, CARBON, 0)),
+  ];
   const rack = (front, rear) => slab(front, rear, roofY, roofY + .09, '#3a4441', 1);
   switch (entry.trim ?? entry.shape.name) {
     // A round bale lying across the rack shows its wrapped end from the side.

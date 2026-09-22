@@ -74,7 +74,9 @@ export class CityGuide {
   updateTaxi() {
     const run = this.taxi, vehicle = this.position(), target = run.target;
     $('next-city-stop').disabled = run.status !== 'pickup';
-    $('next-city-stop').textContent = run.status === 'pickup' ? `Next passenger · $${target.fare}` : `Fare $${run.fare.fare + run.tips}`;
+    $('next-city-stop').textContent = run.status === 'pickup'
+      ? target ? `Next passenger · $${target.fare}` : 'Choose passenger'
+      : `Fare $${run.fare.fare + run.tips}`;
     this.canvas.title = run.status === 'pickup' ? 'Tap a customer dot to choose your pickup' : 'Route to the drop-off';
     if (this.expanded) this.draw(vehicle, taxiRoute(vehicle, target), run.status === 'pickup' ? run.customers : [{ ...target, color: '#ffd238' }], target);
   }

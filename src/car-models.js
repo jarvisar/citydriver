@@ -23,7 +23,7 @@ export function createShapeCar(entry) {
       const geometry = new THREE.BoxGeometry(...size), mesh = new THREE.Mesh(geometry, material);
       taxiGeometry.push(geometry); mesh.position.set(...p); body.add(mesh); return mesh;
     };
-    const roof = (entry.shape.cabinY ?? 1.22) + entry.shape.cabin[1];
+    const roof = (entry.shape.cabinY ?? 1.22) + entry.shape.cabin[1] - (entry.shape.drop ?? 0);
     part([1.25, .45, .5], [0, roof + .26, 0], light).name = 'taxi-sign';
     for (const side of [-1, 1]) for (let i = 0; i < 10; i++) {
       part([.035, .14, .16], [side * (entry.shape.width / 2 + .015), .95 + (i % 2) * .14, -.8 + i * .17], black);
