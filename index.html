@@ -95,6 +95,7 @@
           <button id="change-journey" hidden class="journey-button start-button menu-secondary" aria-haspopup="dialog"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h16m-4-4 4 4-4 4M20 17H4m4-4-4 4 4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="control-label">Change route</span></button>
           <button id="enter-vr" class="start-button vr-entry menu-secondary" type="button" hidden><svg class="vr-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3.8 7.5h16.4a1.8 1.8 0 0 1 1.8 1.8v5.4a1.8 1.8 0 0 1-1.8 1.8h-3.6a2 2 0 0 1-1.7-.9l-1.2-1.8a2 2 0 0 0-3.4 0l-1.2 1.8a2 2 0 0 1-1.7.9H3.8A1.8 1.8 0 0 1 2 14.7V9.3a1.8 1.8 0 0 1 1.8-1.8Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg><span class="vr-entry-label">Enter VR</span></button>
         </div>
+        <span class="controller-hint">D-pad / stick: choose · A / Cross: select · RT / R2: drive</span>
       </section>
       <div id="pause-overlay" class="pause-overlay" hidden>
         <div class="pause-content">
@@ -149,7 +150,7 @@
               </div>
             </section>
             <button id="enter-vr-pause" class="panel-button vr-entry" type="button" hidden><svg class="vr-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3.8 7.5h16.4a1.8 1.8 0 0 1 1.8 1.8v5.4a1.8 1.8 0 0 1-1.8 1.8h-3.6a2 2 0 0 1-1.7-.9l-1.2-1.8a2 2 0 0 0-3.4 0l-1.2 1.8a2 2 0 0 1-1.7.9H3.8A1.8 1.8 0 0 1 2 14.7V9.3a1.8 1.8 0 0 1 1.8-1.8Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg><span class="vr-entry-label">Enter VR</span></button>
-            <span class="controller-hint">D-pad / stick: choose · A / Cross: select<br>B / Circle or Start / Menu: resume<br>L3: garage · X / Square: camera</span>
+            <span class="controller-hint">D-pad / stick: choose · left / right: adjust · A / Cross: select<br>B / Circle or Start / Menu: resume · right stick: scroll<br>View / Share: map · L3: garage · X / Square: camera</span>
           </div>
         </div>
       </div>
@@ -168,7 +169,7 @@
       </dialog>
       <dialog id="car-dialog" class="chooser" aria-labelledby="car-heading">
         <div class="chooser-heading"><h2 id="car-heading" class="garage-title">Garage</h2><button id="close-cars" class="icon-button" aria-label="Close garage"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button></div>
-        <span class="controller-hint">D-pad / stick: choose · A / Cross: select · B / Circle: close</span>
+        <span class="controller-hint">D-pad / stick: choose · A / Cross: select · B / Circle: close<br>Custom paint: A / Cross to change colour</span>
         <section class="paint-shop" aria-labelledby="paint-heading">
           <div class="paint-shop-heading">
             <h3 id="paint-heading">Paint</h3>

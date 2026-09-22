@@ -69,6 +69,8 @@ body[data-controller=true] .pause-overlay button:focus { outline: 2px solid var(
 
 .chooser { width: min(930px, calc(100% - var(--ui-left) - var(--ui-right))); max-height: calc(100dvh - var(--ui-top) - var(--ui-bottom)); padding: 20px; overscroll-behavior: contain; scrollbar-width: thin; }
 .chooser-heading { position: sticky; top: -20px; z-index: 1; padding: 4px 0; background: #f6f5ea; }
+/* Focus moved by a controller or the keyboard scrolls clear of the pinned heading. */
+:is(.chooser, #taxi-fleet-dialog) { scroll-padding-block: 80px 16px; }
 body[data-journey=desert] .chooser-heading { background: #fff2dd; }
 body[data-journey=snow] .chooser-heading { background: #1c2b41; }
 body[data-journey=jungle] .chooser-heading { background: #203a27; }
@@ -103,7 +105,7 @@ body[data-journey=city] .chooser-heading { background: #eef1f4; }
 /* Short landscape screens trade secondary readouts for a clear driving area. */
 @media (max-height: 560px) and (orientation: landscape) {
   :root { --edge: 6px; --header-clear: calc(var(--ui-top) + 60px); --stick-size: 125.84px; }
-  .brand-caption, #stick-help { display: none; }
+  .brand-caption, #stick-help, #welcome > .controller-hint { display: none; }
   .brand-mark { width: 32px; height: 32px; }
   .wordmark { font-size: 23px; }
   .journey-button { position: static; font-size: 11px; padding: 10px 12px; }

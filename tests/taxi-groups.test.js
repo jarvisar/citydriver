@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { TaxiRun, STOP_SECONDS, GROUP_MAX_LEG, GROUP_MAX_DETOUR, GROUP_MAX_ROUTE, GROUP_MIN_TURN, MAX_SHIFT_SECONDS,
-  RATINGS, taxiRoute, turnCosine, deliverySeconds, partySize } from '../src/taxi-run.js';
+  RATINGS, GROUP_FARE_SHARE, taxiRoute, turnCosine, deliverySeconds, partySize } from '../src/taxi-run.js';
 import { TaxiView } from '../src/taxi-view.js';
 import { routeDistance } from '../src/city-exploration.js';
 import { cityLayout } from '../src/world/city-layout.js';
@@ -41,6 +41,7 @@ test('every rider in a seeded party has their own stop along a compact, forward-
     assert.equal(offer.stops.length, offer.passengers, 'one stop per rider');
     assert.equal(new Set(offer.stops.map(s => s.destination.id)).size, offer.passengers, 'no shared destinations');
     assert.equal(offer.stops.reduce((sum, s) => sum + s.fare, 0), offer.fare);
+    assert.equal(offer.fare, Math.round((40 + offer.length * .28) * (1 + (offer.passengers - 1) * GROUP_FARE_SHARE)), 'each extra rider adds a fifth');
     assert.equal(offer.destination, offer.stops[0].destination);
     assert.ok(offer.stops[0].length >= 280 && offer.stops[0].length <= 1100);
     assert.ok(offer.length <= GROUP_MAX_ROUTE);
@@ -106,13 +107,14 @@ test('a group shares one clock, is rated at every stop and is paid in full at th
     const event = run.drainEvents()[0], rating = RATINGS.find(r => r.id === expected[index]);
     held += stop.fare + Math.round(stop.fare * .5 * arrivals[index]);
     assert.equal(event.rating, rating.id);
-    assert.equal(event.seconds, deliverySeconds(stop.length, rating), 'each drop-off is its own time bonus');
+    assert.equal(event.seconds, last ? deliverySeconds(group.length, rating) : rating.riderSeconds,
+      "riders stepping out early add a rating bonus; the route's time lands at the last stop");
     clock = Math.min(MAX_SHIFT_SECONDS, clock - STOP_SECONDS + event.seconds); assert.ok(Math.abs(run.timeLeft - clock) < 1e-9);
     assert.equal(run.deliveredPassengers, index + 1);
     if (last) {
       assert.equal(event.kind, 'paid'); assert.equal(event.groupComplete, true); assert.equal(event.bonus, group.groupBonus);
       assert.equal(event.paid, held + 17 + group.groupBonus, 'every share, time bonus fare and tip arrives together');
-      assert.equal(run.cash, event.paid); assert.match(event.text, new RegExp(`^Group complete · Speedy! \\+\\$${event.paid} · \\+${event.seconds}s$`));
+      assert.equal(run.cash, event.paid); assert.match(event.text, new RegExp(`^Group complete · Speedy! · \\+\\$${event.paid} · \\+${event.seconds}s$`));
       break;
     }
     assert.equal(event.kind, 'dropoff'); assert.equal(event.paid, 0); assert.equal(run.cash, 0, 'nothing is paid until everyone arrives');

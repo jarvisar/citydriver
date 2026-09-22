@@ -58,6 +58,8 @@ body[data-controller=true] #app :is(button, input, select):focus {
 #app .city-guide[data-expanded=false] .city-guide-header { background: transparent; }
 #app #city-map-toggle { color: var(--city-text); border-radius: var(--city-control-radius); }
 #app #city-map-toggle:hover { background: var(--city-hover); }
+/* With a controller, the map button names the pad button that opens it. */
+body[data-controller=true] #app #city-map-toggle::before { content: 'VIEW'; margin-right: 6px; padding: 1px 5px; border: 1px solid var(--city-line); border-radius: 4px; font-size: 9px; letter-spacing: .5px; vertical-align: 1px; }
 #app #taxi-buttons button { border-radius: var(--city-control-radius); border-color: var(--city-line); }
 #app #taxi-buttons > button { color: var(--city-text); background: var(--city-glass); }
 #app #taxi-buttons[data-drifting=true] [data-drive-button=handbrake] { background: var(--city-hover); }
@@ -68,6 +70,7 @@ body[data-controller=true] #app :is(button, input, select):focus {
 #app .stick-thumb { background: var(--city-muted); border-color: #f5f4e970; box-shadow: 0 3px 10px #101e2859; }
 #app #touch-stick.active .stick-thumb { background: var(--city-accent); border-color: var(--city-accent-hover); }
 #app #stick-help { border: 1px solid var(--city-line); border-radius: var(--city-control-radius); }
+#app #welcome > .controller-hint { border: 1px solid var(--city-line); background: var(--city-glass); color: var(--city-text); }
 #app #stick-help .stick-help-line { opacity: 1; color: var(--city-muted); }
 #app #stick-help .dismiss-control-help { color: var(--city-muted); background: transparent; }
 #app #stick-help .dismiss-control-help:hover { color: var(--city-text); background: var(--city-hover); }

@@ -12,7 +12,7 @@ const buttonValue = (pad, index) => {
 export class GamepadInput {
   constructor(onAction, onConnection, getGamepads = () => navigator.getGamepads?.() ?? [], onKonami = () => {}) {
     this.onAction = onAction; this.onConnection = onConnection; this.getGamepads = getGamepads;
-    this.index = null; this.connected = false; this.state = {};
+    this.index = null; this.connected = false; this.state = {}; this.scroll = 0;
     this.previousButtons = []; this.requireNeutral = false;
     this.konami = new KonamiCode(); this.onKonami = onKonami;
   }
@@ -20,8 +20,8 @@ export class GamepadInput {
     this.state = {}; this.requireNeutral = true;
     if (!preserveKonami) this.konami.reset();
   }
-  // `menu` is 'pause' for the pause screen, truthy for a modal chooser, and
-  // false during a drive.
+  // `menu` is 'pause' for the pause screen and the results card, 'welcome' for
+  // the title screen, truthy for a modal chooser, and false during a drive.
   update({ blocked = false, paused = false, menu = false } = {}) {
     let pads;
     try { pads = Array.from(this.getGamepads()).filter(pad => pad?.connected); }
@@ -36,7 +36,9 @@ export class GamepadInput {
     if (Boolean(pad) !== this.connected) {
       this.connected = Boolean(pad); this.onConnection(this.connected);
     }
-    if (!pad) { this.state = {}; return; }
+    if (!pad) { this.state = {}; this.scroll = 0; return; }
+    // The right stick scrolls a long menu, so read-only panels are reachable too.
+    this.scroll = menu ? deadzone(pad.axes[3], .2) : 0;
     const buttons = pad.buttons.map((_, index) => buttonValue(pad, index) > .5);
     // Treat stick directions as menu buttons so they fire once per tilt. The two
     // axes stay apart so a grid of cards can be crossed by row as well as along.
@@ -57,7 +59,7 @@ export class GamepadInput {
     const active = Object.values(state).some(Boolean) || buttons.some(Boolean);
     if (blocked || this.requireNeutral) {
       if (blocked) this.konami.reset();
-      this.state = {}; this.previousButtons = buttons;
+      this.state = {}; this.scroll = 0; this.previousButtons = buttons;
       this.requireNeutral = blocked || active;
       return;
     }
@@ -76,7 +78,7 @@ export class GamepadInput {
     // fire once and Start can resume the game without a keyboard or touchscreen.
     this.state = paused ? {} : state;
     const pause = pressed(9), view = pressed(2), reset = pressed(3), nextJourney = pressed(5);
-    const journey = pressed(8), fullscreen = pressed(4), fps = pressed(11), car = pressed(10);
+    const map = pressed(8), fullscreen = pressed(4), fps = pressed(11), car = pressed(10);
     const back = pressed(1), confirm = pressed(0), autodrive = pressed(12);
     const previous = pressed(14) || pressed(17), next = pressed(15) || pressed(18);
     const up = pressed(12) || pressed(19), down = pressed(13) || pressed(20);
@@ -85,9 +87,9 @@ export class GamepadInput {
     if (fullscreen) { this.onAction('fullscreen'); return; }
     // A chooser takes the whole pad. The pause screen only borrows the
     // directions and A, so the shortcuts below still work from it.
-    if (menu && menu !== 'pause') {
+    if (menu && menu !== 'pause' && menu !== 'welcome') {
       this.state = {};
-      if (journey || car || back) this.onAction('menuClose');
+      if (map || car || back) this.onAction('menuClose');
       else if (previous) this.onAction('menuPrevious');
       else if (next) this.onAction('menuNext');
       else if (up) this.onAction('menuUp');
@@ -95,7 +97,21 @@ export class GamepadInput {
       else if (confirm) this.onAction('menuConfirm');
       return;
     }
-    if (journey) { this.onAction('journey'); return; }
+    // The title screen is a menu with the car cruising behind it: the D-pad and
+    // face buttons choose, and only the gas pedal takes the wheel.
+    if (menu === 'welcome') {
+      this.state = { forward: deadzone(buttonValue(pad, 7), .08) };
+      if (this.state.forward) this.onAction('drive');
+      else if (car) this.onAction('car');
+      else if (previous) this.onAction('menuPrevious');
+      else if (next) this.onAction('menuNext');
+      else if (up) this.onAction('menuUp');
+      else if (down) this.onAction('menuDown');
+      else if (confirm || pause) this.onAction('menuConfirm');
+      else if (view) this.onAction('view');
+      return;
+    }
+    if (map) { this.onAction('map'); return; }
     if (car) { this.onAction('car'); return; }
     if (pause) { this.onAction('pause'); return; }
     if (nextJourney) { this.onAction('nextJourney'); return; }

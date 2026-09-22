@@ -127,3 +127,4 @@ button svg:not(.chooser-art) { stroke-linecap: round; stroke-linejoin: round; }
   #welcome .start-button { min-height: 54px; font-size: 20px; }
   #welcome .start-button.menu-secondary { margin-top: 7px; padding-block: 6px; font-size: 13px; }
 }
+#welcome > .controller-hint { position: relative; margin: 18px auto 0; padding: 6px 38px 6px 12px; width: fit-content; max-width: 100%; text-align: center; border-radius: 8px; }

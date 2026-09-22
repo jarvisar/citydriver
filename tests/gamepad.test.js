@@ -87,7 +87,7 @@ test('stick deadzone, analog triggers, D-pad and face-button fallbacks', () => {
 
 test('shortcuts fire once per press and Start works while paused', () => {
   const { input, device, actions } = fixture();
-  for (const [index, action] of [[9, 'pause'], [2, 'view'], [3, 'reset'], [5, 'nextJourney'], [8, 'journey'], [4, 'fullscreen'], [11, 'fps']]) {
+  for (const [index, action] of [[9, 'pause'], [2, 'view'], [3, 'reset'], [5, 'nextJourney'], [8, 'map'], [4, 'fullscreen'], [11, 'fps']]) {
     hold(device, index); input.update(); input.update(); input.update();
     assert.equal(actions.filter(item => item === action).length, 1);
     hold(device, index, 0); input.update();
@@ -144,6 +144,29 @@ test('chooser routes controller inputs to navigation without driving', () => {
   assert.equal(actions.length, 12);
 });
 
+test('the title screen is a menu: the D-pad chooses, A and Start confirm, and only the gas pedal drives', () => {
+  const { input, device, actions } = fixture();
+  const welcome = { menu: 'welcome' };
+  for (const [index, action] of [[13, 'menuDown'], [12, 'menuUp'], [15, 'menuNext'], [14, 'menuPrevious'], [0, 'menuConfirm'], [9, 'menuConfirm'], [10, 'car'], [2, 'view']]) {
+    hold(device, index); input.update(welcome); input.update(welcome);
+    assert.equal(actions.at(-1), action);
+    assert.ok(!input.state.forward && !input.state.left && !input.state.right && !input.state.handbrake, 'a menu press never reaches the car');
+    hold(device, index, 0); input.update(welcome);
+  }
+  assert.equal(actions.includes('autodrive'), false, 'D-pad Up moves the focus instead of starting autodrive');
+  hold(device, 7); input.update(welcome);
+  assert.equal(actions.at(-1), 'drive');
+  assert.ok(input.state.forward > .9);
+});
+
+test('the right stick scrolls a menu and is ignored while driving', () => {
+  const { input, device } = fixture();
+  device.axes[3] = 1; input.update({ paused: true, menu: 'pause' });
+  assert.ok(input.scroll > .9);
+  input.update();
+  assert.equal(input.scroll, 0);
+});
+
 test('the pause screen takes the pad as a menu while its shortcuts stay live', () => {
   const { input, device, actions } = fixture();
   const pauseMenu = { paused: true, menu: 'pause' };
@@ -156,7 +179,7 @@ test('the pause screen takes the pad as a menu while its shortcuts stay live', (
   assert.equal(actions.length, 6);
   // The pause screen is a layer over the drive, not a modal, so the shortcuts
   // that open the garage or the routes from it still work.
-  for (const [index, action] of [[9, 'pause'], [8, 'journey'], [10, 'car'], [5, 'nextJourney'], [4, 'fullscreen'], [11, 'fps']]) {
+  for (const [index, action] of [[9, 'pause'], [8, 'map'], [10, 'car'], [5, 'nextJourney'], [4, 'fullscreen'], [11, 'fps']]) {
     hold(device, index); input.update(pauseMenu); input.update(pauseMenu);
     assert.equal(actions.at(-1), action);
     hold(device, index, 0); input.update(pauseMenu);

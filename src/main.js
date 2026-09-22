@@ -43,6 +43,7 @@ import { setupControlHelp, controlHelpDismissed, updateControlHelp } from './con
 import { BrowserVR } from './vr.js';
 import { VRStatus } from './vr-status.js';
 import { setupPwaFullscreen } from './pwa-fullscreen.js';
+import { moveMenuFocus, confirmMenuFocus, scrollMenu } from './menu-focus.js';
 
 setupControlHelp();
 setupPwaFullscreen();
@@ -50,10 +51,6 @@ setupPwaFullscreen();
 const $ = selector => document.querySelector(selector);
 const MENU_MOVES = ['menuNext', 'menuPrevious', 'menuUp', 'menuDown'];
 const MENU_CRUISE_SPEED = TRAFFIC_CRUISE_SPEED * 1.4;
-// A chooser's ring holds its cards and paint chips; the pause screen's holds
-// resume, the garage and every driving, sound and graphics setting.
-const MENU_CARDS = '[data-journey], [data-car], [data-paint], [data-fleet-car], #close-fleet';
-const PAUSE_CONTROLS = '#resume, #pause-fleet, #restart-run, #switch-mode, #change-car, #autodrive, #traffic, #city-weather, [data-place-type], #sound, #audio-mixer-toggle, #audio-mixer button, #audio-mixer input, #fullscreen, #graphics-toggle, [data-quality], #pixel-density, #soft-shading, #enter-vr-pause, .update-entry, .pwa-install-button';
 const mileageFormat = new Intl.NumberFormat('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 let paused = false, started = false, time = 0, hudTime = 0, gameMode = 'taxi';
 document.body.dataset.mode = gameMode;
@@ -132,6 +129,8 @@ async function boot() {
     // The pause screen is a menu too: it is up whenever the drive is paused
     // with no chooser over it, and the controller walks it the same way.
     const openPauseMenu = () => !$('#taxi-results').hidden ? $('#taxi-results') : paused && !pauseOverlay.hidden ? pauseOverlay : null;
+    // The title screen is a menu of its own until a drive begins.
+    const openWelcomeMenu = () => !started && !paused && !$('#welcome').classList.contains('hidden') ? $('#welcome') : null;
     scene.add(vehicle.car);
     const traffic = new Traffic(scene, vehicle.route, vehicle.s, journey);
     const pedestrianContacts = new PedestrianContacts();
@@ -403,45 +402,6 @@ async function boot() {
         $('#journey-transition').classList.remove('active');
       }
     }
-    // Cards are laid out in a grid that changes with the viewport and holds one
-    // full-width row, so up and down follow the rendered geometry rather than a
-    // column count. A single row of cards steps along itself instead, and the
-    // pause screen's stack of settings is walked by the same rules.
-    function moveMenuFocus(menu, name) {
-      // Everything in the menu's ring that is laid out is reachable.
-      const cards = [...menu.querySelectorAll(menu.id === 'taxi-results' ? 'button' : menu === pauseOverlay ? PAUSE_CONTROLS : MENU_CARDS)].filter(card => card.offsetParent && !card.disabled);
-      if (!cards.length) return;
-      const index = cards.indexOf(document.activeElement);
-      if (index < 0) { cards[0].focus(); return; }
-      const current = cards[index];
-      const step = name === 'menuNext' || name === 'menuDown' ? 1 : -1;
-      if (current.matches('[data-audio-channel]') && (name === 'menuNext' || name === 'menuPrevious')) {
-        current.value = Math.max(0, Math.min(100, Number(current.value) + step * 5));
-        current.dispatchEvent(new Event('input', { bubbles: true }));
-        return;
-      }
-      if (current.matches('input[type="range"]') && ['menuNext', 'menuPrevious'].includes(name)) {
-        if (step > 0) current.stepUp(); else current.stepDown();
-        current.dispatchEvent(new Event('input', { bubbles: true }));
-        return;
-      }
-      if (name === 'menuUp' || name === 'menuDown') {
-        const box = current.getBoundingClientRect();
-        const x = box.left + box.width / 2, y = box.top + box.height / 2;
-        let best = null, bestCost = Infinity;
-        for (const card of cards) {
-          if (card === current) continue;
-          const other = card.getBoundingClientRect();
-          const dy = other.top + other.height / 2 - y;
-          if (Math.abs(dy) < 4 || Math.sign(dy) !== step) continue;
-          // Nearest row first, then the card closest to the same column.
-          const cost = Math.abs(dy) + Math.abs(other.left + other.width / 2 - x) * 2;
-          if (cost < bestCost) { bestCost = cost; best = card; }
-        }
-        if (best) { best.focus(); return; }
-      }
-      cards[(index + step + cards.length) % cards.length].focus();
-    }
     async function action(name, routeNumber) {
       if (name === 'exitVR') { if (vr?.active) await vr.toggle(); return; }
       if (name === 'recenterVR') { rendering.vrCamera.recenter(); return; }
@@ -466,7 +426,7 @@ async function boot() {
       if (chooser) {
         if (name === 'menuClose' || (vr?.active && name === 'pause') || (name === 'car' && (chooser === carDialog || chooser === fleetDialog))) chooser.close();
         if (MENU_MOVES.includes(name)) moveMenuFocus(chooser, name);
-        if (name === 'menuConfirm' && chooser.contains(document.activeElement)) document.activeElement.click();
+        if (name === 'menuConfirm') confirmMenuFocus(chooser);
         return;
       }
       // The pause screen is not modal, so it takes the menu actions and leaves
@@ -476,11 +436,17 @@ async function boot() {
       if (pauseMenu && name.startsWith('menu')) {
         if (name === 'menuClose') { if (taxi.status !== 'over') setPaused(false); }
         else if (name !== 'menuConfirm') moveMenuFocus(pauseMenu, name);
-        else if (pauseMenu.contains(document.activeElement)) document.activeElement.click();
-        else $('#resume').focus();
+        else confirmMenuFocus(pauseMenu, pauseMenu === pauseOverlay ? $('#resume') : $('#taxi-retry'));
         return;
       }
-      if (name === 'nextJourney' || name === 'journey') return;
+      const welcomeMenu = openWelcomeMenu();
+      if (welcomeMenu && name.startsWith('menu')) {
+        if (name === 'menuConfirm') confirmMenuFocus(welcomeMenu, $('#start'));
+        else if (name !== 'menuClose') moveMenuFocus(welcomeMenu, name);
+        return;
+      }
+      if (name === 'map') { if (started && !paused) $('#city-map-toggle').click(); return; }
+      if (name === 'nextJourney') return;
       if (taxi.status === 'over') { if (name === 'reset') beginTaxi(); return; }
       if (name === 'car') { openCars(); return; }
       if (name === 'autodrive') {
@@ -535,6 +501,8 @@ async function boot() {
     }
     const input = new Input(action, connected => {
       toast(connected ? controlHelpDismissed() ? 'Controller connected' : 'Controller connected · RT / R2 to drive' : 'Controller disconnected');
+      // Show the focus ring straight away, so the title screen reads as a menu.
+      if (connected && openWelcomeMenu() && !$('#welcome').contains(document.activeElement)) $('#start').focus();
       if (!connected && started && !paused) setPaused(true);
     }, () => {
       if (changingJourney) return;
@@ -825,7 +793,11 @@ async function boot() {
     function frame(timestamp, xrFrame) {
       vrStatus.update(vrMenuModel());
       if (vr.active) input.xr.update(vr.session.inputSources, { blocked: !vr.visible || changingJourney, paused });
-      else input.gamepad.update({ blocked: document.hidden || !document.hasFocus() || changingJourney, paused, menu: openChooser() ? 'chooser' : openPauseMenu() ? 'pause' : false });
+      else {
+        input.gamepad.update({ blocked: document.hidden || !document.hasFocus() || changingJourney, paused, menu: openChooser() ? 'chooser' : openPauseMenu() ? 'pause' : openWelcomeMenu() ? 'welcome' : false });
+        const menu = input.gamepad.scroll && (openChooser() ?? openPauseMenu() ?? openWelcomeMenu());
+        if (menu) scrollMenu(menu, input.gamepad.scroll * 18);
+      }
       const running = !paused && !hidden();
       frameClock.tick(timestamp, running, simulate);
       const dt = frameClock.dt;

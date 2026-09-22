@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { TaxiRun, taxiRoute, leadStop, SHIFT_SECONDS, MAX_SHIFT_SECONDS, GROUP_MAX_ROUTE, DROP_OFF_CLEARANCE } from '../src/taxi-run.js';
+import { TaxiRun, taxiRoute, leadStop, SHIFT_SECONDS, MAX_SHIFT_SECONDS, GROUP_MAX_ROUTE, DROP_OFF_CLEARANCE,
+  TIPS, COMBO_MAX, STUNT_BOOST, CRAZY_STOP_SPEED } from '../src/taxi-run.js';
 import { citydriverRoute, cityStreetAt, cityRiverAt } from '../src/world/city-grid.js';
 import { DrivingController, createCar } from '../src/vehicle.js';
 import { steerCurve } from '../src/handling.js';
@@ -267,26 +268,57 @@ function advance(run, car, meters) {
   }
 }
 
-test('near misses score once per car; drifts build tips and crashes break the combo', () => {
+test('near misses score once per car; drifts build tips and crashes break the combo but keep the tips', () => {
   const run = new TaxiRun(), car = player(); run.start(car); pickup(run, car, run.customers.find(c => c.passengers === 1));
   car.speed = 25; const other = { s: car.s, u: car.u + 3.5, speed: 10, direction: 1, axis: 'north' };
-  run.update(1 / 60, car, [other]); assert.equal(run.tips, 10); assert.equal(run.combo, 2);
-  run.update(1 / 60, car, [other]); assert.equal(run.tips, 10);
-  advance(run, car, 20); car.drifting = true; run.update(1, car); assert.equal(run.tips, 20); assert.equal(run.combo, 3);
-  car.audioTelemetry.impactSerial++; car.audioTelemetry.impact = 15; car.drifting = false;
-  run.update(1 / 60, car, [{ ...other }]); assert.equal(run.tips, 10); assert.equal(run.combo, 1);
+  run.update(1 / 60, car, [other]); assert.equal(run.tips, TIPS.nearMiss); assert.equal(run.combo, 2);
+  run.update(1 / 60, car, [other]); assert.equal(run.tips, TIPS.nearMiss);
+  advance(run, car, 20); car.drifting = true; run.update(1, car);
+  const earned = TIPS.nearMiss + TIPS.drift * 2; assert.equal(run.tips, earned); assert.equal(run.combo, 3);
+  run.drainEvents(); car.audioTelemetry.impactSerial++; car.audioTelemetry.impact = 15; car.drifting = false;
+  run.update(1 / 60, car, [{ ...other }]); assert.equal(run.tips, earned, 'a crash costs the chain, not the tips'); assert.equal(run.combo, 1);
+  assert.deepEqual(run.drainEvents().map(e => e.text), ['Crash · ×3 combo lost']);
   run.combo = 3; run.comboTime = .1; run.update(.2, car); assert.equal(run.combo, 1);
+});
+
+test('a stunt chain climbs to its cap and every trick tops up the boost', () => {
+  const run = new TaxiRun(), car = player(); run.start(car); pickup(run, car, run.customers.find(c => c.passengers === 1));
+  run.boost = 0; let expected = 0;
+  for (let i = 1; i <= COMBO_MAX + 2; i++) { expected += TIPS.drift * Math.min(i, COMBO_MAX); run.reward('Drift', TIPS.drift); }
+  assert.equal(run.tips, expected); assert.equal(run.combo, COMBO_MAX); assert.equal(run.tipMultiplier, COMBO_MAX);
+  assert.ok(Math.abs(run.boost - Math.min(1, (COMBO_MAX + 2) * STUNT_BOOST)) < 1e-9);
+});
+
+test('a fast handbrake stop in the ring is a Crazy stop; an ordinary stop is not', () => {
+  const run = new TaxiRun(), car = player(); run.start(car); run.drainEvents();
+  const slide = (target, speed, handbrake) => {
+    Object.assign(car, { s: target.s, u: target.u, speed }); car.audioTelemetry.handbrake = handbrake ? 1 : 0; run.update(1 / 60, car);
+    car.speed = 0; car.audioTelemetry.handbrake = 0;
+    for (let i = 0; i < 29; i++) run.update(1 / 60, car);
+  };
+  const solo = run.customers.find(c => c.passengers === 1 && c.id !== run.blockedPickup?.id);
+  slide(solo, CRAZY_STOP_SPEED + 6, true);
+  assert.equal(run.status, 'driving'); assert.equal(run.tips, TIPS.crazyStop); assert.equal(run.combo, 2, 'it starts the chain');
+  assert.deepEqual(run.drainEvents().map(e => e.text), [`Crazy stop +$${TIPS.crazyStop} · Rider aboard · +6s`]);
+  slide(run.target, CRAZY_STOP_SPEED + 8, true);
+  const paid = run.drainEvents().find(e => e.kind === 'paid');
+  assert.equal(paid.stunt, TIPS.crazyStop * 2); assert.ok(paid.text.includes(`Crazy stop +$${TIPS.crazyStop * 2} · `));
+  const next = run.customers.find(c => c.passengers === 1 && c.id !== run.blockedPickup?.id);
+  slide(next, CRAZY_STOP_SPEED + 6, false);
+  assert.equal(run.status, 'driving'); assert.equal(run.tips, 0, 'braking without the handbrake is an ordinary stop');
+  slide(run.target, CRAZY_STOP_SPEED - 2, true);
+  assert.equal(run.drainEvents().find(e => e.kind === 'paid').stunt, 0, 'a slow slide is an ordinary stop');
 });
 
 test('stunts only tip on the way: circling for drift tips earns nothing', () => {
   const run = new TaxiRun(), car = player(); run.start(car); pickup(run, car, run.customers.find(c => c.passengers === 1));
   car.speed = 20; car.drifting = true;
-  run.update(.7, car); assert.equal(run.tips, 5, 'the first drift on the way tips');
+  run.update(.7, car); assert.equal(run.tips, TIPS.drift, 'the first drift on the way tips');
   // Holding a drift in place, as when circling, pays nothing more.
   for (let i = 0; i < 20; i++) run.update(.7, car);
-  assert.equal(run.tips, 5);
+  assert.equal(run.tips, TIPS.drift);
   // Carrying on toward the drop-off tips again.
-  advance(run, car, 30); run.update(.7, car); assert.ok(run.tips > 5);
+  advance(run, car, 30); run.update(.7, car); assert.ok(run.tips > TIPS.drift);
 });
 
 test('the cab has a roof sign, boost adds speed, and drifting creates recoverable slip', () => {
@@ -394,39 +426,39 @@ test('a short continuous corner drift earns a tip, but separate taps do not accu
   assert.equal(run.tips, 0);
   car.drifting = true;
   for (let i = 0; i < 42; i++) run.update(1 / 60, car);
-  assert.equal(run.tips, 5); assert.equal(run.combo, 2);
+  assert.equal(run.tips, TIPS.drift); assert.equal(run.combo, 2);
 });
 
-test('one prolonged scrape costs tips once and cannot earn stunts until clear', () => {
+test('one prolonged scrape breaks the combo once, keeps the tips and cannot earn stunts until clear', () => {
   const run = new TaxiRun(), car = player(); run.start(car); pickup(run, car);
-  run.drainEvents(); run.tips = 100; car.speed = 25; car.drifting = true;
+  run.drainEvents(); run.tips = 100; run.combo = 4; run.comboTime = 4; car.speed = 25; car.drifting = true;
   const other = { s: car.s, u: car.u + 3.5, speed: 10, direction: 1 };
   for (let i = 0; i < 120; i++) {
     car.audioTelemetry.impactSerial++; car.audioTelemetry.impact = 8;
     run.update(1 / 60, car, [other]);
   }
-  assert.equal(run.tips, 50); assert.equal(run.combo, 1);
+  assert.equal(run.tips, 100); assert.equal(run.combo, 1);
   const events = run.drainEvents();
   assert.equal(events.filter(e => e.kind === 'crash').length, 1);
   assert.equal(events.filter(e => e.kind === 'tip').length, 0);
   car.drifting = false; run.update(1, car);
   car.audioTelemetry.impactSerial++; run.update(1 / 60, car);
-  assert.equal(run.tips, 25, 'a later distinct crash still carries a penalty');
+  assert.equal(run.tips, 100); assert.equal(run.drainEvents().length, 0, 'with no chain to lose, a bump says nothing');
   run.start(car); pickup(run, car); car.speed = 25; car.drifting = true; run.update(.7, car);
-  assert.equal(run.tips, 5, 'restart clears crash recovery');
+  assert.equal(run.tips, TIPS.drift, 'restart clears crash recovery');
 });
 
 test('long fares return more time than short fares and the shift still has a ceiling', () => {
   const complete = (length, timeLeft = 30) => {
     const run = new TaxiRun(), car = player(); run.start(car); pickup(run, car, run.customers.find(c => c.passengers === 1));
-    run.currentStop.length = length; run.timeLeft = timeLeft;
+    run.fare.length = run.currentStop.length = length; run.timeLeft = timeLeft;
     Object.assign(car, { s: run.target.s, u: run.target.u }); run.update(.5, car);
     assert.equal(run.delivered, 1); assert.ok(run.cash > 0);
     return run;
   };
   const short = complete(300), long = complete(1000);
-  assert.equal(short.timeLeft, 42.5, 'a short fare delivered at once is Speedy: 8 s plus 5 s');
-  assert.ok(long.timeLeft >= short.timeLeft + 8 && long.timeLeft <= short.timeLeft + 12);
-  assert.match(long.drainEvents().find(e => e.kind === 'paid').text, /^Speedy! .*\+23s/);
+  assert.equal(short.timeLeft, 43.5, 'a short fare delivered at once is Speedy: 9 s for the distance plus 5 s');
+  assert.equal(long.timeLeft, short.timeLeft + 21, 'every 33 m of route earns a second');
+  assert.match(long.drainEvents().find(e => e.kind === 'paid').text, /^Speedy! · \+\$\d+ · \+35s$/);
   assert.equal(complete(1100, MAX_SHIFT_SECONDS - 1).timeLeft, MAX_SHIFT_SECONDS);
 });
