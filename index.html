@@ -67,7 +67,7 @@
       <aside id="city-guide" class="city-guide" aria-label="Landmarks">
         <div class="city-guide-header"><span>MAP <b id="city-stamps">0 / 5</b></span><button type="button" id="city-map-toggle" aria-expanded="true" aria-controls="city-map">Hide map</button></div>
         <canvas id="city-map" width="208" height="144" role="img" aria-label="Local street map. North is up; the white arrow is your car, gold marks your route, and colored dots mark landmarks."></canvas>
-        <div class="city-guide-stop"><span class="city-guide-eyebrow">DESTINATION</span><strong id="city-stop-name">Destination</strong><span id="city-stop-distance">Choose a stop.</span></div>
+        <div class="city-guide-stop"><span class="city-guide-eyebrow">DESTINATION</span><strong id="city-stop-name">Destination</strong><span id="city-stop-context"></span><span id="city-stop-distance">Choose a stop.</span></div>
         <button type="button" id="next-city-stop">Next stop <span aria-hidden="true">↗</span></button>
       </aside>
       <p id="vr-error" role="status" hidden></p>
@@ -105,10 +105,10 @@
               <label class="weather-setting" for="city-weather"><span>Weather &amp; light</span><select id="city-weather"><option value="auto" selected>Auto</option><option value="clear">Day</option><option value="overcast">Overcast</option><option value="rain">Rain</option><option value="storm">Storm</option><option value="sunset">Golden hour</option><option value="night">Night</option></select></label>
             </section>
             <section class="pause-panel notebook-panel" aria-labelledby="notebook-heading">
-              <h3 id="notebook-heading">Landmarks</h3>
+              <h3 id="notebook-heading">City discoveries</h3>
               <p id="city-notebook-progress">Pass landmarks to mark them visited.</p>
               <div id="city-notebook" aria-label="Landmark destinations"></div>
-              <p class="weather-note">Select a destination.</p>
+              <p class="weather-note">Choose a place to visit. Collect stamps in free drive or while taking fares.</p>
             </section>
             <section class="pause-panel" aria-labelledby="sound-heading">
               <h3 id="sound-heading">Sound</h3>

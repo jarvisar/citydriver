@@ -28,7 +28,7 @@ try {
       const profile = cityStreetProfile(axis, index), lane = index * 112 + (axis === 'north' ? 1 : -1) * direction * profile.lane;
       Object.assign(car, cityLanePose(axis, lane, along, direction)); car.speed = 0;
       car.knock.x = car.knock.z = car.knock.spin = 0; car.update(0, {});
-      const pilot = new CityAutodrive(), from = { s: car.s, u: car.u }, impact = car.audioTelemetry.impactSerial;
+      const pilot = new CityAutodrive({ random: () => .9 }), from = { s: car.s, u: car.u }, impact = car.audioTelemetry.impactSerial;
       let offRoad = 0, blocked = 0;
       for (let tick = 0; tick < 2400; tick++) {
         a.world.update(car.s, car.u);

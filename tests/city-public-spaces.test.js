@@ -19,7 +19,7 @@ class PublicSpaceChunk extends CitydriverChunk {
 }
 function samples() {
   const result = new Map();
-  for (let ix = -24; ix <= 24; ix++) for (let iz = -24; iz <= 24; iz++) {
+  for (let ix = -48; ix <= 48; ix++) for (let iz = -48; iz <= 48; iz++) {
     const b = cityBlock(ix, iz), type = b.landmark || b.kind;
     if (!SPACE_NAMES[type]) continue;
     const design = publicSpacePlan(b), key = `${type}-${design.variant}`;
@@ -29,8 +29,8 @@ function samples() {
   }
   return result;
 }
-test('public spaces cover 23 designs and neighbouring ordinary spaces never duplicate their layout', () => {
-  const found = samples(); assert.equal(found.size, 23);
+test('public spaces cover every destination design and neighbouring ordinary spaces never duplicate their layout', () => {
+  const found = samples(); assert.equal(found.size, Object.values(SPACE_NAMES).reduce((n, designs) => n + designs.length, 0));
   for (const blocks of found.values()) {
     const ordinary = blocks[0].kind === 'park' || blocks[0].kind === 'plaza';
     assert.equal(blocks.length, ordinary ? 4 : 3);

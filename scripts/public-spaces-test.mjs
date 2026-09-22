@@ -17,7 +17,7 @@ try {
     const { cityBlock } = await import('/src/world/city-grid.js');
     const { publicSpacePlan, SPACE_NAMES } = await import('/src/world/city-public-space-kit.js');
     const found = new Map();
-    for (let ix = -16; ix <= 16; ix++) for (let iz = -16; iz <= 16; iz++) {
+    for (let ix = -40; ix <= 40; ix++) for (let iz = -40; iz <= 40; iz++) {
       const b = cityBlock(ix, iz); if (!SPACE_NAMES[b.landmark || b.kind]) continue;
       const plan = publicSpacePlan(b), key = `${plan.type}-${plan.variant}`;
       if (!found.has(key)) found.set(key, { key, ix, iz, ...plan });
@@ -28,7 +28,7 @@ try {
     window.__citydriver.rendering.renderer.domElement.style.visibility = 'visible';
     return [...found.values()].sort((a, b) => Object.keys(SPACE_NAMES).indexOf(a.type) - Object.keys(SPACE_NAMES).indexOf(b.type) || a.variant - b.variant);
   });
-  assert.equal(sites.length, 23);
+  assert.equal(sites.length, 53);
   const cases = sites.concat([
     { key: 'north-river-join', name: 'North–south river bank', type: 'river', ix: 3, iz: 2, focus: [28, 12.6] },
     { key: 'east-river-join', name: 'East–west river bank', type: 'river', ix: 2, iz: 5, focus: [12.6, 84.4] },
@@ -63,7 +63,7 @@ try {
         clock: [[56, 32], [31, 39], [29, 62]], market: [[33, 50], [56, 50], [50, 50]],
         garden: [[39, 35], [56, 47], [73, 50]], depot: [[56, 61], [56, 60], [72, 69]], art: [[56, 56], [56, 56], [56, 56]],
       };
-      let [fx, fs] = focus ?? locations[type][variant];
+      let [fx, fs] = focus ?? locations[type]?.[variant] ?? [56, 40];
       if (type === 'park' || type === 'plaza') {
         [fx, fs] = orientation === 1 ? [112 - fs, fx] : orientation === 2 ? [112 - fx, 112 - fs] : orientation === 3 ? [fs, 112 - fx] : [fx, fs];
       }

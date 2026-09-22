@@ -10,7 +10,7 @@ export class CityGuide {
     let storage; try { storage = localStorage; } catch { /* Optional storage. */ }
     this.exploration = new CityExploration(storage); this.notify = notify; this.position = position;
     this.canvas = $('city-map'); this.ctx = this.canvas.getContext('2d'); this.expanded = true;
-    $('city-notebook').innerHTML = PLACE_TYPES.map(type => `<button type="button" class="notebook-place" data-place-type="${type}" style="--place-color:${CITY_PLACES[type].color}"><span class="notebook-stamp">${CITY_PLACES[type].symbol}</span><span><strong>${CITY_PLACES[type].name}</strong><small>${CITY_PLACES[type].short}</small></span><span class="notebook-check" aria-hidden="true">○</span></button>`).join('');
+    $('city-notebook').innerHTML = PLACE_TYPES.map(type => `<button type="button" class="notebook-place" data-place-type="${type}" title="${CITY_PLACES[type].description}" style="--place-color:${CITY_PLACES[type].color}"><span class="notebook-stamp">${CITY_PLACES[type].symbol}</span><span><strong>${CITY_PLACES[type].name}</strong><small>${CITY_PLACES[type].short}</small></span><span class="notebook-check" aria-hidden="true">○</span></button>`).join('');
     for (const button of document.querySelectorAll('[data-place-type]')) button.addEventListener('click', () => this.next(button.dataset.placeType));
     $('next-city-stop').addEventListener('click', () => { this.next(); $('next-city-stop').blur(); });
     $('city-map-toggle').addEventListener('click', () => {
@@ -32,7 +32,7 @@ export class CityGuide {
     const found = this.exploration.found;
     $('city-stamps').textContent = `${found.size} / ${PLACE_TYPES.length}`;
     $('city-notebook-progress').textContent = found.size === PLACE_TYPES.length
-      ? '5 / 5 visited'
+      ? `${PLACE_TYPES.length} / ${PLACE_TYPES.length} visited`
       : `${found.size} / ${PLACE_TYPES.length} visited`;
     for (const button of document.querySelectorAll('[data-place-type]')) {
       const collected = found.has(button.dataset.placeType);
@@ -42,16 +42,17 @@ export class CityGuide {
     }
   }
   update(active) {
-    if (this.taxi?.running) { this.updateTaxi(); return; }
-    $('next-city-stop').disabled = false; $('next-city-stop').textContent = 'Next stop';
     const vehicle = this.position(), e = this.exploration;
     const found = e.update(vehicle.s, vehicle.u, active);
     if (found.length) {
       this.notify(e.found.size === PLACE_TYPES.length ? 'All landmarks visited' : `${found[0].name} · ${e.found.size} / ${PLACE_TYPES.length}`);
       this.refreshNotebook();
     }
+    if (this.taxi?.running) { this.updateTaxi(); return; }
+    $('next-city-stop').disabled = false; $('next-city-stop').textContent = 'Next stop';
     const target = e.target, route = placeRoute(vehicle.s, vehicle.u, target), distance = routeDistance(route);
     $('city-stop-name').textContent = target?.name ?? 'Destination';
+    $('city-stop-context').textContent = target ? `${target.short} · ${target.district}` : '';
     $('city-stop-distance').textContent = e.justArrived?.id === target?.id ? 'Visited' : `${distance < 1000 ? `${Math.round(distance / 10) * 10} m` : `${(distance / 1000).toFixed(1)} km`}`;
     if (this.expanded) this.draw(vehicle, route);
   }

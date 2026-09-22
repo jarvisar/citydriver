@@ -47,6 +47,27 @@ test('pickup and payment require stopping; successful fares add cash and time on
   assert.equal(run.drainEvents().length, 0);
 });
 
+test('expanded destinations offer distinct customers, reachable stops and varied successive fares', () => {
+  const car = player(), run = new TaxiRun(), visited = new Set(); run.start(car);
+  for (let trip = 0; trip < 24; trip++) {
+    assert.equal(run.customers.length, 3);
+    assert.equal(new Set(run.customers.map(c => c.destination.type)).size, 3);
+    for (const customer of run.customers) {
+      assert.notEqual(customer.name, 'Passenger');
+      assert.ok(customer.length >= 280 && customer.length <= 1100);
+      assert.equal(cityStreetAt(customer.s, customer.u).median, false);
+      assert.equal(cityStreetAt(customer.destination.s, customer.destination.u).median, false);
+      for (const other of run.customers) if (other !== customer) assert.ok(Math.hypot(other.s - customer.s, other.u - customer.u) > 24);
+    }
+    assert.ok(!run.recentDestinations.includes(run.target.destination.type), 'recent destinations are avoided when alternatives exist');
+    pickup(run, car); visited.add(run.target.type);
+    Object.assign(car, { s: run.target.s, u: run.target.u, speed: 0 });
+    run.update(.5, car);
+    assert.equal(run.delivered, trip + 1);
+  }
+  assert.ok(visited.size >= 10, `a shift explores many different destinations: ${[...visited]}`);
+});
+
 test('late fares fail, shift expiry ends the run, and restart clears state but retains best', () => {
   const saved = new Map(), storage = { getItem: k => saved.get(k), setItem: (k, v) => saved.set(k, v) };
   const car = player(), run = new TaxiRun(storage); run.start(car); pickup(run, car);

@@ -14,6 +14,7 @@ import { riverResidentPose } from '../src/world/city-rivers.js';
 import { planBuildings } from '../src/world/city-buildings.js';
 import { placeCityBuildings, parcelsOverlap, footprintFitsBlock } from '../src/world/city-parcels.js';
 import { cityBlock } from '../src/world/city-grid.js';
+import { LANDMARK_TYPES } from '../src/world/city-places.js';
 
 test('mixed neighborhoods remain invertible, reproducible and joined across positive and negative addresses', () => {
   let rectangular = 0, curved = 0;
@@ -143,7 +144,7 @@ test('architecture keeps its exact dimensions and right angles, fitting irregula
 test('landmark assemblies remain rigid and residents keep to dry banks in both river orientations', () => {
   const world = new CitydriverWorld(new THREE.Scene()), types = new Set();
   try {
-    for (let ix = -8; ix <= 8; ix++) for (let iz = 1; iz <= 8; iz++) {
+    for (let ix = -24; ix <= 24; ix++) for (let iz = -24; iz <= 24; iz++) {
       const block = cityBlock(ix, iz); if (!block.landmark || types.has(block.landmark)) continue;
       const c = new CitydriverChunk(ix, iz, world.materials, true); types.add(block.landmark);
       for (const batch of c.batches.values()) for (const item of batch.items) {
@@ -155,7 +156,7 @@ test('landmark assemblies remain rigid and residents keep to dry banks in both r
       }
       c.dispose();
     }
-    assert.equal(types.size, 5);
+    assert.equal(types.size, LANDMARK_TYPES.length);
     for (const [ix, iz] of [[3, 2], [0, 5], [3, 5], [-4, -8]]) {
       const c = new CitydriverChunk(ix, iz, world.materials);
       for (const walker of c.walkers) for (let time = 0; time < 300; time += 3.7) {

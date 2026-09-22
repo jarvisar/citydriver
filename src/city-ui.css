@@ -64,12 +64,16 @@
 .city-guide-eyebrow { color: #b7c9bd; font-size: 8px; letter-spacing: 1.25px; }
 #city-stop-name { font-family: Georgia, serif; font-size: 21px; font-weight: 400; letter-spacing: -.3px; }
 #city-stop-distance { font-size: 10px; color: #c4d2c8; }
+#city-stop-context { font-size: 10px; line-height: 1.5; color: #becfc4; }
 #next-city-stop { min-height: 35px; width: 100%; display: flex; align-items: center; justify-content: space-between; border-top: 1px solid #d2e0cc26; padding: 10px 1px 0; font-size: 11px; color: #f1cc8e; }
 #next-city-stop:hover { color: #fff5da; }
 #next-city-stop span { font-size: 18px; }
 #app:has(#welcome:not(.hidden), #pause-overlay:not([hidden]), dialog[open], #journey-transition.active) .city-guide { visibility: hidden; pointer-events: none; }
 #city-notebook-progress { font-size: 12px; line-height: 1.6; margin: 0 0 12px; }
 .notebook-panel { padding: 14px; border: 1px solid var(--ui-line); border-radius: 12px; background: color-mix(in srgb, var(--cream) 90%, transparent); }
+#city-notebook { max-height: 360px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; padding: 2px 8px 2px 2px; }
+.notebook-place:hover { background: color-mix(in srgb, var(--place-color) 18%, transparent); }
+.notebook-place:focus-visible { outline-offset: -2px; }
 .notebook-place { display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 0; text-align: left; border: 0; border-bottom: 1px solid var(--ui-line); background: transparent; }
 .notebook-place > span:nth-child(2) { flex: 1; }
 .notebook-place strong { display: block; font-size: 12px; font-weight: 600; }

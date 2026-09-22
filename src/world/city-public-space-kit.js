@@ -13,6 +13,16 @@ export const SPACE_NAMES = {
   garden: ['Palm house', 'Twin conservatories', 'Water garden'],
   depot: ['Tram sheds', 'Platform gardens', 'Works yard'],
   art: ['Balancing act', 'Colour gates', 'The sundial'],
+  cinema: ['Premiere palace', 'Matinee gardens', 'Picture house'],
+  hotel: ['Grand terrace', 'Palm court', 'Copper crown'],
+  museum: ['Classical gallery', 'Sculpture court', 'Modern wing'],
+  station: ['Union terminal', 'Garden platforms', 'Express hall'],
+  library: ['Lantern library', 'Reading garden', 'Archive house'],
+  hospital: ['Healing garden', 'Medical pavilion', 'Memorial court'],
+  observatory: ['Celestial garden', 'Planetarium court', 'Star pavilion'],
+  music: ['Jazz courtyard', 'Garden sessions', 'Blue Note stage'],
+  sports: ['Tennis club', 'Basketball club', 'Neighborhood courts'],
+  firehouse: ['Heritage engine house', 'Station garden', 'Hose tower'],
 };
 const PALETTES = [
   { stone: '#d5c7ad', path: '#c7b99b', green: '#819668', accent: '#bd785b', flower: '#c597ab' },

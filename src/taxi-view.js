@@ -90,7 +90,7 @@ export class TaxiView {
     const length = routeDistance(taxiRoute(vehicle, stop));
     $('taxi-nav-distance').textContent = `${Math.round(length / 10) * 10} m`;
     $('taxi-task-title').textContent = run.status === 'pickup' ? 'PICK UP' : stop.name;
-    $('taxi-task-detail').textContent = run.status === 'pickup' ? 'Stop in a pickup ring' : `${Math.ceil(run.fareLeft)}s · ${money(run.fare.fare + run.tips)} · Stop in the yellow ring`;
+    $('taxi-task-detail').textContent = run.status === 'pickup' ? `${stop.name} → ${stop.destination.name} · Stop in the ring` : `${Math.ceil(run.fareLeft)}s · ${money(run.fare.fare + run.tips)} · Stop in the yellow ring`;
     $('taxi-stop-progress').style.width = `${Math.min(1, run.hold / STOP_SECONDS) * 100}%`;
     $('taxi-combo').textContent = run.status === 'driving' && run.combo > 1 ? `TIP ×${run.combo}` : '';
     $('taxi-task').dataset.stage = run.status;

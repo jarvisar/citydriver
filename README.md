@@ -17,7 +17,11 @@ Start a **Taxi run** with 90 seconds. Stop inside a pickup ring to board a passe
 
 On the main menu, press forward to enter free drive, or press **R** to generate a new city. **Start run** starts a taxi run.
 
-Blocks mix shops, brick buildings, balcony apartments, stepped towers, and warehouses, with varied rooflines and planted courtyards. Weather defaults to Auto, starting at golden hour and cycling through conditions; your selected weather is saved.
+Explore **17 discovery categories**, including a cinema, grand hotel, museum, railway station, library, hospital, observatory, jazz club, athletic club, and historic firehouse. Parks and city squares are destinations too. Passenger offers show the customer and destination, favor varied trips, and collect discovery stamps during taxi runs as well as free drive. Choose any destination from **Pause → City discoveries**; existing stamps stay saved.
+
+Blocks mix ten architectural styles: shops, brick buildings, balcony apartments, glass offices, Art Deco towers, warehouses, mansard townhouses, factory lofts, butterfly-roofed pavilions, and glazed atrium buildings. Neighborhood palettes, ten storefront signs, roof gardens and eight roof types give the streets distinct character. Weather defaults to Auto, starting at golden hour and cycling through conditions; your selected weather is saved.
+
+The [city improvement notes](docs/city-improvements.md) describe the destinations, art direction, and repeatable before/after screenshot tour.
 
 Side streets have stop signs. Avenues connect to wider boulevards with grass and trees in the medians. Traffic stops and yields at smaller junctions.
 

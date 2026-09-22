@@ -8,16 +8,19 @@ import { cityRigidFrame } from './city-layout.js';
 const pick = (items, random) => items[Math.floor(random() * items.length)];
 const integer = (random, min, max) => min + Math.floor(random() * (max - min + 1));
 const ACCENTS = ['#386f73', '#a9503e', '#cc9a48', '#456282', '#687b59'];
-const ROOFS = ['#636a70', '#59636b', '#767b78', '#6b7278'];
+const creamTrim = '#e4d2b0';
+const ROOFS = ['#647c7a', '#667789', '#987463', '#758a7d', '#8b8874'];
 const STYLES = {
-  'Old town': { types: ['brick', 'brick', 'apartment', 'shop', 'deco'], walls: ['#b47760', '#c8ad88', '#985b50', '#e0c6a4', '#738b88'], layouts: ['street', 'court', 'mixed'] },
-  'Garden quarter': { types: ['apartment', 'apartment', 'brick', 'shop'], walls: ['#cad1b6', '#7c9e91', '#e0c8aa', '#c49b88', '#8799ac'], layouts: ['court', 'mixed', 'street'] },
-  Midtown: { types: ['office', 'deco', 'apartment', 'office', 'brick'], walls: ['#8dabb4', '#adc1c5', '#d5c6ad', '#6c8694', '#b39c8c'], layouts: ['towers', 'mixed', 'street'] },
-  'Warehouse district': { types: ['warehouse', 'warehouse', 'brick', 'shop'], walls: ['#a56f59', '#bfa68a', '#8c9996', '#997b6b', '#c6b697'], layouts: ['works', 'mixed', 'street'] },
-  'Market district': { types: ['brick', 'apartment', 'shop', 'deco', 'brick'], walls: ['#be8068', '#d6ba95', '#688b88', '#cfaa81', '#718293'], layouts: ['street', 'mixed', 'court'] },
-  'Civic quarter': { types: ['deco', 'apartment', 'brick', 'office', 'shop'], walls: ['#cfc6b4', '#9fadb4', '#bc927e', '#d5b996', '#a6b8ae'], layouts: ['mixed', 'court', 'towers'] },
+  'Old town': { types: ['townhouse', 'brick', 'townhouse', 'shop', 'deco'], walls: ['#c88368', '#d4bb91', '#a65e52', '#ead2b0', '#7b9d95'], layouts: ['street', 'court', 'mixed'] },
+  'Garden quarter': { types: ['apartment', 'townhouse', 'pavilion', 'apartment', 'shop'], walls: ['#cbd6b5', '#86b1a1', '#e6d1ad', '#d5a998', '#9daec1'], layouts: ['court', 'mixed', 'street'] },
+  Midtown: { types: ['office', 'atrium', 'deco', 'office', 'atrium'], walls: ['#8eafb9', '#accad0', '#ded0b4', '#7897a7', '#b4aaa3'], layouts: ['towers', 'mixed', 'street'] },
+  'Warehouse district': { types: ['warehouse', 'loft', 'loft', 'brick', 'pavilion'], walls: ['#b7795b', '#cfac84', '#87a19a', '#a67b69', '#c8b58c'], layouts: ['works', 'mixed', 'street'] },
+  'Market district': { types: ['townhouse', 'apartment', 'shop', 'pavilion', 'brick'], walls: ['#d08a70', '#dec29a', '#74a39a', '#d6ab7d', '#859aaf'], layouts: ['street', 'mixed', 'court'] },
+  'Civic quarter': { types: ['deco', 'atrium', 'brick', 'office', 'pavilion'], walls: ['#dbcfb8', '#a1b8bc', '#c99a83', '#ddc19e', '#afc8b4'], layouts: ['mixed', 'court', 'towers'] },
 };
-const HEIGHTS = { brick: [2, 6], apartment: [3, 7], shop: [1, 2], warehouse: [1, 3], office: [6, 13], deco: [5, 10] };
+const HEIGHTS = { brick: [2, 6], apartment: [3, 8], shop: [1, 2], warehouse: [1, 3], office: [7, 16], deco: [5, 12], townhouse: [2, 4], loft: [3, 5], pavilion: [1, 2], atrium: [5, 11] };
+export const BUILDING_TYPES = Object.keys(HEIGHTS);
+export const SHOP_NAMES = ['CAFE', 'DELI', 'BOOKS', 'RECORDS', 'BAKERY', 'FLOWERS', 'NOODLES', 'CYCLES', 'GROCER', 'STUDIO'];
 
 // Plan lots before adding detail, so the skyline and collisions agree at both
 // render distances. Narrow frontages share a block with deeper, wider buildings.
@@ -50,7 +53,7 @@ export function planBuildings(plan) {
   } else if (layout === 'works') {
     add(17, 17, 43 + random() * 6, 31, 'warehouse');
     add(74, 18, 21, 29, 'brick');
-    add(17, 65, 29, 29, 'warehouse');
+    add(17, 65, 29, 29, 'loft');
     add(53, 67, 41, 27, 'warehouse');
   } else {
     row(16, false, 3, 22, 34, ['shop', undefined, undefined]);
@@ -61,11 +64,11 @@ export function planBuildings(plan) {
     const floors = integer(random, low, high), accent = pick(ACCENTS, random);
     let { x, s, width, depth } = lot;
     for (let r = 0; r < rotation; r++) { [x, s] = [112 - s, x]; [width, depth] = [depth, width]; }
-    const stepped = (type === 'deco' || type === 'office') || (type === 'apartment' && random() < .38);
+    const stepped = (type === 'deco' || type === 'office' || type === 'atrium') || (type === 'apartment' && random() < .38);
     return { x, s, width, depth, type, floors, wall: pick(style.walls, random), accent,
-      roof: pick(ROOFS, random), roofType: type === 'warehouse' ? 'sawtooth' : type === 'brick' && random() < .22 ? 'gable' : stepped ? 'terrace' : 'flat',
+      roof: pick(ROOFS, random), roofType: ({ townhouse: 'mansard', loft: 'monitor', pavilion: 'butterfly', atrium: 'lantern' })[type] ?? (type === 'warehouse' ? 'sawtooth' : type === 'brick' && random() < .22 ? 'gable' : stepped ? 'terrace' : 'flat'),
       setbackFloors: stepped ? Math.max(2, Math.floor(floors * .57)) : floors,
-      seed: (plan.seed + index * 9973) >>> 0, variation: integer(random, 0, 3), shop: pick(['CAFE', 'DELI', 'BOOKS', 'RECORDS'], random) };
+      seed: (plan.seed + index * 9973) >>> 0, variation: integer(random, 0, 3), shop: pick(SHOP_NAMES, random) };
   });
   for (const b of buildings) {
     b.streetSides = [b.x - b.width / 2 < 21, b.x + b.width / 2 > 91, b.s - b.depth / 2 < 21, b.s + b.depth / 2 > 91];
@@ -84,19 +87,21 @@ const signGeometry = new THREE.PlaneGeometry(1, 1);
 const muralGeometry = new THREE.BufferGeometry();
 muralGeometry.setAttribute('position', new THREE.Float32BufferAttribute([-.5, -.5, 0, .5, -.5, 0, 0, .5, 0], 3));
 muralGeometry.computeVertexNormals();
-export const SHOP_NAMES = ['CAFE', 'DELI', 'BOOKS', 'RECORDS'];
 export function shopSignMaterial(name) {
   let map = null;
   if (globalThis.document) {
-    const canvas = document.createElement('canvas'); canvas.width = 512; canvas.height = 128;
+    const vertical = name.endsWith(' TOWER');
+    const canvas = document.createElement('canvas'); canvas.width = vertical ? 128 : 512; canvas.height = vertical ? 512 : 128;
     const ctx = canvas.getContext('2d');
-    ctx.fillStyle = '#29484e'; ctx.fillRect(0, 0, 512, 128);
-    ctx.strokeStyle = '#d6c79e'; ctx.lineWidth = 3; ctx.strokeRect(9, 9, 494, 110);
+    const colors = { BAKERY: '#94664b', FLOWERS: '#55795a', NOODLES: '#a45142', RECORDS: '#625676', STUDIO: '#657999', RIVOLI: '#864a41', 'BLUE NOTE': '#39496d' };
+    ctx.fillStyle = colors[name] ?? '#29484e'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.strokeStyle = '#d6c79e'; ctx.lineWidth = 3; ctx.strokeRect(9, 9, canvas.width - 18, canvas.height - 18);
     ctx.fillStyle = '#f6e8c9'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = 'bold 65px sans-serif';
-    ctx.fillText(name, 256, 68);
+    if (vertical) [...name.replace(' TOWER', '')].forEach((letter, i, letters) => ctx.fillText(letter, 64, 38 + (i + .5) * 436 / letters.length, 96));
+    else ctx.fillText(name, 256, 68, 466);
     map = new THREE.CanvasTexture(canvas); map.colorSpace = THREE.SRGBColorSpace;
   }
-  return new THREE.MeshStandardMaterial({ map, color: map ? '#ffffff' : '#365c60', roughness: .85 });
+  return new THREE.MeshStandardMaterial({ map, color: map ? '#ffffff' : '#365c60', emissive: '#ffffff', emissiveMap: map, emissiveIntensity: map ? .22 : 0, roughness: .85 });
 }
 
 function roofEdge(c, x, s, width, depth, roof, color, parapet = .85, surface = '#707778') {
@@ -124,7 +129,7 @@ function facade(c, x, s, width, depth, side) {
 }
 
 function windows(c, b, x, s, width, depth, bottom, floors, metadata, upper = false) {
-  const random = seededRandom(b.seed + (upper ? 1723 : 0)), modern = b.type === 'office', loft = b.type === 'warehouse';
+  const random = seededRandom(b.seed + (upper ? 1723 : 0)), modern = b.type === 'office' || b.type === 'atrium', loft = b.type === 'warehouse' || b.type === 'loft';
   for (let side = 0; side < 4; side++) {
     const f = facade(c, x, s, width, depth, side), span = f.span;
     const bays = Math.max(2, Math.floor((span - 2) / (modern ? 4.4 : loft ? 6.5 : b.variation === 1 ? 5.6 : 4.8)));
@@ -135,11 +140,16 @@ function windows(c, b, x, s, width, depth, bottom, floors, metadata, upper = fal
       if (b.type === 'deco' && floor === floors - 1) f.add(0, y + 1.55, .2, span + .6, .35, .5, '#ded2b8', 'solid', true);
       for (let bay = 0; bay < bays; bay++) {
         const offset = (bay - (bays - 1) / 2) * spacing, lit = random() < .1;
-        const h = loft ? 2.05 : modern ? 2.75 : 2.2, frame = b.type === 'brick' ? '#cdbd9f' : '#a9b8b6';
+        const h = loft ? 2.45 : modern ? 2.75 : 2.2, frame = b.type === 'brick' || b.type === 'townhouse' ? '#e0ccab' : '#b3c5bc';
         f.add(offset, y, .075, windowWidth + .25, h + .25, .11, frame);
         f.add(offset, y, .17, windowWidth, h, .09, lit ? '#e3c38d' : modern ? '#5e8a9a' : '#3e5663', lit ? 'lit' : 'glass');
         if (loft || b.variation === 1) f.add(offset, y, .23, .09, h, .07, frame);
         if (!modern) f.add(offset, y - h / 2 - .14, .25, windowWidth + .44, .14, .48, frame);
+        if (b.type === 'townhouse') {
+          for (const sign of [-1, 1]) f.add(offset + sign * (windowWidth / 2 + .4), y, .2, .5, h, .15, b.accent, 'solid', true);
+          f.add(offset, y, .23, windowWidth, .12, .1, creamTrim);
+        }
+        if (b.type === 'loft') f.add(offset, y, .24, windowWidth, .12, .1, '#c8bda8');
         if (b.type === 'apartment' && b.openSides[side] && floor % 2 === b.variation % 2 && bay % 2 === 0 && side % 2 === 0) {
           f.add(offset, y - 1.35, .68, windowWidth + 1.1, .2, 1.5, '#d1c9b5', 'solid', true);
           f.add(offset, y - .85, 1.36, windowWidth + 1.1, .85, .12, b.accent, 'solid', true);
@@ -152,6 +162,12 @@ function windows(c, b, x, s, width, depth, bottom, floors, metadata, upper = fal
     if (b.type === 'deco') for (let bay = 0; bay <= bays; bay++) {
       const offset = (bay - bays / 2) * spacing;
       f.add(offset, bottom + floors * 1.8, .18, .38, floors * 3.6, .4, '#cfbea2', 'solid', true);
+    }
+    if (b.type === 'loft' || b.type === 'townhouse') for (let floor = 1; floor <= floors; floor++) {
+      f.add(0, bottom + floor * 3.6 - .12, .16, span + .3, b.type === 'loft' ? .4 : .22, .3, '#d6c1a0', 'solid', true);
+    }
+    if (b.type === 'atrium' || b.type === 'pavilion') for (let bay = 0; bay <= bays; bay++) {
+      f.add((bay - bays / 2) * spacing, bottom + floors * 1.8, .4, .25, floors * 3.6, .85, b.type === 'pavilion' ? '#bf976c' : '#d5d9bd', 'solid', true);
     }
   }
 }
@@ -192,7 +208,7 @@ function storefront(c, b, baseHeight) {
 
 function roofDetails(c, b, x, s, w, d, roof) {
   const random = seededRandom(b.seed ^ 0x5bd1e995), equipment = integer(random, 1, 3);
-  const garden = (b.type === 'apartment' || b.type === 'shop') && b.variation === 3;
+  const garden = (b.type === 'apartment' || b.type === 'shop') && b.variation >= 2;
   for (let i = 0; i < equipment; i++) {
     const px = x + (random() - .5) * (w - 7), ps = garden ? s - d * .28 : s + (random() - .5) * (d - 7), size = 1.4 + random() * 2;
     c.box(px, roof + .4 + size / 3, ps, size, size * .66, size * 1.15, '#919b9b');
@@ -222,6 +238,50 @@ function roofDetails(c, b, x, s, w, d, roof) {
     f.add(0, roof + 4.1, 0, width, 4.3, .24, b.accent, 'solid', true);
     if (!c.distant) for (const [offset, size, color] of [[-width * .16, 2.6, '#efdfb9'], [width * .14, 1.8, '#9cbdba']]) {
       c.item('roof-murals', muralGeometry, c.materials.solid, f.position(offset, roof + 4, .14), [size, size, 1], color, f.yaw);
+    }
+  }
+}
+
+function signatureRoof(c, b, x, s, w, d, roof) {
+  if (b.roofType === 'mansard') {
+    // A steep copper/slate skirt and inset cap distinguish the old-town houses.
+    const inset = Math.min(3, w * .17, d * .17), rise = 4.2;
+    for (let i = 0; i < 7; i++) {
+      const t = (i + .5) / 7;
+      c.box(x, roof + t * rise, s, w - 2 * inset * t, rise / 7 + .025, d - 2 * inset * t, b.roof);
+    }
+    c.box(x, roof + rise + .15, s, w - inset * 2 + .25, .35, d - inset * 2 + .25, b.roof);
+    for (let side = 0; side < 4; side++) {
+      const f = facade(c, x, s, w - inset, d - inset, side), count = Math.max(1, Math.floor(f.span / 8));
+      for (let i = 0; i < count; i++) {
+        const offset = (i - (count - 1) / 2) * 6.5;
+        f.add(offset, roof + 2.4, .1, 2.9, 2.8, 1.6, creamTrim, 'solid', true);
+        f.add(offset, roof + 2.35, 1, 1.65, 1.9, .1, '#496b73', 'glass');
+        f.add(offset, roof + 3.9, .3, 3.3, .3, 2, b.roof, 'solid', true);
+      }
+    }
+    for (const dx of [-w * .3, w * .3]) c.box(x + dx, roof + 4.1, s + d * .2, 1.3, 4, 1.8, b.wall);
+  } else if (b.roofType === 'monitor') {
+    const mw = w * .56, md = d * .68;
+    c.box(x, roof + 1.55, s, mw, 2.5, md, '#769c9a', 'glass');
+    pitchedRoof(c, x, s, mw + .5, md + .7, roof + 3.2, b.roof);
+    for (const side of [-1, 1]) for (let i = -2; i <= 2; i++) c.box(x + side * mw / 2, roof + 1.55, s + i * md / 5, .22, 2.7, .22, creamTrim);
+    c.box(x - w * .32, roof + 4.5, s + d * .32, 2, 9, 2, b.wall);
+    c.box(x - w * .32, roof + 8.7, s + d * .32, 2.5, .7, 2.5, creamTrim);
+  } else if (b.roofType === 'butterfly') {
+    const pitch = .19, half = w / 4;
+    for (const side of [-1, 1]) {
+      c.box(x + side * half, roof + 1.3, s, w / 2 / Math.cos(pitch), .55, d + .7, b.accent, 'solid', 0, side * pitch);
+      c.box(x + side * half, roof + 1.05, s, w / 2 / Math.cos(pitch), .12, d + .6, '#dccba6', 'solid', 0, side * pitch);
+    }
+    c.box(x, roof + .45, s, .4, .4, d + .5, '#566f75');
+  } else if (b.roofType === 'lantern') {
+    const lw = w * .67, ld = d * .67;
+    c.box(x, roof + 2, s, lw, 3.6, ld, '#86b5b3', 'glass');
+    pitchedRoof(c, x, s, lw + .6, ld + .6, roof + 4.1, '#8cbdb6');
+    for (const side of [-1, 1]) for (let i = -2; i <= 2; i++) {
+      c.box(x + side * lw / 2, roof + 2, s + i * ld / 5, .25, 3.9, .25, creamTrim);
+      c.box(x + i * lw / 5, roof + 2, s + side * ld / 2, .25, 3.9, .25, creamTrim);
     }
   }
 }
@@ -258,7 +318,8 @@ function buildBuilding(c, b) {
     }
     roof += upperHeight; roofEdge(c, x, s, width, depth, roof, trim, .85, b.roof);
   }
-  if (b.roofType === 'sawtooth') {
+  if (['mansard', 'monitor', 'butterfly', 'lantern'].includes(b.roofType)) signatureRoof(c, b, x, s, width, depth, roof);
+  else if (b.roofType === 'sawtooth') {
     const count = Math.max(2, Math.floor(width / 9)), pitch = (width - 2) / count;
     for (let i = 0; i < count; i++) {
       const px = x - (width - 2) / 2 + (i + .5) * pitch;

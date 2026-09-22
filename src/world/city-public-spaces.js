@@ -169,5 +169,5 @@ export function buildPublicSpace(c) {
   // Plan randomness is separate from street furniture and near-only details.
   const random = seededRandom(plan.plantingSeed);
   (park ? [pondGarden, orchard, meadow, terrace] : [fountainCourt, pergolaSquare, forum, mosaic])[plan.variant](orientedSite(c, plan.orientation), p, random);
-  c.features.discoveries.push({ kind: park ? 'park' : 'square', name: plan.name, variant: plan.variant, orientation: plan.orientation, s: c.start + 56, u: c.east + 56 });
+  c.features.discoveries.push({ id: c.index, type: plan.type, kind: park ? 'park' : 'square', name: plan.name, variant: plan.variant, orientation: plan.orientation, s: c.start + 56, u: c.east + 56 });
 }

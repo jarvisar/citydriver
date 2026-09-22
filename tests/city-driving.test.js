@@ -117,7 +117,7 @@ test('disabling traffic freezes the fleet and enabling or teleporting keeps it l
 
 test('autodrive selects the current street and right lane in all four directions', () => {
   for (const axis of ['north', 'east']) for (const direction of [-1, 1]) {
-    const pilot = new CityAutodrive();
+    const pilot = new CityAutodrive({ random: () => .9 });
     const player = { s: axis === 'north' ? 40 : 0, u: axis === 'north' ? 0 : 40,
       heading: axis === 'north' ? direction > 0 ? 0 : Math.PI : direction * Math.PI / 2, stats: { topSpeed: 25 } };
     assert.equal(pilot.canStart(player), true);
@@ -128,7 +128,7 @@ test('autodrive selects the current street and right lane in all four directions
     assert.ok((axis === 'north' ? input.touchDrive.along : input.touchDrive.across) * direction > .8);
     assert.ok(Math.abs(Math.hypot(input.touchDrive.along, input.touchDrive.across) - 1) < 1e-10);
   }
-  const pilot = new CityAutodrive();
+  const pilot = new CityAutodrive({ random: () => .9 });
   const courtyard = { s: 40, u: 40, heading: 0, stats: { topSpeed: 25 } };
   assert.equal(pilot.canStart(courtyard), false);
   assert.deepEqual(pilot.update(courtyard, { enabled: false }), { handbrake: true });
@@ -138,7 +138,7 @@ test('autodrive obeys signal clearance and leaves a following gap', () => {
   for (let time = 0; time < 48; time += .1) assert.equal(cityGreen('north', time) && cityGreen('east', time), false);
   assert.equal(cityGreen('north', 10), false); assert.equal(cityGreen('east', 10), false);
   for (const axis of ['north', 'east']) {
-    const pilot = new CityAutodrive();
+    const pilot = new CityAutodrive({ random: () => .9 });
     const player = { s: axis === 'north' ? -15 : -3, u: axis === 'north' ? 3 : -15,
       heading: axis === 'north' ? 0 : Math.PI / 2, stats: { topSpeed: 25 } };
     const traffic = { enabled: true, vehicles: [], time: axis === 'north' ? 12 : 0 };
@@ -156,7 +156,7 @@ test('controller keeps road grip on distant east-west streets and crosses rivers
   player.freeDriving = true;
   for (const direction of [-1, 1]) {
     Object.assign(player, cityLanePose('east', -CITY_BLOCK * 8 - direction * 5.7, direction > 0 ? 348 : 436, direction));
-    const pilot = new CityAutodrive();
+    const pilot = new CityAutodrive({ random: () => .9 });
     player.speed = 0; player.update(0, {});
     let crossedWater = false;
     for (let tick = 0; tick < 720; tick++) {

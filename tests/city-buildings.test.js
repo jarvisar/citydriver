@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { cityBlock, PAVEMENT_LEVEL } from '../src/world/city-grid.js';
-import { planBuildings } from '../src/world/city-buildings.js';
+import { planBuildings, BUILDING_TYPES } from '../src/world/city-buildings.js';
 import { CitydriverChunk, CitydriverWorld } from '../src/world/citydriver-world.js';
 
 test('city lots vary their street widths, heights, roofs and layouts without overlapping or obstructing pavements', () => {
@@ -22,14 +22,14 @@ test('city lots vary their street widths, heights, roofs and layouts without ove
       }
     }
   }
-  assert.equal(layouts.size, 5); assert.equal(types.size, 6); assert.equal(roofs.size, 4);
+  assert.equal(layouts.size, 5); assert.deepEqual([...types].sort(), [...BUILDING_TYPES].sort()); assert.equal(roofs.size, 8);
   assert.ok(counts.size >= 4); assert.ok(heights.size >= 12); assert.ok(widths.size >= 30);
 });
 
 test('each architecture keeps its silhouette, facade layout and materials when streamed into full detail', () => {
   const world = new CitydriverWorld(new THREE.Scene()), found = new Set();
   try {
-    for (let ix = -8; ix <= 8 && found.size < 6; ix++) for (let iz = -8; iz <= 8 && found.size < 6; iz++) {
+    for (let ix = -12; ix <= 12 && found.size < BUILDING_TYPES.length; ix++) for (let iz = -12; iz <= 12 && found.size < BUILDING_TYPES.length; iz++) {
       const block = cityBlock(ix, iz); if (block.kind !== 'blocks') continue;
       const types = planBuildings(block).buildings.map(b => b.type);
       if (types.every(type => found.has(type))) continue;
@@ -47,6 +47,6 @@ test('each architecture keeps its silhouette, facade layout and materials when s
       }
       near.dispose(); far.dispose();
     }
-    assert.equal(found.size, 6);
+    assert.equal(found.size, BUILDING_TYPES.length);
   } finally { world.dispose(); }
 });

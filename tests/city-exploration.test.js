@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { cityBlock, cityStreetAt, cityRiverAt, CITY_BLOCK, ROAD_HALF_WIDTH } from '../src/world/city-grid.js';
-import { landmarkForBlock, PLACE_TYPES } from '../src/world/city-places.js';
+import { landmarkForBlock, PLACE_TYPES, LANDMARK_TYPES, destinationType } from '../src/world/city-places.js';
 import { CitydriverWorld } from '../src/world/citydriver-world.js';
 import { CityExploration, nearbyPlaces, placeRoute, routeDistance } from '../src/city-exploration.js';
 import { walkerPose } from '../src/world/city-life.js';
@@ -25,7 +25,7 @@ test('every three-by-three neighbourhood has one reproducible landmark on dry la
     }
     assert.equal(landmarks.length, 1, `neighbourhood ${rx},${rz}`);
   }
-  assert.equal(types.size, PLACE_TYPES.length);
+  assert.equal(types.size, LANDMARK_TYPES.length);
 });
 
 test('suggested routes stay on connected streets and bridge decks across all quadrants', () => {
@@ -57,7 +57,9 @@ test('landmark stamps require an active drive near the road and persist once per
     const { s, u } = cityLayout(place.logicalS - 59, place.logicalU);
     assert.deepEqual(guide.update(s, u, false), [], 'menus and attract mode cannot collect stamps');
     assert.deepEqual(guide.update(place.s, place.u), [], 'cutting through a courtyard is not a drive-by');
-    assert.equal(guide.update(s, u).length, 1);
+    const wasFound = guide.found.has(type), discoveries = guide.update(s, u);
+    assert.equal(discoveries.filter(p => p.type === type).length, wasFound ? 0 : 1);
+    assert.ok(guide.found.has(type), `${type} is discoverable at its entrance`);
     assert.deepEqual(guide.update(s, u), []);
   }
   assert.deepEqual([...new CityExploration(storage).found].sort(), [...PLACE_TYPES].sort());
@@ -85,6 +87,22 @@ test('destinations can be cycled, selected by type, and refreshed after resettin
   assert.equal(guide.justArrived, null); assert.notEqual(guide.target.id, arrived);
 });
 
+test('the expanded notebook preserves old stamps and can route to every new destination category', () => {
+  const guide = new CityExploration({ getItem: () => '["clock","market","garden","depot","art"]' });
+  assert.equal(guide.found.size, 5);
+  const destinations = nearbyPlaces(0, 3);
+  assert.ok(destinations.some(p => p.type === 'park'));
+  assert.ok(destinations.some(p => p.type === 'plaza'));
+  for (const type of PLACE_TYPES) {
+    const destination = guide.next(0, 3, type);
+    assert.equal(destination?.type, type);
+    assert.ok(destination.name && destination.district && destination.design);
+    const route = placeRoute(0, 3, destination);
+    assert.deepEqual(route.at(-1), destination.entrance);
+    assert.ok(cityStreetAt(destination.entrance.s, destination.entrance.u).onRoad);
+  }
+});
+
 test('all landmark geometry streams with colliders clear of roads and stable distant silhouettes', () => {
   const world = new CitydriverWorld(new THREE.Scene()), places = nearbyPlaces(0, 0, 20);
   try {
@@ -110,7 +128,7 @@ test('all landmark geometry streams with colliders clear of roads and stable dis
       world.animate(15); assert.notDeepEqual(chunk.peopleMesh.instanceMatrix.array, positions);
       assert.ok(world.distantGroup.children.length <= 36);
       world.update(place.s + CITY_BLOCK * 4, place.u);
-      assert.equal(world.distantChunks.get(place.id).plan.landmark, type);
+      assert.equal(destinationType(world.distantChunks.get(place.id).plan), type);
     }
   } finally { world.dispose(); }
   assert.equal(world.scene.children.length, 0);

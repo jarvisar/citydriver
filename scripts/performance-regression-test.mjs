@@ -22,6 +22,9 @@ try {
     document.querySelector('#pause-overlay').hidden = true;
     a.world.update(a.vehicle.s, a.vehicle.u); a.vehicle.render(1, a.world.origin);
     a.rendering.snap(); a.rendering.update(a.vehicle.car, 1, a.world.origin);
+    // Camera changes expose different storefronts. Upload shared sign textures
+    // first so lazy texture uploads cannot masquerade as retained AO targets.
+    for (const material of Object.values(a.world.materials)) if (material.map) r.initTexture(material.map);
     const states = [];
     for (let cycle = 0; cycle < 3; cycle++) {
       a.graphics.toggleAmbientOcclusion(); a.rendering.render(); await ao.ready;

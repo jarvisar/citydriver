@@ -52,7 +52,7 @@ test('a cab can drive every street type in both axes and directions without clip
     for (const axis of ['north', 'east']) for (const index of [-3, 0, 1, 2]) for (const direction of [-1, 1]) {
       const street = cityStreetProfile(axis, index), lane = index * B + (axis === 'north' ? 1 : -1) * direction * street.lane;
       Object.assign(car, cityLanePose(axis, lane, -direction * 80, direction));
-      const pilot = new CityAutodrive();
+      const pilot = new CityAutodrive({ random: () => .9 });
       car.speed = 0; car.knock.x = car.knock.z = car.knock.spin = 0; car.update(0, {});
       world.update(car.s, car.u);
       const from = axis === 'north' ? car.s : car.u;
@@ -100,7 +100,7 @@ test('stop-sign drivers yield to cross traffic and reserve a four-way stop one a
   for (let i = 0; i < 90; i++) assert.equal(speed(east, 'east', B - 2.7, B - 12.5), 0);
   traffic.time = 9;
   assert.equal(speed(east, 'east', B - 2.7, B - 12.5), Infinity);
-  const pilot = new CityAutodrive();
+  const pilot = new CityAutodrive({ random: () => .9 });
   pilot.update({ s: 20, u: 2 * B + 5.7, speed: 10, heading: 0, stats: { topSpeed: 30 } }, { enabled: false });
   assert.equal(pilot.path.lane, 2 * B + 5.7);
   assert.equal(pilot.canStart(cityLayout(56, 2 * B)), false, 'cruise cannot start inside a planted median');

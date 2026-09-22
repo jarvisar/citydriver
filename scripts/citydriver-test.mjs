@@ -42,7 +42,7 @@ try {
       const axis = Math.abs(Math.cos(heading)) > .5 ? 'north' : 'east';
       const direction = Math.sign(axis === 'north' ? Math.cos(heading) : Math.sin(heading));
       Object.assign(v, cityLanePose(axis, axis === 'north' ? u : s, axis === 'north' ? s : u, direction));
-      const start = { s: v.s, u: v.u }, pilot = new CityAutodrive();
+      const start = { s: v.s, u: v.u }, pilot = new CityAutodrive({ random: () => .9 });
       v.speed = 0; v.knock.x = v.knock.z = v.knock.spin = 0; v.update(0, {});
       for (let i = 0; i < 10; i++) a.world.update(v.s, v.u);
       for (let i = 0; i < 900; i++) { v.update(1 / 60, pilot.update(v, { enabled: false })); collideScenery(v, a.world.chunks, 1 / 60); a.world.update(v.s, v.u); }
@@ -99,7 +99,7 @@ try {
       const place = places.find(p => p.type === type);
       const center = place.logicalS - 56, profile = cityStreetProfile('east', Math.round(center / 112));
       Object.assign(v, cityLanePose('east', center - profile.lane, place.logicalU - 70)); v.speed = 0;
-      const pilot = new CityAutodrive();
+      const pilot = new CityAutodrive({ random: () => .9 });
       v.knock.x = v.knock.z = v.knock.spin = 0; v.update(0, {}); a.world.update(v.s, v.u);
       guide.exploration.target = place;
       for (let tick = 0; tick < 300; tick++) {
@@ -110,8 +110,10 @@ try {
     v.render(1, a.world.origin); a.rendering.snap(); a.rendering.update(v.car, 1, a.world.origin);
     return [...guide.exploration.found].sort();
   });
-  assert.deepEqual(discoveries, ['art', 'clock', 'depot', 'garden', 'market']);
-  assert.equal(await page.locator('.notebook-place[data-found=true]').count(), 5);
+  const expectedDiscoveries = await page.evaluate(async () => [...(await import('/src/world/city-places.js')).PLACE_TYPES].sort());
+  assert.deepEqual(discoveries, expectedDiscoveries);
+  assert.equal(await page.locator('.notebook-place[data-found=true]').count(), expectedDiscoveries.length);
+  assert.equal(await page.locator('#city-notebook-progress').textContent(), `${expectedDiscoveries.length} / ${expectedDiscoveries.length} visited`);
   await page.locator('[data-place-type=garden]').click();
   assert.equal(await page.evaluate(() => window.__citydriver.cityGuide.exploration.target.type), 'garden');
   await page.screenshot({ path: '.artifacts/citydriver/notebook.png' });
@@ -125,7 +127,7 @@ try {
   await page.screenshot({ path: '.artifacts/citydriver/field-guide.png' });
   await page.reload({ waitUntil: 'networkidle' });
   await page.waitForFunction(() => window.__citydriver && document.querySelector('#loading').classList.contains('loaded'));
-  assert.equal(await page.evaluate(() => window.__citydriver.cityGuide.exploration.found.size), 5);
+  assert.equal(await page.evaluate(() => window.__citydriver.cityGuide.exploration.found.size), expectedDiscoveries.length);
   assert.equal(await page.locator('#city-guide').isVisible(), false);
 
   const mobile = await browser.newPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 1 });
@@ -147,10 +149,12 @@ try {
   await mobile.selectOption('#city-weather', 'night');
   assert.equal(await mobile.evaluate(() => window.__citydriver.weather.state.id), 'night');
   assert.ok(await mobile.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+  await mobile.locator('[data-place-type=plaza]').click();
+  assert.equal(await mobile.evaluate(() => window.__citydriver.cityGuide.exploration.target.type), 'plaza');
   await mobile.screenshot({ path: '.artifacts/citydriver/mobile-pause.png' });
   assert.deepEqual(errors, []);
   await writeFile('.artifacts/citydriver/report.json', JSON.stringify({ passed: true, errors, driving: records, discoveries }, null, 2));
-  console.log(`Citydriver browser checks passed: ${records.length} directional/bridge drives, five landmark discoveries, saved stamps, navigation, weather, reset, desktop and mobile.`);
+  console.log(`Citydriver browser checks passed: ${records.length} directional/bridge drives, ${discoveries.length} discoveries, saved stamps, navigation, weather, reset, desktop and mobile.`);
 } catch (error) {
   console.error('Browser errors:', errors);
   throw error;

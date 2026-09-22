@@ -2,6 +2,7 @@ import { CITY_PLACES } from './city-places.js';
 import { PAVEMENT_LEVEL as G } from './city-grid.js';
 import { publicSpacePlan, pool, bed, pergola, cafeTable, path, reserve } from './city-public-space-kit.js';
 import { rectanglePolygon } from './city-surfaces.js';
+import { DESTINATION_BUILDERS } from './city-destinations.js';
 
 // All landmark pieces join the city's existing instance batches. The same
 // silhouette is used at both detail levels; only small furnishings disappear.
@@ -266,7 +267,13 @@ export function buildLandmark(c) {
     c.surface(p, G + .04, 56, .25, .04, 78, '#e4d5b6');
     c.surface(56, G + .04, p, 78, .04, .25, '#e4d5b6');
   }
-  ({ clock: clockSquare, market, garden, depot, art })[type](c, design);
+  ({ clock: clockSquare, market, garden, depot, art, ...DESTINATION_BUILDERS })[type](c, design);
+  buildDestinationSigns(c, type);
+  c.features.discoveries.push({ id: c.index, type, ...place, variant: design.variant, design: design.name, s: c.start + 56, u: c.east + 56 });
+}
+
+export function buildDestinationSigns(c, type) {
+  const place = CITY_PLACES[type];
   // Low roadside totems make the destination identifiable from a driving view.
   for (const [x, s, yaw] of [[71, 18, 0], [94, 70, Math.PI / 2]]) {
     c.rigid(x, s, () => {
@@ -276,5 +283,4 @@ export function buildLandmark(c) {
       c.sign(type, x, G + 2.5, s, yaw);
     });
   }
-  c.features.discoveries.push({ id: c.index, type, ...place, variant: design.variant, design: design.name, s: c.start + 56, u: c.east + 56 });
 }

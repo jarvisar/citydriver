@@ -42,8 +42,10 @@ try {
   await page.waitForFunction(() => window.__citydriver.taxi.status === 'driving');
   assert.ok(await page.evaluate(() => window.__citydriver.taxi.fareLeft > 0));
   await page.screenshot({ path: '.artifacts/taxi/fare.png' });
+  const deliveredType = await page.evaluate(() => window.__citydriver.taxi.target.type);
   await placeAtTarget(page);
   await page.waitForFunction(() => window.__citydriver.taxi.delivered === 1);
+  await page.waitForFunction(type => window.__citydriver.cityGuide.exploration.found.has(type), deliveredType);
   const cash = await page.evaluate(() => window.__citydriver.taxi.cash); assert.ok(cash > 0);
   await placeAtTarget(page); await page.waitForFunction(() => window.__citydriver.taxi.status === 'driving');
   await page.evaluate(() => { window.__citydriver.taxi.fareLeft = .05; });

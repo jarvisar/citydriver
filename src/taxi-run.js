@@ -6,6 +6,12 @@ export const SHIFT_SECONDS = 90;
 export const STOP_RADIUS = 8;
 export const STOP_SECONDS = .45;
 const distance = (a, b) => Math.hypot(a.s - b.s, a.u - b.u);
+const PASSENGERS = {
+  clock: 'Sightseer', market: 'Market shopper', garden: 'Garden visitor', depot: 'Tram driver', art: 'Art student',
+  cinema: 'Moviegoer', hotel: 'Hotel guest', museum: 'Museum visitor', station: 'Rail commuter', library: 'Reader',
+  hospital: 'Hospital visitor', observatory: 'Stargazer', music: 'Jazz fan', sports: 'Club member', firehouse: 'Firefighter',
+  park: 'Park visitor', plaza: 'Cafe regular',
+};
 
 export function taxiRoute(player, target) {
   if (!target) return [];
@@ -43,7 +49,7 @@ export function leadStop(player) {
 const placeStop = place => {
   const p = place.logicalS === undefined ? cityLogical(place.s, place.u) : { s: place.logicalS, u: place.logicalU };
   const center = p.s - B / 2, index = Math.round(center / B), street = cityStreetProfile('east', index);
-  return { ...cityLanePose('east', center - street.lane, p.u), axis: 'east', index, side: 1, name: place.name };
+  return { ...cityLanePose('east', center - street.lane, p.u), axis: 'east', index, side: 1, name: place.name, type: place.type, district: place.district };
 };
 
 export class TaxiRun {
@@ -57,21 +63,36 @@ export class TaxiRun {
     this.status = 'pickup'; this.timeLeft = SHIFT_SECONDS; this.cash = 0; this.delivered = 0; this.failed = 0;
     this.boost = 1; this.boostActive = false; this.elapsed = 0; this.combo = 1; this.comboTime = 0;
     this.tips = 0; this.hold = 0; this.fare = null; this.events = []; this.driftTime = 0;
+    this.recentDestinations = [];
     this.lastImpact = player.audioTelemetry?.impactSerial ?? 0; this.makeCustomers(player);
   }
   stop() { this.status = 'idle'; this.customers = []; this.fare = null; this.boostActive = false; this.revision++; }
   makeCustomers(player) {
     const places = nearbyPlaces(player.s, player.u, 6);
-    const stops = [leadStop(player), ...places.slice(0, 2).map(placeStop)];
+    const stops = [leadStop(player)];
+    for (const place of places) {
+      const stop = placeStop(place);
+      if (stops.every(other => distance(stop, other) > STOP_RADIUS * 3)) stops.push(stop);
+      if (stops.length === 3) break;
+    }
+    const offered = new Set();
     this.customers = stops.map((stop, i) => {
       const choices = places.map(place => ({ ...placeStop(place), id: place.id }))
         .map(destination => ({ destination, length: routeDistance(taxiRoute(stop, destination)) }))
         .filter(route => route.length >= 280 && route.length <= 1100);
-      const route = choices[(this.delivered * 3 + this.failed + i * 2) % choices.length];
+      // Prefer different kinds of trips, even where several nearby blocks are parks.
+      const fresh = choices.filter(({ destination }) => !offered.has(destination.type) && !this.recentDestinations.includes(destination.type));
+      const diverse = choices.filter(({ destination }) => !offered.has(destination.type));
+      const options = fresh.length ? fresh : diverse.length ? diverse : choices;
+      const types = [...new Set(options.map(({ destination }) => destination.type))];
+      const type = types[(this.delivered * 3 + this.failed + i * 2) % types.length];
+      const routes = options.filter(({ destination }) => destination.type === type);
+      const route = routes[(this.delivered + i) % routes.length];
       const address = cityLogical(stop.s, stop.u);
       const destination = route?.destination ?? placeStop({ ...cityLayout(Math.round(address.s / B) * B + B / 2, Math.round(address.u / B) * B + 3.5 * B), name: 'Downtown' });
       const length = route?.length ?? routeDistance(taxiRoute(stop, destination));
-      return { ...stop, id: `${this.revision}-${i}`, name: 'Passenger', destination, length,
+      offered.add(destination.type);
+      return { ...stop, id: `${this.revision}-${i}`, name: PASSENGERS[destination.type] ?? 'Passenger', destination, length,
         fare: Math.round(40 + length * .28), limit: Math.ceil(18 + length / 14), color: i === 0 ? '#a4f264' : i === 1 ? '#54dfe0' : '#f8ba55' };
     });
     this.selected = 0; this.hold = 0; this.revision++;
@@ -146,6 +167,7 @@ export class TaxiRun {
       const speedBonus = Math.round(this.fare.fare * .5 * this.fareLeft / this.fare.limit);
       const paid = this.fare.fare + this.tips + speedBonus, seconds = 18;
       this.cash += paid; this.delivered++; this.timeLeft = Math.min(120, this.timeLeft + seconds);
+      this.recentDestinations = [...this.recentDestinations, this.fare.destination.type].slice(-3);
       this.events.push({ kind: 'paid', text: `+$${paid} · +${seconds}s`, paid });
       this.status = 'pickup'; this.fare = null; this.tips = 0; this.combo = 1; this.makeCustomers(player);
     }

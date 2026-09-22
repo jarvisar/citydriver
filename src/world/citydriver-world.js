@@ -3,7 +3,8 @@ import { cityAssets, cityTrees } from './city-assets.js';
 import { seededRandom } from './route.js';
 import { residentWindow } from './resident.js';
 import { DistantCity, packDistantChunk } from './distant-city.js';
-import { buildLandmark } from './city-landmarks.js';
+import { buildLandmark, buildDestinationSigns } from './city-landmarks.js';
+import { VENUE_NAMES } from './city-destinations.js';
 import { buildPublicSpace } from './city-public-spaces.js';
 import { buildCityBuildings, SHOP_NAMES, shopSignMaterial } from './city-buildings.js';
 import { blockStreets, buildStreets } from './city-streets.js';
@@ -55,7 +56,7 @@ function resources() {
     bark: standard({ color: '#625548', vertexColors: true }),
     leaves: standard({ color: '#ffffff', vertexColors: true }),
   };
-  for (const name of SHOP_NAMES) result[`shop-${name}`] = shopSignMaterial(name);
+  for (const name of [...SHOP_NAMES, ...VENUE_NAMES]) result[`shop-${name}`] = shopSignMaterial(name);
   for (const [type, place] of Object.entries(CITY_PLACES)) {
     let map = null;
     if (globalThis.document) {
@@ -179,7 +180,7 @@ export class CitydriverChunk {
   }
   buildRoads() { buildStreets(this); }
   buildBuildings() { buildCityBuildings(this); }
-  buildPark() { buildPublicSpace(this); }
+  buildPark() { buildPublicSpace(this); buildDestinationSigns(this, this.plan.kind); }
   buildRiver() { buildRivers(this); }
   buildFurniture() {
     if (this.plan.kind === 'river') return;
