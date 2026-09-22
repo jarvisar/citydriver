@@ -1,56 +1,52 @@
 import * as THREE from 'three';
 import { Parts } from './city-assets.js';
 
-export const WALKER_COLORS = ['#a9cbbb', '#a8c7e3', '#e8b69e', '#e3cc91', '#c7b5d8', '#d5cbb9'];
+export { cityWalker, WALKER_COLORS, WALKER_LOOKS, WALKER_STYLES, WALKER_SKIN, WALKER_HAIR, createWalkerMaterial, walkerAppearance, setWalkerAppearance, pairWalkers, taxiGroupAppearance } from './city-walkers.js';
 
-function walker() {
-  const p = new Parts();
-  // A floating coat and a detached head. All details share one geometry and
-  // material, including the tiny face that makes local -Z read as forward.
-  const profile = [[0, .28], [.24, .33], [.31, .84], [.18, 1.12], [0, 1.14]];
-  const body = new THREE.LatheGeometry(profile.map(([x, y]) => new THREE.Vector2(x, y)), 8);
-  body.scale(1, 1, .8);
-  p.add(body, [0, 0, 0], '#dce4e2');
-  p.add(new THREE.SphereGeometry(.26, 8, 4), [0, 1.5, 0], '#ffead5');
-  const head = p.parts.at(-1), positions = head.attributes.position, colors = head.attributes.color;
-  const hair = new THREE.Color('#4c4745');
-  for (let i = 0; i < positions.count; i += 3) {
-    const y = (positions.getY(i) + positions.getY(i + 1) + positions.getY(i + 2)) / 3;
-    const z = (positions.getZ(i) + positions.getZ(i + 1) + positions.getZ(i + 2)) / 3;
-    if (y > 1.62 || (z > .015 && y > 1.4)) {
-      for (let j = 0; j < 3; j++) colors.setXYZ(i + j, hair.r, hair.g, hair.b);
-    }
-  }
-  for (const side of [-1, 1]) {
-    p.add(new THREE.PlaneGeometry(.036, .052), [side * .078, 1.51, -.244], '#344247', [0, Math.PI, 0]);
-  }
-  // Keep the lathe/sphere's smooth normals without adding any triangles.
-  return p.finish({ preserveNormals: true });
-}
 function canalBoat() {
   const p = new Parts();
-  p.box([0, .42, 0], [4, .9, 13], '#46626b');
-  p.box([0, .93, 0], [4.15, .15, 13.3], '#dbcdb0');
+  // A clipped stern and pointed bow read as a hull even from the low camera.
+  // Two tiny extrusions stay inside the existing merged boat instance.
+  const outline = [[-1.5,6.5],[1.5,6.5],[2,5.7],[2,-4.8],[1.2,-6],[0,-6.65],[-1.2,-6],[-2,-4.8],[-2,5.7]];
+  const shape = new THREE.Shape(outline.map(([x, z]) => new THREE.Vector2(x, z)));
+  const hull = new THREE.ExtrudeGeometry(shape, { depth: .9, bevelEnabled: false, steps: 1 });
+  const vertices = hull.attributes.position;
+  for (let i = 0; i < vertices.count; i++) if (vertices.getZ(i) > .45) vertices.setX(i, vertices.getX(i) * .82);
+  hull.computeVertexNormals(); hull.rotateX(Math.PI / 2);
+  p.add(hull, [0, .87, 0], '#46626b');
+  const deck = new THREE.ExtrudeGeometry(shape, { depth: .15, bevelEnabled: false, steps: 1 });
+  deck.rotateX(Math.PI / 2); deck.scale(1.035, 1, 1.02);
+  p.add(deck, [0, 1.005, 0], '#dbcdb0');
   p.box([0, 1.42, 1.4], [3.1, .9, 7.7], '#b6634c');
   p.box([0, 2.04, 1.4], [3, .5, 7.6], '#e9d4ad');
   for (const side of [-1, 1]) for (const z of [-1, 1.2, 3.4]) p.box([side * 1.52, 2.03, z], [.03, .34, 1.3], '#537b87');
   p.box([0, 2.39, 1.4], [3.4, .2, 8.1], '#49655f');
-  p.box([.7, 2.8, 3.5], [.38, .75, .38], '#4f5755');
+  p.cylinder([.7, 2.8, 3.5], .19, .19, .75, '#4f5755', 8);
   for (const side of [-1, 1]) p.box([side * 1.7, 1.23, -4.5], [.12, .6, 3], '#b4b7a4');
   p.box([0, 1.3, -5.6], [1.4, .6, 1], '#9eaa7c');
   return p.finish();
 }
-export const cityWalker = walker();
+
 export const cityBoat = canalBoat();
 
 // Shared by street residents and waiting passengers. Absolute time means
 // culled residents resume in the right place without maintaining a rig.
 export function walkerFloat(walker, time, target = {}) {
-  const phase = walker.phase + time * (2.6 + walker.speed * 1.4);
+  const phase = (walker.floatPhase ?? walker.phase) + time * (2.6 + walker.speed * 1.4);
   target.lift = .07 + Math.sin(phase) * .075;
   target.roll = Math.sin(phase * .5) * .055;
   target.stretch = 1 + Math.cos(phase) * .018;
   return target;
+}
+
+export function offsetWalkerPose(pose, walker, river = false) {
+  if (!walker.pairOffset) return pose;
+  // Keep each partner on the same side when a river promenade reverses.
+  // Around blocks the eased yaw rotates the pair smoothly through corners.
+  const x = Math.cos(pose.yaw), s = Math.sin(pose.yaw);
+  pose.x += (river ? Math.abs(x) : x) * walker.pairOffset;
+  pose.s += (river ? Math.abs(s) : s) * walker.pairOffset;
+  return pose;
 }
 
 export function walkerPose(walker, time, river = false) {

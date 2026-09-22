@@ -78,7 +78,8 @@ export class CityAutodrive {
     }
     const ds = aim.s - player.s, du = aim.u - player.u, length = Math.hypot(ds, du);
     const along = ds / Math.max(.001, length), across = du / Math.max(.001, length);
-    let speed = Math.min(this.path.speed, speedLimit, player.stats.topSpeed, turnSpeed);
+    const cruiseSpeed = player.carId === 'formula' ? player.stats.topSpeed : this.path.speed;
+    let speed = Math.min(cruiseSpeed, speedLimit, player.stats.topSpeed, turnSpeed);
     if (traffic.enabled && !this.turn?.active) speed = Math.min(speed, junctionSpeed(this, traffic, axis, direction, lane, position, player.speed ?? 0, dt));
     for (const car of traffic.enabled ? traffic.vehicles : []) {
       const dx = car.u - player.u, ds = car.s - player.s;

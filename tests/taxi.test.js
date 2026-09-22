@@ -67,14 +67,16 @@ test('navigation stays empty at startup, while cruising, and until boarding fini
     run.update(.25, car);
     assert.equal(run.status, 'driving'); assert.equal(run.fare, passenger);
     assert.equal(run.target, passenger.destination);
-    Object.assign(car, { s: run.target.s, u: run.target.u }); run.update(.5, car);
+    while (run.status === 'driving') {
+      Object.assign(car, { s: run.target.s, u: run.target.u }); run.update(.5, car);
+    }
     assert.equal(run.target, null);
   }
 });
 
 test('a pickup overlapping the drop-off waits for the cab to leave and return', () => {
   const car = player(), run = new TaxiRun(); run.start(car); pickup(run, car);
-  const waiting = run.customers[0]; run.fare.destination = waiting;
+  const waiting = run.customers[0]; run.fare.stops[0].destination = waiting;
   Object.assign(car, { s: waiting.s, u: waiting.u }); run.update(.5, car);
   run.update(1, car);
   assert.equal(run.delivered, 1); assert.equal(run.status, 'pickup');
@@ -109,8 +111,10 @@ test('expanded destinations offer distinct customers, reachable stops and varied
     }
     assert.ok(run.customers.some(c => !run.recentDestinations.includes(c.destination.type)), 'fresh destinations remain available alongside persistent offers');
     pickup(run, car, run.customers.find(c => !run.recentDestinations.includes(c.destination.type))); visited.add(run.target.type);
-    Object.assign(car, { s: run.target.s, u: run.target.u, speed: 0 });
-    run.update(.5, car);
+    while (run.status === 'driving') {
+      Object.assign(car, { s: run.target.s, u: run.target.u, speed: 0 });
+      run.update(.5, car);
+    }
     assert.equal(run.delivered, trip + 1);
   }
   assert.ok(visited.size >= 10, `a shift explores many different destinations: ${[...visited]}`);

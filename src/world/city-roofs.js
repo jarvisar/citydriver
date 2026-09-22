@@ -32,14 +32,19 @@ export function wedge(c, x, s, base, width, rise, depth, color, descending = fal
 
 // Eave is the underside at the OUTER roof edge, independent of roof width.
 export function pitchedRoof(c, x, s, width, depth, eave, color, gable = null, pitch = .36, options = {}) {
-  const { wallWidth = width - .8, wallDepth = depth - .8, thickness = .34, trim = '#d9c9a9' } = options;
+  const { wallWidth = width - .8, wallDepth = depth - .8, thickness = .34, trim = '#d9c9a9', ridge = true } = options;
   const run = width / 2, rise = run * Math.tan(pitch), center = eave + rise / 2 + thickness / (2 * Math.cos(pitch));
   for (const side of [-1, 1]) {
     c.box(x + side * run / 2, center, s, run / Math.cos(pitch), thickness, depth, color, 'solid', 0, -side * pitch);
     if (trim) for (const end of [-1, 1]) c.box(x + side * run / 2, center - .04, s + end * (depth / 2 + .03), run / Math.cos(pitch), thickness + .12, .16, trim, 'solid', 0, -side * pitch);
   }
   // A small raised ridge covers the panel meeting line without coplanar faces.
-  c.box(x, eave + rise + thickness / Math.cos(pitch), s, .42, .2, depth + .12, color);
+  if (ridge) {
+    // The ridge also caps the two fascia ends. Its front/back extend beyond
+    // those trims, so their crossing never exposes competing coplanar faces.
+    const top = eave + rise + thickness / Math.cos(pitch) + .1;
+    c.box(x, top - .35, s, .5, .7, depth + .3, color);
+  }
   if (gable) {
     const foot = eave + (width - wallWidth) / 2 * Math.tan(pitch), h = wallWidth / 2 * Math.tan(pitch);
     for (const side of [-1, 1]) wedge(c, x + side * wallWidth / 4, s, foot, wallWidth / 2, h, wallDepth, gable, side > 0);
@@ -80,7 +85,7 @@ export function butterflyRoof(c, b, roof) {
   }
   // A shallow, narrow drainage channel replaces the old exposed black trough.
   c.box(x, low + .02, s, gutter + .14, .18, depth + .14, '#768e8e');
-  for (const side of [-1, 1]) c.box(x + side * (gutter / 2 - .08), low + .2, s, .12, .25, depth + .14, '#a9b9af');
+  for (const side of [-1, 1]) c.box(x + side * (gutter / 2 - .08), low + .215, s, .12, .21, depth + .14, '#a9b9af');
   for (const end of [-1, 1]) {
     c.box(x, roof + .45, s + end * (d / 2 - endWall / 2), gutter, .9, endWall, b.wall);
     if (!c.distant) c.box(x, roof - 1.3, s + end * (d / 2 + .17), .18, 4.3, .18, '#869e97');
@@ -104,7 +109,7 @@ export function sawtoothRoof(c, b, roof) {
     const x = b.x - span / 2 + (i + .5) * run;
     c.box(x, base + rise / 2 + thickness / (2 * Math.cos(.22)), b.s, run / Math.cos(.22), thickness, depth, b.roof, 'solid', 0, .22);
     // Close the high glazed face and both triangular ends all the way to the deck.
-    c.box(x + run / 2 - .06, base + rise / 2, b.s, .12, rise, depth, '#829d9f', 'glass');
+    c.box(x + run / 2 - .06, base + rise / 2, b.s, .12, rise, depth - .48, '#829d9f', 'glass');
     for (const end of [-1, 1]) {
       wedge(c, x, b.s + end * (depth / 2 - .12), base, run, rise, .24, b.wall);
       c.box(x, base + rise / 2 + .1, b.s + end * (depth / 2 + .02), run / Math.cos(.22), .38, .15, '#d4c4a6', 'solid', 0, .22);

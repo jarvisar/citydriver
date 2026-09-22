@@ -65,7 +65,11 @@ function trafficSignal() {
   const p = new Parts();
   p.cylinder([0, 2.2, 0], .07, .1, 4.4, iron, 6);
   p.box([0, 4.6, 0], [.34, 1.05, .3], darkIron);
-  for (const y of [4.92, 4.6, 4.28]) p.box([0, y, .16], [.22, .22, .05], '#293538');
+  for (const y of [4.92, 4.6, 4.28]) {
+    p.cylinder([0, y, .17], .125, .125, .06, '#1e282b', 12, [Math.PI / 2, 0, 0]);
+    const hood = new THREE.CylinderGeometry(.14, .14, .22, 8, 1, true, Math.PI / 2, Math.PI);
+    p.add(hood, [0, y, .25], darkIron, [Math.PI / 2, 0, 0]);
+  }
   p.box([0, 5.16, .08], [.44, .06, .5], darkIron);
   return p.finish();
 }
@@ -74,10 +78,19 @@ function stopSign() {
   p.cylinder([0, 1.4, 0], .055, .07, 2.8, galvanised, 6);
   p.cylinder([0, 2.8, 0], .7, .7, .08, '#e9e2cd', 8, [Math.PI / 2, Math.PI / 8, 0]);
   p.cylinder([0, 2.8, .05], .62, .62, .03, '#b74635', 8, [Math.PI / 2, Math.PI / 8, 0]);
-  const letters = ['111100111001111', '111010010010010', '111101101101111', '110101110100100'];
-  letters.forEach((letter, l) => [...letter].forEach((pixel, i) => {
-    if (pixel === '1') p.box([-.35 + (l * 4 + i % 3) * .049, 2.9 - Math.floor(i / 3) * .049, .072], [.045, .045, .012], '#fff2d9');
-  }));
+  // Continuous vector strokes avoid the old disconnected pixel-box lettering.
+  const glyphs = [
+    { outline: [[0,0],[5,0],[5,4],[1.3,4],[1.3,5.7],[5,5.7],[5,7],[0,7],[0,2.7],[3.7,2.7],[3.7,1.3],[0,1.3]] },
+    { outline: [[1.85,0],[3.15,0],[3.15,5.7],[5,5.7],[5,7],[0,7],[0,5.7],[1.85,5.7]] },
+    { outline: [[0,0],[5,0],[5,7],[0,7]], hole: [[1.3,1.3],[1.3,5.7],[3.7,5.7],[3.7,1.3]] },
+    { outline: [[0,0],[1.3,0],[1.3,2.7],[5,2.7],[5,7],[0,7]], hole: [[1.3,4],[1.3,5.7],[3.7,5.7],[3.7,4]] },
+  ];
+  glyphs.forEach(({ outline, hole }, i) => {
+    const shape = new THREE.Shape(outline.map(([x, y]) => new THREE.Vector2(x, y)));
+    if (hole) shape.holes.push(new THREE.Path(hole.map(([x, y]) => new THREE.Vector2(x, y))));
+    const geometry = new THREE.ShapeGeometry(shape); geometry.scale(.038, .044, 1);
+    p.add(geometry, [-.437 + i * .228, 2.646, .073], '#fff2d9');
+  });
   return p.finish();
 }
 // A promenade bench facing the water.

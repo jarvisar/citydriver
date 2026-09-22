@@ -1,4 +1,5 @@
 import { CITY_BLOCK as B, ROAD_LEVEL as R, PAVEMENT_LEVEL as G, cityStreetProfile, cityMedianRange, cityJunctionControl } from './city-grid.js';
+import { signalLens } from './city-detail-assets.js';
 
 export function blockStreets(ix, iz) {
   return { west: cityStreetProfile('north', ix), east: cityStreetProfile('north', ix + 1), south: cityStreetProfile('east', iz), north: cityStreetProfile('east', iz + 1) };
@@ -64,9 +65,9 @@ export function buildStreets(c) {
       if (control === 'signal') {
         const indices = [];
         for (const y of [4.92, 4.6, 4.28]) {
-          const x = a.x + Math.sin(a.yaw) * .2, s = a.s - Math.cos(a.yaw) * .2;
-          c.box(x, G + y, s, .2, .2, .035, '#293538', 'lit', a.yaw);
-          indices.push(c.batches.get('lit').items.length - 1);
+          const x = a.x + Math.sin(a.yaw) * .215, s = a.s - Math.cos(a.yaw) * .215;
+          c.item('signal-lens', signalLens, c.materials.lit, [x, G + y, -s], [.105, .105, 1], '#293538', a.yaw);
+          indices.push(c.batches.get('signal-lens').items.length - 1);
         }
         c.features.signals.push({ axis: a.axis, indices });
       }

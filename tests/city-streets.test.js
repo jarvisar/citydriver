@@ -112,12 +112,17 @@ test('visible traffic lamps follow the same phase as drivers, while minor juncti
     world.update(24, 3);
     const chunks = [...world.chunks.values()], color = new THREE.Color();
     assert.ok(chunks.some(c => c.group.getObjectByName('citydriver-stop')));
-    for (const time of [0, 12]) {
+    for (const time of [0, 10, 11, 12, 22, 23]) {
       world.animate(15, time);
       for (const c of chunks) for (const signal of c.features.signals) {
         const green = signal.axis === 'north' ? time === 0 : time === 12;
-        c.signalMesh.getColorAt(signal.indices[green ? 2 : 0], color);
-        assert.ok(green ? color.g > color.r : color.r > color.g);
+        const amber = signal.axis === 'north' ? time === 10 : time === 22;
+        const active = green ? 2 : amber ? 1 : 0;
+        for (let i = 0; i < 3; i++) {
+          c.signalMesh.getColorAt(signal.indices[i], color);
+          const expected = new THREE.Color(i !== active ? '#293538' : green ? '#62d996' : amber ? '#ffd571' : '#ed654b');
+          assert.ok(Math.abs(color.r - expected.r) + Math.abs(color.g - expected.g) + Math.abs(color.b - expected.b) < 1e-6);
+        }
       }
     }
   } finally { world.dispose(); }

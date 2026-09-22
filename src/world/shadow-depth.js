@@ -12,7 +12,8 @@ const depthMaterials = new Map();
 function depthMaterial(object, material) {
   const side = material.shadowSide ?? shadowSide[material.side] ?? THREE.BackSide;
   const kind = object.isInstancedMesh ? (object.instanceColor ? 'instanced-colored' : 'instanced') : 'mesh';
-  const key = `${kind}/${side}`;
+  const morphs = object.geometry.morphAttributes.position?.length ?? 0;
+  const key = `${kind}/${side}/${morphs}`;
   let depth = depthMaterials.get(key);
   if (!depth) {
     depth = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, side });

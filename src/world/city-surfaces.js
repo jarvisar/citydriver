@@ -62,6 +62,14 @@ export function addSurfacePolygon(c, points, y, height, color, kind = 'solid') {
   const key = kind === 'road' || kind === 'water' ? kind : `surface-${kind}${flat ? '' : '-volume'}`;
   if (!c.batches.has(key)) c.batches.set(key, { geometry: kind === 'water' ? riverWaterGeometry : flat ? surfaceTopGeometry : surfaceGeometry, material: c.materials[kind], items: [] });
   const items = c.batches.get(key).items;
+  // Clip paving after mapping the curved streets: separate tessellations can
+  // overlap slightly even when their logical footprints meet exactly. This is
+  // construction-only work; the resulting pieces use the usual instance batch.
+  c.surfaceLayers ??= new Map();
+  const level = (y + height / 2).toFixed(5);
+  if (!c.surfaceLayers.has(level)) c.surfaceLayers.set(level, []);
+  const layer = c.surfaceLayers.get(level);
+  const previousCount = layer.length;
   c.surfacePoints ??= new Map();
   const mapped = ([x, s]) => {
     const key = `${x},${s}`;
@@ -80,11 +88,30 @@ export function addSurfacePolygon(c, points, y, height, color, kind = 'solid') {
   for (const polygon of pieces) {
     const world = polygon.map(mapped);
     for (let i = 1; i < world.length - 1; i++) {
-      const [a, b, d] = [world[0], world[i], world[i + 1]];
-      if (Math.abs((b.u - a.u) * (d.s - a.s) - (b.s - a.s) * (d.u - a.u)) < EPS) continue;
-      items.push({ p: [0, y, 0], scale: [1, height, 1], color, yaw: 0, roll: 0,
-        ...(kind === 'water' ? { riverAddress: [polygon[0], polygon[i], polygon[i + 1]].flatMap(([x, s]) => [c.east + x, c.start + s]) } : {}),
-        anchor: { u: c.east, s: c.start }, frame: { u: a.u, s: a.s, eu: b.u - a.u, es: b.s - a.s, nu: d.u - a.u, ns: d.s - a.s } });
+      const triangle = [world[0], world[i], world[i + 1]].map(p => [p.u - c.east, p.s - c.start]);
+      if (Math.abs(signedArea(triangle)) < EPS) continue;
+      const bounds = [Math.min(...triangle.map(p => p[0])), Math.min(...triangle.map(p => p[1])),
+        Math.max(...triangle.map(p => p[0])), Math.max(...triangle.map(p => p[1]))];
+      let visible = [triangle];
+      if (kind !== 'water') {
+        for (let k = 0; k < previousCount; k++) {
+          const previous = layer[k];
+          const b = previous.bounds;
+          if (bounds[0] >= b[2] - EPS || bounds[2] <= b[0] + EPS || bounds[1] >= b[3] - EPS || bounds[3] <= b[1] + EPS) continue;
+          visible = visible.flatMap(p => subtractPolygon(p, previous.points));
+          if (!visible.length) break;
+        }
+        layer.push({ points: triangle, bounds });
+      }
+      for (const piece of visible) for (let j = 1; j < piece.length - 1; j++) {
+        const [a, b, d] = [piece[0], piece[j], piece[j + 1]].map(([u, s]) => ({ u: u + c.east, s: s + c.start }));
+        const area = Math.abs((b.u - a.u) * (d.s - a.s) - (b.s - a.s) * (d.u - a.u));
+        // Microscopic clipping slivers add long, nearly coincident prism sides.
+        if (area < 1e-4) continue;
+        items.push({ p: [0, y, 0], scale: [1, height, 1], color, yaw: 0, roll: 0,
+          ...(kind === 'water' ? { riverAddress: [polygon[0], polygon[i], polygon[i + 1]].flatMap(([x, s]) => [c.east + x, c.start + s]) } : {}),
+          anchor: { u: c.east, s: c.start }, frame: { u: a.u, s: a.s, eu: b.u - a.u, es: b.s - a.s, nu: d.u - a.u, ns: d.s - a.s } });
+      }
     }
   }
 }

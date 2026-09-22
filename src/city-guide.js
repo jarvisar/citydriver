@@ -33,7 +33,7 @@ export class CityGuide {
     // Draw immediately so opening the map never exposes an empty canvas.
     if (expanded) {
       if (this.taxi?.running) this.updateTaxi();
-      else this.draw(this.position(), [], [], null);
+      else this.draw(this.position());
     }
   }
   refreshNotebook() {
@@ -60,22 +60,29 @@ export class CityGuide {
     this.canvas.title = 'Local street map';
     $('taxi-offer').hidden = true;
     this.canvas.setAttribute('aria-label', 'Local street map. North is up; the white arrow is your car.');
-    if (this.expanded) this.draw(vehicle, [], [], null);
+    if (this.expanded) this.draw(vehicle);
   }
   updateTaxi() {
     const run = this.taxi, vehicle = this.position(), target = run.target;
     $('taxi-offer').hidden = !this.expanded;
     const offer = run.status === 'pickup'
-      ? 'Choose a passenger by stopping in their pickup ring'
-      : `To ${target.name} · Follow the gold route`;
+      ? 'Stop in a pickup ring. Numbers show group size; everyone boards together.'
+      : `${run.onboard} aboard · ${run.fare.stops.length - run.stopIndex} stop${run.fare.stops.length - run.stopIndex === 1 ? '' : 's'} left · Follow the gold route`;
     if ($('taxi-offer').textContent !== offer) $('taxi-offer').textContent = offer;
     this.canvas.title = run.status === 'pickup' ? 'Nearby passengers' : 'Route to the drop-off';
     this.canvas.setAttribute('aria-label', run.status === 'pickup'
-      ? 'Local street map. North is up; the white arrow is your car and colored dots mark waiting passengers.'
-      : 'Local street map. North is up; the white arrow is your car and gold marks the route to your drop-off.');
-    if (this.expanded) this.draw(vehicle, taxiRoute(vehicle, target), run.status === 'pickup' ? run.customers : [{ ...target, color: '#ffd238' }], target);
+      ? 'Local street map. North is up; the white arrow is your car. Colored dots mark waiting passengers; numbers show group size.'
+      : 'Local street map. North is up; the white arrow is your car. Gold marks the current drop-off; a dashed line leads to the next group stop.');
+    if (this.expanded) this.draw(vehicle);
   }
-  draw(vehicle, route, places = this.exploration.places, target = this.exploration.target) {
+  draw(vehicle) {
+    // Resolve markers on every redraw; exploration and previous fares must not
+    // leave destinations behind after the passenger has gone.
+    const run = this.taxi;
+    const target = run?.status === 'driving' ? run.target : null;
+    const nextStop = target ? run.fare.stops[run.stopIndex + 1]?.destination : null;
+    const places = run?.status === 'pickup' ? run.customers : target ? [{ ...target, color: '#ffd238' }] : [];
+    const route = taxiRoute(vehicle, target);
     const ctx = this.ctx, width = 208, height = 144, scale = MAP_SCALE;
     const ratio = Math.min(window.devicePixelRatio || 1, 2);
     const pixelWidth = Math.floor(width * ratio), pixelHeight = Math.floor(height * ratio);
@@ -86,13 +93,26 @@ export class CityGuide {
     const { ix, iz } = cityCell(vehicle.s, vehicle.u);
     this.mapCache.update(ix, iz);
     this.mapCache.draw(ctx, vehicle, scale, width, height);
+    if (nextStop) {
+      ctx.save(); ctx.strokeStyle = '#95b8b9'; ctx.lineWidth = 2; ctx.setLineDash([3, 4]);
+      ctx.beginPath(); taxiRoute(target, nextStop).forEach((p, i) => { const [x, y] = point(p); if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y); }); ctx.stroke();
+      ctx.restore();
+      const [x, y] = point(nextStop);
+      if (x > 7 && y > 7 && x < width - 7 && y < height - 7) {
+        ctx.beginPath(); ctx.arc(x, y, 7, 0, Math.PI * 2); ctx.fillStyle = '#95b8b9'; ctx.fill();
+        ctx.save(); ctx.fillStyle = '#17262f'; ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('2', x, y); ctx.restore();
+      }
+    }
     ctx.lineJoin = 'round'; ctx.lineCap = 'round'; ctx.lineWidth = 2; ctx.strokeStyle = '#efca8b';
     ctx.beginPath(); route.forEach((p, i) => { const [x, y] = point(p); if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y); }); ctx.stroke();
     for (const place of places) {
       const [x, y] = point(place), selected = place.id === target?.id;
       if (x < 5 || y < 5 || x > width - 5 || y > height - 5) continue;
-      ctx.beginPath(); ctx.arc(x, y, selected ? 6 : 3.5, 0, Math.PI * 2);
+      ctx.beginPath(); ctx.arc(x, y, selected || place.passengers > 1 ? 6 : 3.5, 0, Math.PI * 2);
       ctx.fillStyle = selected ? '#f5d69c' : place.color; ctx.fill();
+      if (place.passengers > 1) {
+        ctx.save(); ctx.fillStyle = '#17262f'; ctx.font = 'bold 9px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(String(place.passengers), x, y); ctx.restore();
+      }
       if (selected) { ctx.strokeStyle = '#fff4dc'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(x, y, 9, 0, Math.PI * 2); ctx.stroke(); }
     }
     if (target) {

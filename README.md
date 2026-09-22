@@ -6,9 +6,11 @@ Taxi driving game built with [Three.js](https://threejs.org/). The city generate
 
 Start a **Taxi run** to pick up passengers and earn money. You start with 90 seconds. Stop in a pickup ring, follow the arrow, then stop in the yellow drop-off ring before the fare timer runs out.
 
-Completed fares add 18–30 seconds. Fast deliveries, drifts, and near misses earn tips; crashes halve your current tips. Boost recharges when released. Resetting costs 5 seconds.
+Completed fares add 18–30 seconds; two-stop groups add 4 extra seconds in total, split between their stops. Fast deliveries, drifts, and near misses earn tips; crashes halve your current tips. Boost recharges when released. Resetting costs 5 seconds.
 
-Choose your own fare by stopping in any passenger ring. Available fares never become navigation targets. Once the passenger boards, a green 3D arrow points directly to their destination and the map shows the road route. You can carry one passenger at a time. Your best score and fleet balance save locally. Pause or switch tabs to stop the clock.
+Choose your own fare by stopping in any passenger ring. Pick up a solo rider or a group of 2–4; everyone boards together. Groups usually share one destination, with at most two nearby stops. Approach a ring to preview the riders, destinations, and fare. Numbers on the map show group size.
+
+Once passengers board, a green 3D arrow points to the current drop-off and automatically advances after each stop. A dashed map route previews the second stop. Groups pay more, refill a quarter of your boost at each stop, and award a $25 bonus per extra rider when everyone arrives. Each stop banks its payout immediately, even if you miss the remaining drop-off. One timer covers the whole fare, with extra time allowed for the second stop. You carry one party at a time; boarding never takes longer for a group. Your best score and fleet balance save locally. Pause or switch tabs to stop the clock.
 
 Buy the GT Taxi ($1,500) or Formula Taxi ($4,500) from **Pause → Taxi fleet** or the results screen. Completed fares stay banked even if you restart. Vehicle changes apply to the next run.
 

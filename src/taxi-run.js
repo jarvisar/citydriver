@@ -7,6 +7,8 @@ import { TaxiFleet } from './taxi-fleet.js';
 export const SHIFT_SECONDS = 90;
 export const STOP_RADIUS = 8;
 export const STOP_SECONDS = .45;
+export const GROUP_MAX_LEG = 260;
+export const GROUP_MAX_DETOUR = 1.3;
 const CUSTOMER_RANGE = B * 3;
 const CUSTOMER_COLORS = ['#a4f264', '#54dfe0', '#f8ba55', '#d6adff', '#ffaaa1', '#9dcaff'];
 // Long trips should earn back more of their travel time, without making the
@@ -23,6 +25,48 @@ const PASSENGERS = {
   cityhall: 'City clerk',
 };
 const PASSENGER_TYPES = Object.keys(PASSENGERS);
+
+// Parties board in one beat. Most share a destination; a split party gets at
+// most one extra stop, in the same neighborhood and further along the trip.
+function partyOffer(stop, destination, length, destinations) {
+  const roll = randomAt(stop.fareSeed, 20010);
+  const passengers = roll < .5 ? 1 : roll < .73 ? 2 : roll < .91 ? 3 : 4;
+  const stops = [{ destination, passengers, length }];
+  if (passengers > 1 && randomAt(stop.fareSeed, 20110) < .55) {
+    const candidates = destinations.filter(next => next.id !== destination.id
+      && distance(destination, next) >= 45 && distance(destination, next) <= GROUP_MAX_LEG)
+      .sort((a, b) => distance(destination, a) - distance(destination, b) || a.id.localeCompare(b.id));
+    for (const next of candidates) {
+      const direct = routeDistance(taxiRoute(stop, next));
+      const orders = [
+        { first: destination, last: next, firstLength: length, direct },
+        { first: next, last: destination, firstLength: direct, direct: length },
+      ].map(order => ({ ...order, leg: routeDistance(taxiRoute(order.first, order.last)) }))
+        .filter(order => order.firstLength >= 280 && order.leg <= GROUP_MAX_LEG
+          && order.firstLength + order.leg <= Math.min(1100, order.direct * GROUP_MAX_DETOUR)
+          && (order.last.s - order.first.s) * (order.first.s - stop.s)
+            + (order.last.u - order.first.u) * (order.first.u - stop.u) >= 0)
+        .sort((a, b) => a.firstLength + a.leg - b.firstLength - b.leg);
+      if (!orders.length) continue;
+      const order = orders[0];
+      stops[0] = { destination: order.first, passengers: Math.ceil(passengers / 2), length: order.firstLength };
+      stops.push({ destination: order.last, passengers: passengers - stops[0].passengers, length: order.leg });
+      break;
+    }
+  }
+  const totalLength = stops.reduce((sum, leg) => sum + leg.length, 0);
+  const fare = Math.round((40 + totalLength * .28) * (1 + (passengers - 1) * .35));
+  // Allocate integer dollars and seconds once; stopping twice must not double
+  // the shift reward. Cash from the first stop stays banked if the party fails.
+  let allocated = 0;
+  for (const [index, leg] of stops.entries()) {
+    leg.fare = index === stops.length - 1 ? fare - allocated : Math.round(fare * leg.passengers / passengers);
+    allocated += leg.fare;
+  }
+  return { passengers, stops, destination: stops[0].destination, length: totalLength, fare,
+    limit: Math.ceil(18 + totalLength / 14 + (stops.length - 1) * 6),
+    groupBonus: (passengers - 1) * 25 };
+}
 
 export function taxiRoute(player, target) {
   if (!target) return [];
@@ -91,18 +135,21 @@ export class TaxiRun {
     try { const best = Number(storage?.getItem('citydriver-taxi-best')); if (Number.isFinite(best) && best > 0) this.best = Math.floor(best); } catch { /* Optional storage. */ }
   }
   get running() { return this.status === 'pickup' || this.status === 'driving'; }
-  get target() { return this.status === 'driving' ? this.fare.destination : null; }
+  get currentStop() { return this.status === 'driving' ? this.fare.stops[this.stopIndex] : null; }
+  get target() { return this.currentStop?.destination ?? null; }
+  get remainingFare() { return this.status === 'driving' ? this.fare.stops.slice(this.stopIndex).reduce((sum, stop) => sum + stop.fare, 0) + this.fare.groupBonus : 0; }
   start(player) {
     this.status = 'pickup'; this.timeLeft = SHIFT_SECONDS; this.cash = 0; this.delivered = 0; this.failed = 0;
     this.boost = 1; this.boostActive = false; this.elapsed = 0; this.combo = 1; this.comboTime = 0;
     this.tips = 0; this.hold = 0; this.fare = null; this.events = []; this.driftTime = 0; this.crashCooldown = 0;
     this.recentDestinations = []; this.customers = []; this.boarding = null; this.blockedPickup = null;
     this.servedCustomers = new Map();
+    this.stopIndex = 0; this.onboard = 0; this.deliveredPassengers = 0;
     this.lastImpact = player.audioTelemetry?.impactSerial ?? 0; this.makeCustomers(player);
     // Starting inside a ring must not choose the first fare for the driver.
     this.blockedPickup = this.customers.find(p => distance(p, player) < STOP_RADIUS) ?? null;
   }
-  stop() { this.status = 'idle'; this.customers = []; this.servedCustomers?.clear(); this.fare = null; this.boarding = null; this.hold = 0; this.boostActive = false; this.revision++; }
+  stop() { this.status = 'idle'; this.customers = []; this.servedCustomers?.clear(); this.fare = null; this.boarding = null; this.hold = 0; this.onboard = 0; this.stopIndex = 0; this.boostActive = false; this.revision++; }
   makeCustomers(player) {
     const previous = this.customers;
     for (const [id, until] of this.servedCustomers) if (until <= this.elapsed) this.servedCustomers.delete(id);
@@ -128,8 +175,8 @@ export class TaxiRun {
       const address = cityLogical(stop.s, stop.u);
       const destination = route?.destination ?? placeStop({ ...cityLayout(Math.round(address.s / B) * B + B / 2, Math.round(address.u / B) * B + 3.5 * B), name: 'Downtown' });
       const length = route?.length ?? routeDistance(taxiRoute(stop, destination));
-      return { ...stop, name: PASSENGERS[destination.type] ?? 'Passenger', destination, length,
-        fare: Math.round(40 + length * .28), limit: Math.ceil(18 + length / 14),
+      const party = partyOffer(stop, destination, length, destinations);
+      return { ...stop, name: PASSENGERS[party.destination.type] ?? 'Passenger', ...party,
         color: CUSTOMER_COLORS[Math.floor(randomAt(stop.fareSeed, 19910) * CUSTOMER_COLORS.length)] };
     });
     this.customerCenter = { s: player.s, u: player.u };
@@ -148,7 +195,7 @@ export class TaxiRun {
     this.combo = Math.min(3, this.combo + 1); this.comboTime = 4;
   }
   finish() {
-    this.status = 'over'; this.boostActive = false; this.boarding = null; this.hold = 0; this.revision++;
+    this.status = 'over'; this.boostActive = false; this.boarding = null; this.hold = 0; this.onboard = 0; this.revision++;
     this.best = Math.max(this.best, this.cash);
     try { this.storage?.setItem('citydriver-taxi-best', String(this.best)); } catch { /* Optional storage. */ }
     this.events.push({ kind: 'over' });
@@ -188,6 +235,7 @@ export class TaxiRun {
       this.hold = passenger ? this.hold + dt : 0;
       if (this.hold >= STOP_SECONDS) {
         this.fare = passenger; this.fareLeft = passenger.limit; this.status = 'driving'; this.boarding = null;
+        this.stopIndex = 0; this.onboard = passenger.passengers;
         this.customers = this.customers.filter(customer => customer !== passenger);
         this.servedCustomers.set(passenger.id, this.elapsed + 60);
         this.hold = 0; this.tips = 0; this.combo = 1; this.driftTime = 0; this.passed = new WeakSet(); this.revision++;
@@ -197,8 +245,10 @@ export class TaxiRun {
     }
     this.fareLeft = Math.max(0, this.fareLeft - dt);
     if (this.fareLeft <= 0) {
-      this.failed++; this.status = 'pickup'; this.fare = null; this.hold = 0; this.tips = 0; this.combo = 1; this.revision++; this.makeCustomers(player);
-      this.events.push({ kind: 'missed', text: 'Fare lost' }); return;
+      const partial = this.stopIndex > 0;
+      this.failed++; this.status = 'pickup'; this.fare = null; this.hold = 0; this.onboard = 0; this.stopIndex = 0; this.tips = 0; this.combo = 1; this.revision++; this.makeCustomers(player);
+      this.blockedPickup = this.customers.find(p => distance(p, player) < STOP_RADIUS) ?? null;
+      this.events.push({ kind: 'missed', text: partial ? 'Group unfinished · earned cash kept' : 'Fare lost' }); return;
     }
     if (player.drifting && Math.abs(player.speed) > 10 && this.crashCooldown === 0) {
       this.driftTime += dt;
@@ -217,14 +267,28 @@ export class TaxiRun {
         }
       }
     }
-    this.hold = distance(this.fare.destination, player) < STOP_RADIUS && Math.abs(player.speed) < 2.5 ? this.hold + dt : 0;
+    this.hold = distance(this.target, player) < STOP_RADIUS && Math.abs(player.speed) < 2.5 ? this.hold + dt : 0;
     if (this.hold >= STOP_SECONDS) {
-      const speedBonus = Math.round(this.fare.fare * .5 * this.fareLeft / this.fare.limit);
-      const paid = this.fare.fare + this.tips + speedBonus, seconds = deliverySeconds(this.fare.length);
-      this.cash += paid; this.delivered++; this.timeLeft = Math.min(120, this.timeLeft + seconds);
+      const stop = this.currentStop, last = this.stopIndex === this.fare.stops.length - 1;
+      const speedBonus = Math.round(stop.fare * .5 * this.fareLeft / this.fare.limit);
+      const bonus = last ? this.fare.groupBonus : 0;
+      const paid = stop.fare + this.tips + speedBonus + bonus;
+      const totalSeconds = deliverySeconds(this.fare.length) + (this.fare.stops.length - 1) * 4;
+      const seconds = this.fare.stops.length === 1 ? totalSeconds : last ? 8 : totalSeconds - 8;
+      this.cash += paid; this.deliveredPassengers += stop.passengers; this.onboard -= stop.passengers;
+      this.timeLeft = Math.min(120, this.timeLeft + seconds);
       this.fleet.credit(paid);
-      this.recentDestinations = [...this.recentDestinations, this.fare.destination.type].slice(-3);
-      this.events.push({ kind: 'paid', text: `+$${paid} · +${seconds}s`, paid });
+      this.recentDestinations = [...this.recentDestinations, stop.destination.type].slice(-3);
+      const celebration = bonus ? 'Group complete! ' : !last ? `${stop.passengers} dropped off · ` : '';
+      this.events.push({ kind: 'paid', text: `${celebration}+$${paid} · +${seconds}s`, paid, bonus, seconds, passengers: stop.passengers, destination: stop.destination, groupComplete: last && this.fare.passengers > 1 });
+      if (this.fare.passengers > 1) this.boost = Math.min(1, this.boost + .25);
+      if (!last) {
+        this.stopIndex++; this.tips = 0; this.hold = 0; this.driftTime = 0; this.revision++;
+        // Preserve the stunt combo and timer, with enough grace to pull away.
+        this.comboTime = Math.max(this.comboTime, 4);
+        return;
+      }
+      this.delivered++; this.stopIndex = 0;
       this.status = 'pickup'; this.fare = null; this.tips = 0; this.combo = 1; this.hold = 0;
       this.revision++; this.makeCustomers(player);
       // Overlapping pickups wait until the driver leaves the ring.

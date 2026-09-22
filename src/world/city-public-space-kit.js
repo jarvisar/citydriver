@@ -137,7 +137,7 @@ export function ribbonBed(c, points, width, color, stone = '#c8bda6') {
 export function pergola(c, x, s, w, d, color = '#cbb593') {
   reserve(c, rectanglePolygon(x, s, w + 1.5, d + 1.5));
   c.structure(x, s, () => {
-    c.surface(x, G + .065, s, w + 1.5, .045, d + 1.5, '#c7b99b');
+    c.surface(x, G + .085, s, w + 1.5, .045, d + 1.5, '#c7b99b');
     for (const dx of [-w / 2 + .5, w / 2 - .5]) for (const ds of [-d / 2 + .5, d / 2 - .5]) {
       c.box(x + dx, G + 2.5, s + ds, .5, 5, .5, color); c.post(x + dx, s + ds, .4);
     }
@@ -149,7 +149,7 @@ export function pergola(c, x, s, w, d, color = '#cbb593') {
 export function cafeTable(c, x, s, color) {
   reserve(c, rectanglePolygon(x, s, 7, 6));
   c.rigid(x, s, () => {
-    c.box(x, G + 1, s, 2.6, .2, 2.6, '#e2cda6');
+    disk(c, x, s, 2.6, 2.6, G + 1, .2, '#e2cda6');
     c.box(x, G + 1.9, s, .15, 3.8, .15, '#736d5c');
     c.item('public-canopy', canopy, c.materials.solid, [x, G + 3.35, -s], [2.85, .8, 2.85], color);
     for (const dx of [-2.3, 2.3]) c.prop('bench', x + dx, s, Math.PI / 2);

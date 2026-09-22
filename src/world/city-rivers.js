@@ -41,13 +41,14 @@ export function buildRiverGround(c) {
 
 export function buildRivers(c) {
   const streets = blockStreets(c.ix, c.iz), confluence = c.plan.rivers.north && c.plan.rivers.east;
+  const posts = new Set();
   for (const axis of ['north', 'east']) {
     if (!c.plan.rivers[axis]) continue;
     const b = riverBuilder(c, axis), profiles = axis === 'north' ? [streets.south, streets.north] : [streets.west, streets.east];
     for (const [edge, sign, street] of [[0, 1, profiles[0]], [112, -1, profiles[1]]]) {
       const width = Math.max(10.8, street.halfWidth + 2.8), railS = edge + sign * (width - .2);
-      b.surface(56, 23.49, edge + sign * width / 2, 58, .98, width, '#929b99');
-      b.surface(56, 24.06, edge + sign * (street.halfWidth + width) / 2, 58, .12, width - street.halfWidth, '#b6b2a4');
+      b.surface(56, 23.49, edge + sign * width / 2, 56, .98, width, '#929b99');
+      b.surface(56, 24.06, edge + sign * (street.halfWidth + width) / 2, 56, .12, width - street.halfWidth, '#b6b2a4');
       const [x, s] = b.point(56, railS), address = { s: c.start + s, u: c.east + x };
       const start = b.point(27.6, railS), end = b.point(84.4, railS);
       const a = cityLayout(c.start + start[1], c.east + start[0]), d = cityLayout(c.start + end[1], c.east + end[0]);
@@ -75,7 +76,11 @@ export function buildRivers(c) {
     for (const x of [27.6, 84.4]) for (const [start, end] of confluence ? [[bankStart, 27.6], [84.4, bankEnd]] : [[bankStart, bankEnd]]) {
       b.surface(x, 24.85, (start + end) / 2, .18, .14, end - start, '#52676a');
       b.surface(x, 24.46, (start + end) / 2, .12, .1, end - start, '#52676a');
-      for (let s = start; s <= end; s += 4) b.box(x, 24.52, s, .13, .95, .13, '#52676a');
+      for (let s = start; s <= end; s += 4) {
+        const key = b.point(x, s).map(v => v.toFixed(6)).join(',');
+        if (posts.has(key)) continue;
+        posts.add(key); b.box(x, 24.52, s, .13, .95, .13, '#52676a');
+      }
       b.solid(x, (start + end) / 2, .3, end - start, true);
     }
     // Alternate formal quays and planted embankments. A continuous path stays

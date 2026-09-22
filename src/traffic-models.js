@@ -6,8 +6,8 @@ export const TRAFFIC_MODELS = [
   { name: 'hatchback', width: 1.85, length: 3.45, cabin: [1.63, .75, 1.95], cabinZ: .25 },
   { name: 'sedan', width: 1.98, length: 4.25, cabin: [1.75, .7, 2.05], cabinZ: .05 },
   { name: 'wagon', width: 2, length: 4.55, cabin: [1.78, .85, 2.95], cabinZ: .37 },
-  { name: 'pickup', width: 2.12, length: 4.8, cabin: [1.89, .95, 1.65], cabinZ: -.65 },
-  { name: 'van', width: 2.08, length: 4.7, cabin: [1.93, 1.35, 3.55], cabinZ: .32 },
+  { name: 'pickup', width: 2.12, length: 5.2, cabin: [1.89, .95, 1.8], cabinZ: -.7 },
+  { name: 'van', width: 2.08, length: 5.15, cabin: [1.93, 1.35, 3.95], cabinZ: .32 },
 ];
 
 // Chooser-only: a low, short-cabin coupe. It is never spawned into traffic and
@@ -36,8 +36,27 @@ export function vehicleGeometry(spec, { separateWheels = false } = {}) {
   const box = (size, location, category = 'paint', color) => add(new THREE.BoxGeometry(...size), location, category, color);
   const { width: w, length: l, cabin: [cw, ch, cl], cabinZ: cz, name, drop = 0 } = spec;
   const roofY = 1.22 + ch;
-  box([w, .65, l], [0, .89, 0]);
-  box([w * .94, .13, l - .14], [0, 1.24, 0]);
+  // Clip the four corners without adding subdivisions to the long body sides.
+  // The short bevels catch light while keeping the original flat-panel style.
+  const corner = .12;
+  const outline = new THREE.Shape();
+  outline.moveTo(-w / 2 + corner, -l / 2);
+  for (const [x, z] of [[w / 2 - corner, -l / 2], [w / 2, -l / 2 + corner],
+    [w / 2, l / 2 - corner], [w / 2 - corner, l / 2], [-w / 2 + corner, l / 2],
+    [-w / 2, l / 2 - corner], [-w / 2, -l / 2 + corner]]) outline.lineTo(x, z);
+  outline.closePath();
+  const shell = new THREE.ExtrudeGeometry(outline, { depth: .65, bevelEnabled: false, steps: 1 });
+  shell.rotateX(Math.PI / 2);
+  // Extrusion is non-indexed; all pieces must share the box geometry format.
+  shell.setIndex(Array.from({ length: shell.attributes.position.count }, (_, i) => i));
+  add(shell, [0, 1.215, 0], 'paint');
+  const deck = new THREE.BoxGeometry(w * .94, .13, l - .14);
+  const deckVertices = deck.attributes.position;
+  for (let i = 0; i < deckVertices.count; i++) {
+    if (name === 'sports' && deckVertices.getZ(i) < 0) deckVertices.setY(i, deckVertices.getY(i) - .06);
+  }
+  deck.computeVertexNormals();
+  add(deck, [0, 1.24, 0], 'paint');
   // Slightly sloped glass keeps the silhouettes in the player's faceted style.
   const glass = new THREE.BoxGeometry(cw, ch, cl);
   const vertices = glass.attributes.position;
@@ -47,9 +66,23 @@ export function vehicleGeometry(spec, { separateWheels = false } = {}) {
   }
   glass.computeVertexNormals();
   add(glass, [0, 1.22 + ch / 2, cz], 'details', '#344e55');
-  box([cw * .96 + .09, .14, cl - .23], [0, roofY + .02, cz + .06]);
+  box([cw * .94 + .08, .1, cl - .24], [0, roofY + .025, cz + .06]);
   for (const side of [-1, 1]) {
-    box([.085, ch, .12], [side * (cw / 2 - .02), 1.22 + ch / 2, cz + .16]);
+    // Follow the sloped glass edges: vertical posts left the windshield looking
+    // like a dark box perched on the doors.
+    for (const [end, rake] of [[-1, .24], [1, -.12]]) {
+      const pillar = new THREE.BoxGeometry(.085, ch + .02, .1), p = pillar.attributes.position;
+      for (let i = 0; i < p.count; i++) if (p.getY(i) > 0) {
+        p.setX(i, p.getX(i) - side * cw * .03);
+        p.setZ(i, p.getZ(i) + rake);
+      }
+      pillar.computeVertexNormals();
+      add(pillar, [side * (cw / 2 - .015), 1.22 + ch / 2, cz + end * (cl / 2 - .025)], 'paint');
+    }
+    const post = new THREE.BoxGeometry(.085, ch, .12), pv = post.attributes.position;
+    for (let i = 0; i < pv.count; i++) if (pv.getY(i) > 0) pv.setX(i, pv.getX(i) - side * cw * .03);
+    post.computeVertexNormals();
+    add(post, [side * (cw / 2 - .02), 1.22 + ch / 2, cz + .16], 'paint');
     box([.09, .12, cl], [side * cw / 2, 1.25, cz]);
     box([.19, .15, .25], [side * (w / 2 + .06), 1.46, cz - cl / 2 + .2]);
     box([.07, .065, .24], [side * (w / 2 + .01), 1.11, cz + .38], 'details', '#c6c9bd');
@@ -63,17 +96,27 @@ export function vehicleGeometry(spec, { separateWheels = false } = {}) {
       add(hub, [side * w / 2, WHEEL.y, z], 'details', '#bfc4b9');
     }
   }
-  for (const z of [-l / 2, l / 2]) box([w * .97, .13, .13], [0, .66, z], 'details', '#bbc0b6');
+  for (const end of [-1, 1]) {
+    box([w * .88, .14, .14], [0, .66, end * l / 2], 'details', '#bbc0b6');
+    box([w * .8, .075, .16], [0, .57, end * (l / 2 - .035)], 'details', '#2b3434');
+    for (const side of [-1, 1]) box([.12, .14, .22], [side * w * .455, .66, end * (l / 2 - .075)], 'details', '#46514f');
+  }
   box([.68, .19, .04], [0, .99, -l / 2 - .023], 'details', '#2b3434');
   box([.49, .17, .04], [0, .96, l / 2 + .023], 'details', '#e9e2cb');
   if (name === 'pickup') {
-    box([w - .3, .08, 1.85], [0, 1.33, 1.27], 'details', '#414c4b');
-    for (const side of [-1, 1]) box([.16, .34, 2.02], [side * (w / 2 - .08), 1.47, 1.28]);
+    const bedFront = cz + cl / 2 + .12, bedRear = l / 2 - .08;
+    const bedLength = bedRear - bedFront, bedZ = (bedRear + bedFront) / 2;
+    box([w - .3, .08, bedLength], [0, 1.33, bedZ], 'details', '#414c4b');
+    for (const side of [-1, 1]) box([.16, .34, bedLength], [side * (w / 2 - .08), 1.47, bedZ]);
     box([w, .34, .15], [0, 1.47, l / 2 - .08]);
+    box([.34, .07, .025], [0, 1.48, l / 2 + .006], 'details', '#2b3434');
   }
   if (name === 'van') {
     // Solid rear quarter panels distinguish the van from the long-window wagon.
-    for (const side of [-1, 1]) box([.11, ch - .06, 1.48], [side * cw / 2, 1.22 + ch / 2, 1.27]);
+    for (const side of [-1, 1]) {
+      box([.11, ch - .06, 2], [side * cw / 2, 1.22 + ch / 2, cz + cl / 2 - 1]);
+      box([.025, .045, 1.75], [side * (cw / 2 + .061), 1.49, cz + cl / 2 - 1], 'details', '#697773');
+    }
     box([cw, ch, .1], [0, 1.22 + ch / 2, cz + cl / 2]);
     box([cw * .69, .5, .025], [0, roofY - .37, cz + cl / 2 + .055], 'details', '#344e55');
   }

@@ -336,9 +336,10 @@ export class DrivingController {
     const arcade = Boolean(this.arcade), boosting = arcade && input.boost;
     const forward = clamp(Number(input.forward) || 0, 0, 1); const brake = clamp(Number(input.brake) || 0, 0, 1);
     const steering = touch ? 0 : clamp((Number(input.right) || 0) - (Number(input.left) || 0), -1, 1);
-    // Keep some weight on turn-in, but let go of the old turn promptly when
-    // straightening up or countersteering out of an arcade drift.
-    const steeringResponse = arcade ? (steering * this.steer <= 0 || Math.abs(steering) < Math.abs(this.steer) ? 16 : 10) : 7;
+    // Reach 90% of a new turn in about 96 ms in either mode. Release and
+    // countersteer faster, so a short tap does not keep turning after letting go.
+    // Exponential damping preserves analog range and works at any tick rate.
+    const steeringResponse = steering * this.steer < 0 || Math.abs(steering) < Math.abs(this.steer) ? 36 : 24;
     this.steer = THREE.MathUtils.damp(this.steer, steering, steeringResponse, dt);
     this.reverseDelay = arcade && brake && !touch && dt > 0 ? Math.max(0, this.reverseDelay - dt) : 0;
     // How far off the tarmac the car is: 0 on the road, 1 out on open ground,
@@ -410,7 +411,9 @@ export class DrivingController {
     const step = this.speed * dt, fromS = this.s, fromU = this.u;
     if (!dt || !Number.isFinite(this.slideHeading) || !arcade) this.slideHeading = this.heading;
     const slip = Math.atan2(Math.sin(this.slideHeading - this.heading), Math.cos(this.slideHeading - this.heading));
-    this.slideHeading = this.heading + slip * Math.exp(-dt * (drifting ? 2.2 : 12));
+    // Normal grip should follow turn-in promptly; the handbrake deliberately
+    // keeps its longer slide, then the tires regain grip on release.
+    this.slideHeading = this.heading + slip * Math.exp(-dt * (drifting ? 2.2 : 24));
     const travelAngle = arcade ? this.slideHeading - frame.angle : difference;
     this.s += touch?.amount ? touch.along * step : Math.cos(travelAngle) * step / frame.scale;
     this.u += touch?.amount ? touch.across * step : Math.sin(travelAngle) * step;

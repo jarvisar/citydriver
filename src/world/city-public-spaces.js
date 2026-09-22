@@ -73,7 +73,7 @@ function pondGarden(c, p, random) {
   // A straight timber viewing deck meets the gently lobed shoreline.
   c.structure(58, 74, () => {
     c.box(58, G + .65, 72, 17, .4, 10, '#a18b6d'); c.solid(58, 72, 17, 10);
-    for (const [s, h] of [[78.9, .28], [77.65, .56]]) c.box(58, G + h / 2, s, 5, h, 1.3, stone);
+    for (const [s, h] of [[78.9, .28], [77.65, .56]]) c.box(58, G + h / 2, s, 5, h, 1.25, stone);
     c.solid(58, 78.5, 5, 3.2);
     if (!c.distant) for (let x = 50; x < 67; x += 1.4) c.box(x, G + .86, 72, .045, .02, 10, '#7e715e');
     c.prop('bench', 58, 74, Math.PI);
@@ -163,7 +163,7 @@ function mosaic(c, p, random) {
   for (let i = 0; i < 7; i++) c.box(36 + i * 6, G + .095, 39 + i * 5, 4.5, .035, 4.5, i % 2 ? p.accent : p.stone, 'solid', -.7);
   c.structure(35, 75, () => {
     disk(c, 35, 75, 20, 20, G + .25, .5, p.stone);
-    for (const dx of [-4.5, 4.5]) c.box(35 + dx, G + 5, 75, 2, 10, 3, p.accent);
+    for (const dx of [-4.5, 4.5]) c.box(35 + dx, G + 4.15, 75, 2, 8.3, 3, p.accent);
     c.box(35, G + 9.3, 75, 12, 2, 3, p.accent); c.solid(35, 75, 14, 5);
   });
   for (const [x, s] of [[72, 28], [85, 40], [58, 85]]) cafeTable(c, x, s, p.accent);

@@ -52,9 +52,23 @@ function roadCarParts(entry) {
     // Lamps at each end.
     slab(-l / 2 - .02, -l / 2 + .16, .9, 1.12, '#ffeec2', 2),
     slab(l / 2 - .16, l / 2 + .02, .9, 1.1, '#c4483a', 2),
-    // The wheels stand outboard of the bodywork, so they sit over it.
-    wheel(-wheelZ), wheel(wheelZ),
   ];
+  if (entry.kind === 'built') {
+    parts.push(
+      slab(cz - cabinLength / 2 + .18, cz + cabinLength / 2 - .06, roofY - .025, roofY + .075, PAINT, 1),
+      slab(cz + .1, cz + .22, cabinY, roofY, PAINT, 0),
+      slab(-l / 2 + .18, l / 2 - .18, .565, .66, PAINT, 0),
+      slab(-l / 2 - .06, -l / 2 + .16, .59, .73, CARBON, 1),
+      slab(l / 2 - .16, l / 2 + .06, .59, .73, CARBON, 1),
+      slab(cz + .26, cz + .5, 1.077, 1.142, TRIM, 1),
+    );
+    if (shape.name === 'van') parts.push(
+      slab(cz + cabinLength / 2 - 2, cz + cabinLength / 2, cabinY + .03, roofY - .03, PAINT, 1),
+      slab(cz + cabinLength / 2 - 1.875, cz + cabinLength / 2 - .125, 1.467, 1.512, '#697773', 0),
+    );
+  }
+  // The wheels stand outboard of the bodywork, so they sit over it.
+  parts.push(wheel(-wheelZ), wheel(wheelZ));
   parts.push(...accessories(entry, { ...draw, l, cz, cabinLength, roofY, radius }));
   return parts;
 }
@@ -104,14 +118,14 @@ function formulaParts(entry) {
 }
 
 // The specials are drawn one by one from their models' own measurements, each
-// at the scale that frames it: the rig is half as long again as the microcar is
-// tall. A raked cabin is a painted frame with a smaller glass house inside it.
+// at the scale that frames it. A raked cabin is a painted frame with a smaller
+// glass house inside it.
 const LAMP = '#ffeec2', TAIL = '#c4483a', ENGINE = '#59625f', SEAT = '#3a4441', SHOCK = '#d9a441', AMBER = '#e0a23a', CANVAS = '#e9e2cb', LEATHER = '#8a5a3a';
 const cabin = ({ shape2d }, front, rear, bottom, top, rake = .24, inset = .08) => [
   shape2d([[front, bottom], [front + rake, top], [rear - rake / 2, top], [rear, bottom]], PAINT),
   shape2d([[front + inset * 1.6, bottom + inset], [front + rake + inset, top - inset], [rear - rake / 2 - inset, top - inset], [rear - inset, bottom + inset]], GLASS),
 ];
-const tyres = ({ disc }, { front, rear }) => [front, rear].map(({ radius, z }) => disc(z, radius, radius, TIRE) + disc(z, radius, radius * .46, HUB));
+const tyres = ({ disc }, wheels) => Object.values(wheels).map(({ radius, z }) => disc(z, radius, radius, TIRE) + disc(z, radius, radius * .46, HUB));
 
 const SPECIAL_ART = {
   buggy(shape) {
@@ -170,21 +184,27 @@ const SPECIAL_ART = {
     ];
   },
   rig(shape) {
-    const draw = pen({ scale: 35, ground: 128 }), { slab, shape2d, shadow } = draw;
+    const draw = pen({ scale: 32, ground: 128 }), { slab, shape2d, shadow } = draw;
     return [
-      shadow(3.2),
-      slab(-2.9, 3, .6, .9, CARBON, 2),
-      slab(1.55, 2.65, .9, 1.04, CARBON, 1), slab(2.49, 2.55, .45, .95, CARBON, 1),
-      slab(.5, 1.8, 1.03, 2.875, PAINT, 3),
-      shape2d([[.5, 2.86], [.5, 2.97], [1.8, 3.37], [1.8, 2.86]], PAINT),
-      slab(-1.1, .5, 1.03, 1.98, PAINT, 3),
-      ...cabin(draw, -1.05, .45, 1.975, 2.725),
-      slab(-.86, .38, 2.72, 2.84, PAINT, 2), slab(-.84, -.72, 2.84, 2.91, AMBER, 1),
-      slab(-2.95, -1.05, 1.03, 1.98, PAINT, 4),
-      slab(.29, .47, 1.1, 3.4, TRIM, 2),
-      slab(-3.03, -2.93, 1.08, 1.92, TRIM, 1), slab(-3.1, -2.85, .55, .85, TRIM, 2),
-      slab(-.35, .95, .52, 1.12, TRIM, 8),
-      slab(-2.64, -2.5, 1.04, 1.28, LAMP, 2), slab(2.96, 3.06, .7, .86, TAIL, 1),
+      shadow(3.75),
+      slab(-3.5, 3.6, .6, .9, CARBON, 2),
+      slab(1.79, 2.71, .96, 1.08, TRIM, 1), slab(3.61, 3.65, .45, .95, CARBON, 1),
+      slab(.25, 1.65, 1.025, 2.875, PAINT, 3),
+      shape2d([[.25, 2.86], [.25, 2.97], [1.65, 3.37], [1.65, 2.86]], PAINT),
+      slab(-1.55, .25, 1.025, 1.975, PAINT, 3),
+      ...cabin(draw, -1.5, .2, 1.975, 2.725),
+      slab(-1.44, .16, 1.96, 2.02, TRIM, 0),
+      shape2d([[-1.53, 1.98], [-1.46, 1.98], [-1.22, 2.73], [-1.29, 2.73]], TRIM),
+      slab(-.46, -.34, 1.975, 2.725, PAINT, 0),
+      slab(-.29, -.01, 1.8, 1.88, TRIM, 1),
+      slab(-1.315, .135, 2.72, 2.84, PAINT, 2), slab(-1.28, -1.18, 2.84, 2.91, AMBER, 1),
+      shape2d([[-3.45, 1.03], [-3.45, 1.89], [-1.55, 1.975], [-1.55, 1.025]], PAINT),
+      slab(.04, .22, 1.1, 3.4, TRIM, 2),
+      slab(-3.56, -3.45, 1.035, 1.885, TRIM, 1), slab(-3.65, -3.4, .55, .85, TRIM, 2),
+      slab(-.125, 1.225, .52, 1.12, TRIM, 8),
+      slab(-1.2, -.4, .69, .85, TRIM, 1), slab(-1.13, -.47, .94, 1.06, '#59625f', 1),
+      slab(-3.275, -1.725, 1.1, 1.345, PAINT, 3),
+      slab(-3.325, -3.21, 1.08, 1.32, LAMP, 2), slab(3.6, 3.65, .7, .86, TAIL, 1),
       ...tyres(draw, shape.wheels),
     ];
   },

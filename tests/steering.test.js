@@ -61,3 +61,50 @@ test('every car keeps proportional steering, reverse steering and highway stabil
     } finally { car.disposeModel(); }
   }
 });
+
+test('steering responds within 100 ms and releases or reverses promptly in both modes', () => {
+  for (const id of CAR_IDS) for (const arcade of [false, true]) {
+    const car = new DrivingController(road, {}, id); car.arcade = arcade;
+    try {
+      for (const hz of [30, 60, 120, 144]) for (const amount of [.25, 1]) for (const direction of [-1, 1]) {
+        car.reset();
+        const label = `${id}, arcade=${arcade}, ${hz} Hz, input=${amount * direction}`;
+        const turn = direction > 0 ? { right: amount } : { left: amount };
+        const advance = (seconds, input) => {
+          for (let elapsed = 0; elapsed < seconds - 1e-10;) {
+            const dt = Math.min(1 / hz, seconds - elapsed);
+            holdSpeed(car, 6, dt, input); elapsed += dt;
+          }
+        };
+        advance(.1, turn);
+        assert.ok(car.heading * direction > 0, `${label}: heading follows input`);
+        assert.ok(car.steer * direction >= amount * .9, `${label}: turn-in exceeds 100 ms`);
+        assert.ok(car.steer * direction <= amount, `${label}: steering overshoots`);
+        advance(1 / 15, {});
+        assert.ok(Math.abs(car.steer) < amount * .1, `${label}: release carries on turning`);
+        advance(.3, turn);
+        advance(1 / 30, direction > 0 ? { left: amount } : { right: amount });
+        assert.ok(car.steer * direction < 0, `${label}: countersteering stays in the old direction`);
+      }
+    } finally { car.disposeModel(); }
+  }
+});
+
+test('taxi tires recover direction promptly after releasing a handbrake drift', () => {
+  for (const hz of [30, 60, 120, 144]) {
+    const car = new DrivingController(road, {}, 'taxi'); car.arcade = true;
+    try {
+      for (let i = 0; i < hz; i++) holdSpeed(car, 15, 1 / hz, { right: 1, handbrake: true });
+      const slip = Math.abs(car.heading - car.slideHeading);
+      assert.ok(car.drifting && slip > .1, `${hz} Hz: handbrake still creates a drift`);
+      // Center the wheels to isolate tire recovery from steering release.
+      car.steer = 0;
+      for (let elapsed = 0; elapsed < .1 - 1e-10;) {
+        const dt = Math.min(1 / hz, .1 - elapsed);
+        holdSpeed(car, 15, dt, {}); elapsed += dt;
+      }
+      assert.equal(car.drifting, false);
+      assert.ok(Math.abs(car.heading - car.slideHeading) < slip * .1, `${hz} Hz: tires still sliding after 100 ms`);
+    } finally { car.disposeModel(); }
+  }
+});

@@ -20,10 +20,37 @@ export class Snowfall {
     this.geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(COUNT * 3), 3).setUsage(THREE.DynamicDrawUsage));
     this.geometry.setAttribute('flakeSize', new THREE.BufferAttribute(sizes, 1));
     this.geometry.setAttribute('flakeNear', new THREE.BufferAttribute(near, 1));
+    this.geometry.setAttribute('snowSeed', new THREE.BufferAttribute(this.seeds, 4));
+    this.uniforms = { snowTime: { value: 0 }, snowOrigin: { value: 0 } };
     this.material = new THREE.PointsMaterial({ color: '#f0f6ff', size: 1, transparent: true,
       opacity: .85, depthWrite: false, sizeAttenuation: false, toneMapped: false });
     this.material.onBeforeCompile = shader => {
-      shader.vertexShader = 'attribute float flakeSize; attribute float flakeNear; varying float vFlakeAlpha;\n' + shader.vertexShader;
+      Object.assign(shader.uniforms, this.uniforms);
+      shader.vertexShader = `attribute float flakeSize; attribute float flakeNear;
+        attribute vec4 snowSeed; uniform float snowTime; uniform float snowOrigin;
+        varying float vFlakeAlpha;\n` + shader.vertexShader;
+      shader.vertexShader = shader.vertexShader.replace('#include <project_vertex>', `
+        #include <project_vertex>
+        bool overhead = projectionMatrix[2][3] != -1.0;
+        vec3 snowExtent = vec3(1.25 / projectionMatrix[0][0], 1.25 / projectionMatrix[1][1], 80.0);
+        vec3 snowLocal = vec3(0.0);
+        if (overhead) {
+          // Fill the orthographic frustum, with the wrap/fade margin offscreen.
+          // Use the whole particle budget instead of concentrating it at the car.
+          vec3 seed = snowSeed.xyz / vec3(${WIDTH}.0, ${HEIGHT}.0, ${DEPTH}.0);
+          vec3 drift = vec3(snowTime * 0.65 + sin(snowTime * 0.6 + snowSeed.w * 7.0) * 1.8,
+            -snowTime * snowSeed.w, sin(snowTime * 0.4 + snowSeed.w * 11.0) * 1.4);
+          vec3 logicalCamera = cameraPosition - vec3(0.0, 0.0, snowOrigin);
+          snowLocal = mod(seed * snowExtent * 2.0 + mat3(viewMatrix) * (drift - logicalCamera),
+            snowExtent * 2.0) - snowExtent;
+          // Keep a layer of air in front of the city even at the bottom of a
+          // wide scenic view. Depth testing still lets buildings occlude flakes.
+          float focusDepth = -(modelViewMatrix * vec4(0.0, -55.0, 0.0, 1.0)).z;
+          float layerDepth = max(90.0, focusDepth - 100.0 - 1.0 / projectionMatrix[1][1]);
+          mvPosition = vec4(snowLocal + vec3(0.0, 0.0, -layerDepth), 1.0);
+          gl_Position = projectionMatrix * mvPosition;
+        }
+      `);
       shader.vertexShader = shader.vertexShader.replace('gl_PointSize = size;', `
         float perspective = projectionMatrix[2][3] == -1.0 ? clamp(90.0 / max(8.0, -mvPosition.z), 0.6, 2.5) : 1.0;
         gl_PointSize = size * flakeSize * 4.0 * perspective;
@@ -31,6 +58,11 @@ export class Snowfall {
         vec3 edge = abs(position + vec3(0.0, 40.0 * flakeNear, 0.0)) / extent;
         vFlakeAlpha = (1.0 - smoothstep(0.7, 1.0, max(edge.x, max(edge.y, edge.z))))
           * smoothstep(2.0, 8.0, -mvPosition.z);
+        if (overhead) {
+          vec3 viewEdge = abs(snowLocal) / snowExtent;
+          vFlakeAlpha = (1.0 - smoothstep(0.8, 1.0, max(viewEdge.x, viewEdge.y)))
+            * (1.0 - smoothstep(0.7, 1.0, viewEdge.z));
+        }
       `);
       shader.fragmentShader = 'varying float vFlakeAlpha;\n' + shader.fragmentShader;
       shader.fragmentShader = shader.fragmentShader.replace('#include <color_fragment>', `
@@ -40,11 +72,13 @@ export class Snowfall {
         diffuseColor.a *= (1.0 - smoothstep(0.12, 0.5, radius)) * vFlakeAlpha;
       `);
     };
-    this.material.customProgramCacheKey = () => 'city-snow-v1';
+    this.material.customProgramCacheKey = () => 'city-snow-v2';
     this.points = new THREE.Points(this.geometry, this.material);
     this.points.name = 'falling-snow'; this.points.frustumCulled = false;
   }
   update(time, anchor, origin) {
+    this.uniforms.snowTime.value = time;
+    this.uniforms.snowOrigin.value = origin;
     this.points.position.set(anchor.x, anchor.y, anchor.z + origin);
     const positions = this.geometry.attributes.position;
     for (let i = 0; i < COUNT; i++) {

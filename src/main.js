@@ -31,6 +31,7 @@ import { DrivingController } from './vehicle.js';
 import { CityTraffic as Traffic } from './city-traffic.js';
 import { TRAFFIC_CRUISE_SPEED } from './traffic.js';
 import { collideScenery } from './collision.js';
+import { PedestrianContacts } from './world/pedestrian-reactions.js';
 import { CityAutodrive as Autodrive } from './city-autodrive.js';
 import { Input } from './input.js';
 import { touchDrivingInput, thirdPersonDrivingInput } from './touch-stick.js';
@@ -131,6 +132,7 @@ async function boot() {
     const openPauseMenu = () => !$('#taxi-results').hidden ? $('#taxi-results') : paused && !pauseOverlay.hidden ? pauseOverlay : null;
     scene.add(vehicle.car);
     const traffic = new Traffic(scene, vehicle.route, vehicle.s, journey);
+    const pedestrianContacts = new PedestrianContacts();
     const nightLighting = new NightLighting(scene);
     const drawScene = rendering.render;
     rendering.render = (...args) => {
@@ -829,8 +831,9 @@ async function boot() {
         time += dt;
         world.update(vehicle.s, vehicle.u, { budgetMs: 3 }); vehicle.render(frameClock.alpha, world.origin);
         traffic.render(frameClock.alpha, world.origin);
-        rendering.update(vehicle.car, dt, world.origin); world.animate(time, traffic.time, vr.active ? null : rendering.camera);
-        taxiView.render(taxi, vehicle, world.origin, time);
+        pedestrianContacts.update(vehicle, traffic, time);
+        rendering.update(vehicle.car, dt, world.origin); world.animate(time, traffic.time, vr.active ? null : rendering.camera, pedestrianContacts);
+        taxiView.render(taxi, vehicle, world.origin, time, pedestrianContacts);
         weather.update(time, vehicle, world.origin); rendering.setWeather(weather.state, dt);
         world.setWetness(weather.state.wetness); vehicle.setLights(weather.state.lightLevel); traffic.models.setLights(weather.state.lightLevel);
       }

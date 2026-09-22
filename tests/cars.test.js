@@ -22,7 +22,7 @@ const flatOut = (id, seconds = 90) => {
 test('every car builds a solid, steerable model', () => {
   for (const id of CAR_IDS) {
     const model = createCar(id);
-    assert.equal(model.wheels.length, 4, `${id} needs four wheels`);
+    assert.equal(model.wheels.length, id === 'rig' ? 6 : 4, `${id} needs its full set of wheels`);
     assert.equal(model.wheels.filter(wheel => wheel.front).length, 2, `${id} needs two steered wheels`);
     assert.equal(model.nightLights.length, id === 'formula' ? 1 : 2, `${id} needs its running lamps`);
     let meshes = 0;

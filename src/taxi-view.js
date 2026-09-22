@@ -1,9 +1,10 @@
 import * as THREE from 'three';
-import { cityWalker, walkerFloat } from './world/city-life.js';
+import { cityWalker, walkerFloat, createWalkerMaterial, walkerAppearance, setWalkerAppearance, taxiGroupAppearance } from './world/city-life.js';
 import { ROAD_LEVEL, PAVEMENT_LEVEL, cityStreetProfile, nearestCityStreet } from './world/city-grid.js';
 import { STOP_RADIUS, STOP_SECONDS, taxiRoute } from './taxi-run.js';
 import { routeDistance } from './city-exploration.js';
 import { DestinationArrow } from './destination-arrow.js';
+import { applyWalkerHop } from './world/pedestrian-reactions.js';
 
 const $ = id => document.getElementById(id);
 const money = value => `$${Math.round(value ?? 0).toLocaleString('en-US')}`;
@@ -25,7 +26,17 @@ export class TaxiView {
     this.ring = new THREE.RingGeometry(6 * markerScale, 6.5 * markerScale, 40); this.ring.rotateX(-Math.PI / 2);
     this.beam = new THREE.CylinderGeometry(6.3 * markerScale, 6.3 * markerScale, 5, 32, 1, true);
     this.cone = new THREE.ConeGeometry(1, 2, 4); this.cone.rotateZ(Math.PI);
-    this.people = new THREE.MeshStandardMaterial({ color: '#ffffff', vertexColors: true, roughness: .9 });
+    this.people = createWalkerMaterial();
+    this.partyBadges = new Map();
+    if (globalThis.document) for (const count of [2, 3, 4]) {
+      const canvas = document.createElement('canvas'); canvas.width = 128; canvas.height = 64;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#17262f'; ctx.beginPath(); ctx.roundRect(2, 2, 124, 60, 18); ctx.fill();
+      ctx.strokeStyle = '#c3f4bb'; ctx.lineWidth = 3; ctx.stroke();
+      ctx.fillStyle = '#fff8e7'; ctx.font = 'bold 42px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(`×${count}`, 64, 34);
+      const map = new THREE.CanvasTexture(canvas); map.colorSpace = THREE.SRGBColorSpace;
+      this.partyBadges.set(count, new THREE.SpriteMaterial({ map, depthTest: false, depthWrite: false }));
+    }
     this.revision = -1; this.markers = []; this.materials = [];
     this.skidGeometry = new THREE.PlaneGeometry(.22, 1.2); this.skidGeometry.rotateX(-Math.PI / 2);
     this.skidMaterial = new THREE.MeshBasicMaterial({ color: '#202526', transparent: true, opacity: .52, depthWrite: false });
@@ -35,7 +46,8 @@ export class TaxiView {
     this.group.add(this.skids); this.trails = []; this.trailIndex = 0; this.lastTrail = 0; this.transform = new THREE.Object3D();
   }
   rebuild(run) {
-    for (const marker of this.markers) this.group.remove(marker.group);
+    const previousReactions = new Map(this.markers.map(marker => [marker.stop.id, marker.reactions]));
+    for (const marker of this.markers) { marker.person?.dispose(); this.group.remove(marker.group); }
     for (const material of this.materials) material.dispose();
     this.materials = []; this.markers = []; this.revision = run.revision;
     const stops = run.status === 'pickup' ? run.customers : run.status === 'driving' ? [{ ...run.target, color: '#ffd240' }] : [];
@@ -49,22 +61,37 @@ export class TaxiView {
       const ring = new THREE.Mesh(this.ring, solid); ring.position.y = PAVEMENT_LEVEL + .07; group.add(ring);
       const beam = new THREE.Mesh(this.beam, glow); beam.position.y = ROAD_LEVEL + 2.5; group.add(beam);
       const arrow = new THREE.Mesh(this.cone, solid); arrow.position.y = ROAD_LEVEL + 7; group.add(arrow);
+      const badgeMaterial = run.status === 'pickup' && this.partyBadges.get(stop.passengers);
+      if (badgeMaterial) {
+        const badge = new THREE.Sprite(badgeMaterial); badge.position.y = ROAD_LEVEL + 9;
+        badge.scale.set(3.6, 1.8, 1); badge.renderOrder = 1; group.add(badge);
+      }
       let person = null;
       const float = { phase: this.markers.length * 2.4, speed: .2 };
       if (run.status === 'pickup') {
-        person = new THREE.Mesh(cityWalker, this.people); person.scale.setScalar(1.25); person.position.y = PAVEMENT_LEVEL;
+        person = new THREE.InstancedMesh(cityWalker, this.people, stop.passengers);
+        const seed = Math.imul(Math.round(stop.s * 10), 73856093) ^ Math.imul(Math.round(stop.u * 10), 19349663);
+        for (let i = 0; i < stop.passengers; i++) {
+          setWalkerAppearance(person, i, stop.passengers > 1 ? taxiGroupAppearance(seed, i) : walkerAppearance(seed));
+        }
+        person.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+        // All riders share a draw call and stay in a compact line on the curb.
         const curb = street.halfWidth - street.lane + 2;
-        if (stop.axis === 'north') person.position.x = stop.side * curb;
-        else person.position.z = stop.side * curb;
-        person.rotation.y = stop.axis === 'north' ? stop.side * Math.PI / 2 : stop.side < 0 ? Math.PI : 0;
+        person.boundingSphere = new THREE.Sphere(new THREE.Vector3(stop.axis === 'north' ? stop.side * curb : 0,
+          PAVEMENT_LEVEL + 1.5, stop.axis === 'north' ? 0 : stop.side * curb), 5);
         group.add(person);
       }
       group.traverse(object => { object.userData.ambientOcclusion = false; });
-      this.markers.push({ group, stop, arrow, ring, beam, person, float }); this.group.add(group);
+      const previous = previousReactions.get(stop.id), count = person?.count ?? 0;
+      const reactions = previous?.length === count ? previous : Array.from({ length: count }, (_, i) => previous?.[i] ?? {});
+      this.markers.push({ group, stop, arrow, ring, beam, person, float, reactions, curb: street.halfWidth - street.lane + 2 }); this.group.add(group);
     }
   }
-  reset() { this.trails = []; this.trailIndex = 0; this.lastTrail = 0; this.skids.count = 0; this.revision = -1; }
-  render(run, vehicle, origin, time) {
+  reset() {
+    this.trails = []; this.trailIndex = 0; this.lastTrail = 0; this.skids.count = 0; this.revision = -1;
+    for (const marker of this.markers) marker.reactions = null;
+  }
+  render(run, vehicle, origin, time, contacts = null) {
     this.group.visible = run.running;
     if (!run.running) return;
     if (this.revision !== run.revision) this.rebuild(run);
@@ -73,10 +100,21 @@ export class TaxiView {
       const selected = run.status === 'driving' || marker.stop.id === run.boarding?.id;
       marker.group.position.set(marker.stop.u, 0, -marker.stop.s);
       if (marker.person) {
-        const motion = walkerFloat(marker.float, time, passengerFloat);
-        marker.person.position.y = PAVEMENT_LEVEL + motion.lift;
-        marker.person.rotation.z = motion.roll;
-        marker.person.scale.y = 1.25 * motion.stretch;
+        const { stop, person, curb } = marker;
+        const cos = Math.cos(marker.group.rotation.y), sin = Math.sin(marker.group.rotation.y);
+        for (let i = 0; i < person.count; i++) {
+          const motion = walkerFloat(marker.float, time + i * .7, passengerFloat);
+          const along = (i - (person.count - 1) / 2) * 1.35;
+          this.transform.position.set(stop.axis === 'north' ? stop.side * curb : along,
+            PAVEMENT_LEVEL + motion.lift, stop.axis === 'north' ? along : stop.side * curb);
+          this.transform.rotation.set(0, stop.axis === 'north' ? stop.side * Math.PI / 2 : stop.side < 0 ? Math.PI : 0, motion.roll);
+          this.transform.scale.set(1.25, 1.25 * motion.stretch, 1.25); this.transform.updateMatrix();
+          const p = this.transform.position, reaction = marker.reactions[i];
+          contacts?.hit(reaction, stop.u + cos * p.x + sin * p.z, p.y, -stop.s - sin * p.x + cos * p.z, .35, time);
+          applyWalkerHop(reaction, this.transform.matrix, time);
+          person.setMatrixAt(i, this.transform.matrix);
+        }
+        person.instanceMatrix.needsUpdate = true;
       }
       marker.arrow.position.y = ROAD_LEVEL + 7 + Math.sin(time * 3) * .35;
       marker.arrow.scale.setScalar(selected ? 1 : .65);
@@ -91,7 +129,7 @@ export class TaxiView {
           z: -vehicle.s + Math.cos(vehicle.heading) * 1.3 + Math.sin(vehicle.heading) * side * .8, heading: vehicle.heading };
         this.trails[this.trailIndex] = trail;
         this.transform.position.set(trail.x, ROAD_LEVEL + .08, trail.z);
-        this.transform.rotation.set(0, -trail.heading, 0); this.transform.updateMatrix();
+        this.transform.rotation.set(0, -trail.heading, 0); this.transform.scale.setScalar(1); this.transform.updateMatrix();
         this.skids.setMatrixAt(this.trailIndex, this.transform.matrix);
         this.skids.instanceMatrix.addUpdateRange(this.trailIndex * 16, 16);
         this.trailIndex = (this.trailIndex + 1) % 160;
@@ -118,7 +156,7 @@ export class TaxiView {
     $('taxi-buttons').dataset.drifting = String(vehicle.drifting);
     const stop = run.target;
     const pickup = run.status === 'pickup';
-    text('taxi-stage', pickup ? 'Pick up' : 'Drop off');
+    text('taxi-stage', pickup ? 'Pick up' : run.fare.stops.length > 1 ? `Stop ${run.stopIndex + 1} of ${run.fare.stops.length}` : 'Drop off');
     $('taxi-task').dataset.stage = run.status;
     $('taxi-task').dataset.urgent = String(!pickup && run.fareLeft <= 10);
     text('taxi-combo', !pickup && run.combo > 1 ? `Tip ×${run.combo}` : '');
@@ -128,10 +166,16 @@ export class TaxiView {
     track.setAttribute('aria-valuenow', String(Math.round(Math.min(1, run.hold / STOP_SECONDS) * 100)));
     $('taxi-nav').hidden = !stop;
     if (!stop) {
+      const nearby = run.boarding ?? run.customers.reduce((best, customer) => {
+        const d = Math.hypot(customer.s - vehicle.s, customer.u - vehicle.u);
+        return d < 32 && (!best || d < Math.hypot(best.s - vehicle.s, best.u - vehicle.u)) ? customer : best;
+      }, null);
       $('taxi-task').dataset.arriving = String(Boolean(run.boarding));
-      text('taxi-task-title', 'Find a passenger');
-      this.instruction(run.boarding ? 'Hold still · boarding…' : '');
-      text('taxi-fare-status', '');
+      text('taxi-task-title', nearby ? nearby.destination.name : 'Find a passenger');
+      text('taxi-party', nearby ? `${nearby.passengers} rider${nearby.passengers === 1 ? '' : 's'} · ${nearby.stops.length === 1 ? nearby.passengers > 1 ? '1 shared stop' : '1 stop' : '2 nearby stops'}` : 'Groups ride together · up to 2 nearby stops');
+      text('taxi-next-stop', nearby?.stops.length > 1 ? `Then ${nearby.stops[1].destination.name}` : '');
+      this.instruction(run.boarding ? `Hold still · boarding${run.boarding.passengers > 1 ? ` ${run.boarding.passengers} riders` : ''}…` : nearby ? 'Stop in the ring to pick up' : '');
+      text('taxi-fare-status', nearby ? `${money(nearby.fare + nearby.groupBonus)} + tips` : '');
       $('taxi-stop-progress').style.width = `${Math.min(1, run.hold / STOP_SECONDS) * 100}%`;
       return;
     }
@@ -140,7 +184,10 @@ export class TaxiView {
     text('taxi-nav-distance', nearStop ? 'Here' : `${Math.max(10, Math.round(length / 10) * 10)} m`);
     $('taxi-nav').setAttribute('aria-label', `Drop-off ${Math.round(length)} meters by road; the green arrow points directly to the destination`);
     text('taxi-task-title', stop.name);
-    text('taxi-fare-status', `Arrive in ${Math.ceil(run.fareLeft)}s · ${money(run.fare.fare + run.tips)}`);
+    text('taxi-fare-status', `Arrive in ${Math.ceil(run.fareLeft)}s · ${money(run.remainingFare + run.tips)}`);
+    text('taxi-party', run.fare.passengers > 1 ? `${run.onboard} aboard · ${run.currentStop.passengers === run.onboard ? 'everyone off here' : `${run.currentStop.passengers} off here`}` : '');
+    const next = run.fare.stops[run.stopIndex + 1];
+    text('taxi-next-stop', next ? `Then ${next.destination.name} · ${Math.round(next.length / 10) * 10} m further` : run.fare.groupBonus ? `Finish the group: +${money(run.fare.groupBonus)} bonus` : '');
     const instruction = nearStop
       ? Math.abs(vehicle.speed) >= 2.5 ? 'Brake to drop off' : 'Hold still · dropping off…'
       : '';
@@ -154,7 +201,7 @@ export class TaxiView {
   }
   results(run) {
     $('taxi-result-cash').textContent = money(run.cash);
-    $('taxi-result-fares').textContent = `${run.delivered} fare${run.delivered === 1 ? '' : 's'} · ${run.failed} missed`;
+    $('taxi-result-fares').textContent = `${run.delivered} fare${run.delivered === 1 ? '' : 's'} · ${run.deliveredPassengers} riders delivered · ${run.failed} missed`;
     $('taxi-result-best').textContent = `Best ${money(run.best)}`;
     $('taxi-results').hidden = false;
   }
@@ -162,6 +209,8 @@ export class TaxiView {
     this.navigation.dispose();
     this.taskObserver?.disconnect(); globalThis.window?.removeEventListener('resize', this.measureTask);
     for (const material of this.materials) material.dispose();
+    for (const material of this.partyBadges.values()) { material.map.dispose(); material.dispose(); }
+    for (const marker of this.markers) marker.person?.dispose();
     for (const resource of [this.ring, this.beam, this.cone, this.people, this.skidGeometry, this.skidMaterial]) resource.dispose();
     this.skids.dispose(); this.group.removeFromParent();
   }

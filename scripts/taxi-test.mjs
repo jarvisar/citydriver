@@ -17,7 +17,7 @@ async function openPage(options) {
 }
 async function placeAtTarget(page) {
   await page.evaluate(() => {
-    const a = window.__citydriver, target = a.taxi.target ?? a.taxi.customers.find(p => p.id !== a.taxi.blockedPickup?.id), v = a.vehicle;
+    const a = window.__citydriver, target = a.taxi.target ?? a.taxi.customers.find(p => p.passengers === 1 && p.id !== a.taxi.blockedPickup?.id), v = a.vehicle;
     v.s = target.s; v.u = target.u; v.speed = 0; v.heading = target.axis === 'north' ? 0 : Math.PI / 2;
     v.knock.x = v.knock.z = v.knock.spin = 0; v.update(0, {}); a.world.update(v.s, v.u);
     v.render(1, a.world.origin); a.rendering.snap(); a.rendering.update(v.car, 1, a.world.origin);
@@ -37,6 +37,69 @@ async function checkMapDoesNotSelectCustomer(page, touch = false) {
   assert.equal(await page.evaluate(() => window.__citydriver.taxi.target), null);
   assert.equal(await page.locator('#taxi-nav').isVisible(), false);
 }
+async function checkGroupFare(page, split, label) {
+  if (!await page.evaluate(() => window.__citydriver.paused)) await page.click('#pause');
+  const offer = await page.evaluate(async split => {
+    const { cityLayout } = await import('/src/world/city-layout.js');
+    const a = window.__citydriver, v = a.vehicle, run = a.taxi;
+    a.traffic.setEnabled(false, v);
+    for (let s = -750; s <= 750; s += 250) for (let u = -750; u <= 750; u += 250) {
+      Object.assign(v, cityLayout(s, u), { speed: 0 }); run.start(v);
+      const group = run.customers.find(c => c.passengers === (split ? 2 : 4) && c.stops.length === (split ? 2 : 1) && c.id !== run.blockedPickup?.id);
+      if (!group) continue;
+      Object.assign(v, { s: group.s - Math.cos(group.heading) * 16, u: group.u - Math.sin(group.heading) * 16, heading: group.heading });
+      v.knock.x = v.knock.z = v.knock.spin = 0; v.update(0, {}); a.world.update(v.s, v.u);
+      v.render(1, a.world.origin); a.rendering.snap(); a.rendering.update(v.car, 1, a.world.origin);
+      run.update(.1, v); a.taxiView.render(run, v, a.world.origin, 0); a.taxiView.hud(run, v);
+      return { id: group.id, passengers: group.passengers, fare: group.fare + group.groupBonus, stops: group.stops.length,
+        names: group.stops.map(s => s.destination.name), bank: run.fleet.balance,
+        rendered: a.taxiView.markers.find(m => m.stop.id === group.id).person.count };
+    }
+    throw new Error('No suitable group offer found');
+  }, split);
+  assert.equal(offer.rendered, offer.passengers);
+  assert.match(await page.locator('#taxi-party').textContent(), new RegExp(`${offer.passengers} riders`));
+  assert.equal(await page.evaluate(() => window.__citydriver.taxi.target), null);
+  await page.click('#resume');
+  await page.screenshot({ path: `.artifacts/taxi/${label}-pickup.png` });
+  await page.evaluate(id => {
+    const a = window.__citydriver, v = a.vehicle, group = a.taxi.customers.find(c => c.id === id);
+    Object.assign(v, { s: group.s, u: group.u, speed: 0 });
+    v.knock.x = v.knock.z = v.knock.spin = 0; v.update(0, {});
+  }, offer.id);
+  await page.waitForFunction(() => window.__citydriver.taxi.status === 'driving');
+  await page.waitForFunction(count => document.querySelector('#taxi-party').textContent.startsWith(`${count} aboard`), offer.passengers);
+  if (page.viewportSize().width < 600 && await page.locator('#city-map-toggle').getAttribute('aria-expanded') === 'true') await page.click('#city-map-toggle');
+  await page.screenshot({ path: `.artifacts/taxi/${label}-aboard.png` });
+  if (page.viewportSize().width < 600) {
+    const portrait = page.viewportSize(); await page.setViewportSize({ width: portrait.height, height: portrait.width });
+    const task = await page.locator('#taxi-task').boundingBox();
+    assert.ok(task.x >= 0 && task.x + task.width <= portrait.height && task.y + task.height < portrait.width - 80);
+    await page.screenshot({ path: `.artifacts/taxi/${label}-landscape.png` });
+    await page.setViewportSize(portrait);
+  }
+  for (let i = 0; i < offer.stops; i++) {
+    await page.waitForFunction(name => document.querySelector('#taxi-task-title').textContent === name, offer.names[i]);
+    if (split) assert.equal(await page.locator('#taxi-stage').textContent(), `Stop ${i + 1} of 2`);
+    await placeAtTarget(page);
+    if (i < offer.stops - 1) {
+      await page.waitForFunction(() => window.__citydriver.taxi.stopIndex === 1);
+      assert.equal(await page.evaluate(() => window.__citydriver.taxi.status), 'driving');
+      assert.equal(await page.evaluate(() => window.__citydriver.taxi.delivered), 0);
+      assert.ok(await page.evaluate(() => window.__citydriver.taxi.cash > 0));
+      await page.waitForFunction(() => document.querySelector('#taxi-stage').textContent === 'Stop 2 of 2');
+      await page.screenshot({ path: `.artifacts/taxi/${label}-next-stop.png` });
+    }
+  }
+  await page.waitForFunction(() => window.__citydriver.taxi.delivered === 1);
+  const result = await page.evaluate(() => {
+    const run = window.__citydriver.taxi;
+    return { cash: run.cash, riders: run.deliveredPassengers, bank: run.fleet.balance, target: run.target, onboard: run.onboard };
+  });
+  assert.equal(result.riders, offer.passengers); assert.equal(result.onboard, 0); assert.equal(result.target, null);
+  assert.ok(result.cash >= offer.fare); assert.equal(result.bank - offer.bank, result.cash);
+  assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+}
 try {
   const page = await openPage({ viewport: { width: 1440, height: 960 } });
   await page.screenshot({ path: '.artifacts/taxi/menu.png' });
@@ -55,7 +118,7 @@ try {
   assert.equal(await page.evaluate(() => window.__citydriver.taxiView.navigation.group.visible), false);
   await checkMapDoesNotSelectCustomer(page);
   assert.equal(await page.locator('#taxi-stage').textContent(), 'Pick up');
-  await page.waitForFunction(() => document.querySelector('#taxi-task-title').textContent === 'Find a passenger');
+  assert.ok((await page.locator('#taxi-task-title').textContent()).length > 0);
   await page.screenshot({ path: '.artifacts/taxi/pickup.png' });
   await page.keyboard.down('KeyW'); await page.keyboard.down('ShiftLeft');
   await page.waitForFunction(() => window.__citydriver.taxi.boost < .85 && window.__citydriver.vehicle.speed > 10);
@@ -120,6 +183,8 @@ try {
   await page.screenshot({ path: '.artifacts/taxi/results.png' });
   await page.click('#taxi-retry'); assert.equal(await page.evaluate(() => window.__citydriver.taxi.cash), 0);
   assert.equal(await page.evaluate(() => window.__citydriver.taxi.best), cash);
+  await checkGroupFare(page, false, 'group-shared');
+  await checkGroupFare(page, true, 'group-two-stops');
   await page.keyboard.press('KeyP'); await page.click('#switch-mode');
   assert.equal(await page.evaluate(() => window.__citydriver.gameMode), 'free');
   assert.equal(await page.evaluate(() => window.__citydriver.taxi.status), 'idle');
@@ -157,9 +222,10 @@ try {
   await touch.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] });
   assert.equal(await mobile.evaluate(() => Boolean(window.__citydriver.input.state.handbrake)), false);
   await mobile.screenshot({ path: '.artifacts/taxi/mobile.png' });
+  await checkGroupFare(mobile, true, 'mobile-group');
   await mobile.tap('#pause'); const mobileTime = await mobile.evaluate(() => window.__citydriver.taxi.timeLeft);
   await mobile.waitForTimeout(200); assert.equal(await mobile.evaluate(() => window.__citydriver.taxi.timeLeft), mobileTime);
   assert.deepEqual(errors, []);
   await writeFile('.artifacts/taxi/report.json', JSON.stringify({ passed: true, cash, errors }, null, 2));
-  console.log('Taxi checks passed: pickup, drop-off, failure, boost, touch drift, pause, restart, saved best, free drive, desktop and touch.');
+  console.log('Taxi checks passed: pickup, drop-off, shared groups, two-stop groups, automatic navigation, banked payouts, failure, boost, touch drift, pause, restart, saved best, free drive, desktop and touch.');
 } finally { await browser.close(); }

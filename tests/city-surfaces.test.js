@@ -9,6 +9,23 @@ import { blockStreets } from '../src/world/city-streets.js';
 import { footprintContact } from '../src/collision.js';
 
 const same = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]) < 1e-7;
+test('crossing paving covers its union once and preserves surfaces at other elevations', () => {
+  const material = new THREE.MeshBasicMaterial();
+  const c = { east: 0, start: 0, batches: new Map(), materials: { solid: material } };
+  const area = () => [...c.batches.values()].flatMap(b => b.items).reduce((sum, { frame: f }) => sum + Math.abs(f.eu * f.ns - f.es * f.nu) / 2, 0);
+  try {
+    addSurfacePolygon(c, rectanglePolygon(56, 56, 20, 4), 25, .04, '#ffffff');
+    const first = area();
+    addSurfacePolygon(c, rectanglePolygon(56, 56, 20, 4), 25, .04, '#ffffff');
+    assert.equal(area(), first, 'duplicate paving emits no competing triangles');
+    addSurfacePolygon(c, rectanglePolygon(56, 56, 4, 20), 25, .04, '#ffffff');
+    assert.ok(area() > first && area() < first * 2, 'the crossing is cut out of the second path');
+    const joined = area();
+    addSurfacePolygon(c, rectanglePolygon(56, 56, 20, 4), 26, .04, '#ffffff');
+    assert.ok(Math.abs(area() - joined - first) < 1e-7, 'an elevated platform keeps its complete top');
+  } finally { material.dispose(); }
+});
+
 test('path bends share complete mitred joins and diagonal entrances meet the lawn boundary flush', () => {
   for (const width of [3, 4.5, 14]) {
     const panels = pathPanels([[16, 28], [42, 46], [68, 58], [96, 84]], width);

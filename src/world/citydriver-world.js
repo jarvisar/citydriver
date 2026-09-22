@@ -2,16 +2,17 @@ import * as THREE from 'three';
 import { cityAssets, cityTrees } from './city-assets.js';
 import { seededRandom } from './route.js';
 import { residentWindow } from './resident.js';
+import { applyWalkerHop, walkerTravelTime, holdWalkerTravel } from './pedestrian-reactions.js';
 import { DistantCity, packDistantSteps } from './distant-city.js';
 import { buildLandmark, buildDestinationSigns } from './city-landmarks.js';
-import { VENUE_NAMES } from './city-destinations.js';
+import { VENUE_SIGNS } from './city-destinations.js';
 import { buildPublicSpace } from './city-public-spaces.js';
 import { buildGrassFringe } from './city-grass.js';
-import { buildCityBuildings, buildCityBuildingSteps, SHOP_NAMES, shopSignMaterial } from './city-buildings.js';
+import { buildCityBuildings, buildCityBuildingSteps, SHOP_NAMES, shopSignMaterial, fitSignText } from './city-buildings.js';
 import { blockStreets, buildStreets } from './city-streets.js';
 import { cityGreen } from '../city-junctions.js';
 import { CITY_PLACES } from './city-places.js';
-import { cityWalker, cityBoat, walkerPose, walkerFloat, WALKER_COLORS } from './city-life.js';
+import { cityWalker, cityBoat, walkerPose, walkerFloat, WALKER_COLORS, createWalkerMaterial, walkerAppearance, setWalkerAppearance, pairWalkers, offsetWalkerPose } from './city-life.js';
 import { cityLayout, cityLogical, cityLayoutFrame, cityRigidFrame } from './city-layout.js';
 import { cityItemMatrix, cityAffinePoint } from './city-layout-render.js';
 import { addSurfacePolygon, rectanglePolygon } from './city-surfaces.js';
@@ -41,9 +42,10 @@ function* renderBatchSteps(group, batches, east = 0, start = 0) {
       const item = items[i];
       const matrix = cityItemMatrix(item, east, start, transform.matrix);
       mesh.setMatrixAt(i, matrix); tint.set(item.color); mesh.setColorAt(i, tint);
+      if (key === 'residents') setWalkerAppearance(mesh, i, item.appearance);
     }
-    mesh.castShadow = !key.startsWith('surface-') && !key.startsWith('public-water') && !['road', 'water', 'lit', 'glass', 'grass-fringe'].includes(key);
-    mesh.receiveShadow = key !== 'lit';
+    mesh.castShadow = !key.startsWith('surface-') && !key.startsWith('public-water') && !['road', 'water', 'lit', 'signal-lens', 'detail-clock', 'glass', 'grass-fringe'].includes(key);
+    mesh.receiveShadow = !['lit', 'signal-lens', 'detail-clock'].includes(key);
     if (key === 'water' || key === 'grass-fringe') mesh.userData.ambientOcclusion = false;
     mesh.updateMatrix();
     mesh.matrixAutoUpdate = false;
@@ -61,22 +63,24 @@ function resources() {
     road: standard({ color: '#666c70', roughness: .85 }),
     glass: standard({ color: '#ffffff', roughness: .32, metalness: .25 }),
     lit: new THREE.MeshBasicMaterial({ color: '#ffffff', toneMapped: false }),
+    clock: new THREE.MeshBasicMaterial({ color: '#ffffff', vertexColors: true, toneMapped: false }),
     water: createRiverWaterMaterial(),
     props: standard({ color: '#ffffff', vertexColors: true }),
-    residents: standard({ color: '#ffffff', vertexColors: true, flatShading: false }),
+    residents: createWalkerMaterial(),
     bark: standard({ color: '#625548', vertexColors: true }),
     leaves: standard({ color: '#ffffff', vertexColors: true }),
   };
-  for (const name of [...SHOP_NAMES, ...VENUE_NAMES]) result[`shop-${name}`] = shopSignMaterial(name);
+  for (const name of SHOP_NAMES) result[`shop-${name}`] = shopSignMaterial(name);
+  for (const [name, [w, h]] of Object.entries(VENUE_SIGNS)) result[`venue-${name}`] = shopSignMaterial(name, w / h);
   for (const [type, place] of Object.entries(CITY_PLACES)) {
     let map = null;
     if (globalThis.document) {
       const canvas = document.createElement('canvas'); canvas.width = 512; canvas.height = 256;
       const ctx = canvas.getContext('2d');
       ctx.fillStyle = '#314f55'; ctx.fillRect(0, 0, 512, 256);
-      ctx.textAlign = 'center'; ctx.fillStyle = place.color; ctx.font = '30px sans-serif'; ctx.fillText(`CITY GUIDE  /  ${place.symbol}`, 256, 58);
-      ctx.fillStyle = '#fff5df'; ctx.font = 'bold 44px sans-serif'; ctx.fillText(place.name, 256, 132, 475);
-      ctx.fillStyle = '#b6cec9'; ctx.font = '24px sans-serif'; ctx.fillText(place.short.toUpperCase(), 256, 194);
+      ctx.textAlign = 'center'; ctx.fillStyle = place.color; fitSignText(ctx, `CITY GUIDE  /  ${place.symbol}`, 256, 58, 475, 30, 'normal');
+      ctx.fillStyle = '#fff5df'; fitSignText(ctx, place.name, 256, 132, 475, 44);
+      ctx.fillStyle = '#b6cec9'; fitSignText(ctx, place.short.toUpperCase(), 256, 194, 475, 24, 'normal');
       map = new THREE.CanvasTexture(canvas); map.colorSpace = THREE.SRGBColorSpace;
     }
     result[`sign-${type}`] = new THREE.MeshBasicMaterial({ map, side: THREE.DoubleSide, toneMapped: false });
@@ -118,6 +122,7 @@ export class CitydriverChunk {
     if (!this.distant) yield* this.finishSteps();
     this.layoutFrames = null;
     this.surfacePoints = null;
+    this.surfaceLayers = null;
     this.paths = this.plantedAreas = this.plantingExclusions = null;
   }
   layoutFrame(s, u, flexible = false) {
@@ -255,12 +260,15 @@ export class CitydriverChunk {
     this.walkers = Array.from({ length: this.plan.landmark ? 10 : 4 }, (_, i) => ({
       phase: random() * (river ? 144 : 332), speed: .65 + random() * .45, side: i % sides,
       direction: i % 2 ? -1 : 1, size: .9 + random() * .22, width: .92 + random() * .16, color: pick(WALKER_COLORS, random),
+      appearance: walkerAppearance(this.plan.seed + i * 719),
     }));
+    pairWalkers(this.walkers, this.plan.seed);
     for (const walker of this.walkers) {
-      const pose = river ? riverResidentPose(this, walker, 0) : walkerPose(walker, 0);
+      const pose = offsetWalkerPose(river ? riverResidentPose(this, walker, 0) : walkerPose(walker, 0), walker, river);
       const motion = walkerFloat(walker, 0, residentFloat), width = walker.size * walker.width;
       this.item('residents', cityWalker, this.materials.residents, [pose.x, PAVEMENT_LEVEL + motion.lift, -pose.s],
         [width, walker.size * motion.stretch, width], walker.color, pose.yaw, motion.roll);
+      this.batches.get('residents').items.at(-1).appearance = walker.appearance;
     }
     if (river) {
       const x = this.plan.seed % 2 ? 37 : 75, s = 42 + random() * 25;
@@ -278,7 +286,7 @@ export class CitydriverChunk {
       }
     }
   }
-  animate(time, signalTime = time, animatePeople = true) {
+  animate(time, signalTime = time, animatePeople = true, contacts = null) {
     const phase = Math.floor(signalTime % 24);
     if (phase !== this.signalPhase && this.signalMesh) {
       this.signalPhase = phase;
@@ -294,12 +302,20 @@ export class CitydriverChunk {
     if (!animatePeople) return;
     const mesh = this.peopleMesh;
     for (let i = 0; i < this.walkers.length; i++) {
-      const walker = this.walkers[i], pose = this.plan.kind === 'river' ? riverResidentPose(this, walker, time) : walkerPose(walker, time);
+      const walker = this.walkers[i], river = this.plan.kind === 'river';
+      const travelTime = walkerTravelTime(walker, time);
+      const pose = offsetWalkerPose(river ? riverResidentPose(this, walker, travelTime) : walkerPose(walker, travelTime), walker, river);
       const motion = walkerFloat(walker, time, residentFloat), width = walker.size * walker.width;
       residentItem.p[0] = pose.x; residentItem.p[1] = PAVEMENT_LEVEL + motion.lift; residentItem.p[2] = -pose.s;
       residentItem.yaw = pose.yaw; residentItem.roll = motion.roll;
       residentItem.scale[0] = residentItem.scale[2] = width; residentItem.scale[1] = walker.size * motion.stretch;
-      mesh.setMatrixAt(i, cityItemMatrix(residentItem, this.east, this.start, transform.matrix));
+      const matrix = cityItemMatrix(residentItem, this.east, this.start, transform.matrix), e = matrix.elements;
+      if (contacts?.hit(walker, e[12] + this.east, e[13], e[14] - this.start, .28 * width, time)) {
+        const partner = walker.pairOffset ? this.walkers[i + (walker.pairOffset < 0 ? 1 : -1)] : null;
+        holdWalkerTravel(walker, partner, time);
+      }
+      applyWalkerHop(walker, matrix, time);
+      mesh.setMatrixAt(i, matrix);
     }
     mesh.instanceMatrix.needsUpdate = true;
     if (this.boatMesh) this.boatMesh.position.y = Math.sin(time * .8 + this.plan.seed) * .08;
@@ -315,7 +331,7 @@ export class CitydriverChunk {
         yaw: Math.atan2(matrix.elements[8], matrix.elements[10]) };
     });
     yield* renderBatchSteps(this.group, this.batches, this.east, this.start);
-    this.signalMesh = this.group.getObjectByName('citydriver-lit');
+    this.signalMesh = this.group.getObjectByName('citydriver-signal-lens');
     this.peopleMesh = this.group.getObjectByName('citydriver-residents');
     if (this.peopleMesh) {
       this.peopleMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
@@ -544,7 +560,7 @@ export class CitydriverWorld {
     this.materials.road.roughness = .85 - wet * .58;
     this.materials.road.color.copy(dryRoad).lerp(wetRoad, wet);
   }
-  animate(time, signalTime = time, camera = null) {
+  animate(time, signalTime = time, camera = null, contacts = null) {
     this.materials.water.userData.time.value = time;
     if (camera) {
       camera.updateMatrixWorld();
@@ -560,7 +576,7 @@ export class CitydriverWorld {
         this.animationSphere.radius += 12;
         visible = this.animationFrustum.intersectsSphere(this.animationSphere);
       }
-      chunk.animate(time, signalTime, visible);
+      chunk.animate(time, signalTime, visible, contacts);
     }
   }
   dispose() {
