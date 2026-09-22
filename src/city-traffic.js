@@ -6,6 +6,7 @@ import { createTrafficModels, TRAFFIC_MODELS, TRAFFIC_COLORS } from './traffic-m
 import { trafficContact } from './traffic.js';
 import { collisionImpulse, contactPoint } from './impact.js';
 import { junctionSpeed } from './city-junctions.js';
+const up = new THREE.Vector3(0, 1, 0);
 
 // A bounded fleet on both street axes. Vehicles obey a shared intersection
 // cycle, yield to the player, and recycle beyond the local view in any direction.
@@ -62,7 +63,7 @@ export class CityTraffic {
     car.logicalU = car.axis === 'north' ? car.lane : along;
     const p = this.route.position(car.s, car.u);
     car.position.set(p.x, p.y + .13, p.z);
-    car.quaternion.setFromAxisAngle(new THREE.Vector3(0, 1, 0), -car.heading);
+    car.quaternion.setFromAxisAngle(up, -car.heading);
   }
   update(dt, player) {
     if (!this.enabled) return;
@@ -74,11 +75,13 @@ export class CityTraffic {
       let target = car.cruiseSpeed;
       const along = car.axis === 'north' ? car.logicalS : car.logicalU;
       target = Math.min(target, junctionSpeed(car, this, car.axis, car.direction, car.lane, along, car.speed, dt));
-      for (const other of [...this.vehicles, player]) {
+      const cos = Math.cos(car.heading), sin = Math.sin(car.heading);
+      for (let i = 0; i <= this.vehicles.length; i++) {
+        const other = i === this.vehicles.length ? player : this.vehicles[i];
         if (other === car) continue;
         const ds = other.s - car.s, du = other.u - car.u;
-        const ahead = ds * Math.cos(car.heading) + du * Math.sin(car.heading);
-        const beside = Math.abs(du * Math.cos(car.heading) - ds * Math.sin(car.heading));
+        const ahead = ds * cos + du * sin;
+        const beside = Math.abs(du * cos - ds * sin);
         if (ahead > 0 && beside < 2.9) target = Math.min(target, Math.sqrt(2 * 8 * Math.max(0, ahead - 9)));
       }
       car.targetSpeed = target;

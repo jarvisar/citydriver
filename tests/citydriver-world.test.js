@@ -57,7 +57,8 @@ test('streamed blocks are bounded, move in both axes, and retain collision coord
       assert.equal(world.chunks.size, 25);
       assert.equal(scene.children.length, 26);
       assert.equal(world.chunks.size + world.distantChunks.size, (2 * DISTANT_CITY_RADIUS + 1) ** 2);
-      assert.ok(world.distantGroup.children.length <= 14, 'the distant city, including both tree silhouettes, shares fourteen draw calls including joined ground and public-space stone and water');
+      assert.ok(world.distantGroup.children.length <= 36, 'the distant city is bounded to local two-by-two tiles');
+      assert.ok(world.distantGroup.children.every(tile => tile.children.length <= 14), 'each tile batches by geometry and material');
       assert.equal([...world.collisionChunks(s, u)].length, 9);
       const cell = cityCell(s, u);
       assert.ok(world.chunks.has(cell.key));

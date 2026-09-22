@@ -52,6 +52,8 @@ export function collideScenery(player, chunks, dt) {
   const reach = Math.hypot(halfWidth, halfLength), center = Math.floor(player.s / CHUNK_LENGTH);
   const nearby = player.route.grid ? chunks.values() : [chunks.get(center - 1), chunks.get(center), chunks.get(center + 1)];
   for (const chunk of nearby) {
+    const bounds = chunk?.collisionBounds;
+    if (bounds && (p.x + reach < bounds.minX || p.x - reach > bounds.maxX || p.z + reach < bounds.minZ || p.z - reach > bounds.maxZ)) continue;
     const colliders = chunk?.features?.colliders;
     if (!colliders) continue;
     for (const solid of colliders) {

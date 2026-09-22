@@ -100,10 +100,13 @@ try {
     const r = a.rendering.renderer; r.setPixelRatio(1); r.setSize(1440, 1000); r.shadowMap.needsUpdate = true;
     r.render(a.world.scene, camera);
     let instances = 0, triangles = 0, batches = 0;
-    for (const group of [...a.world.chunks.values()].map(c => c.group).concat(a.world.distantGroup)) for (const m of group.children) {
+    for (const group of [...a.world.chunks.values()].map(c => c.group).concat(a.world.distantGroup)) group.traverse(m => {
+      if (!m.isInstancedMesh) return;
       batches++; instances += m.count; triangles += (m.geometry.index?.count ?? m.geometry.attributes.position.count) / 3 * m.count;
-    }
-    return { instances, triangles, batches, distantBatches: a.world.distantGroup.children.length, png: r.domElement.toDataURL('image/png') };
+    });
+    let distantBatches = 0;
+    a.world.distantGroup.traverse(m => { if (m.isInstancedMesh) distantBatches++; });
+    return { instances, triangles, batches, distantBatches, distantTiles: a.world.distantGroup.children.length, png: r.domElement.toDataURL('image/png') };
   });
   await writeFile(`${output}/neighborhood.png`, Buffer.from(neighborhood.png.split(',')[1], 'base64'));
   delete neighborhood.png;

@@ -21,7 +21,7 @@
 // High keeps a wider square of detailed city blocks. Other levels use fewer
 // furnished blocks, with a cheap distant skyline covering the same camera views.
 export const QUALITY_LEVELS = [
-  { id: 'high', label: 'High', summary: 'Native resolution · sharp shadows', density: 1, shadowMap: 2048, chunks: { behind: 3, ahead: 5 }, antialias: true, aoQuality: 'high' },
+  { id: 'high', label: 'High', summary: 'Full detail · sharp shadows', density: 1, shadowMap: 2048, chunks: { behind: 3, ahead: 5 }, antialias: true, aoQuality: 'high' },
   { id: 'balanced', label: 'Balanced', summary: '85% resolution · medium shadows', density: .85, shadowMap: 1536, chunks: { behind: 2, ahead: 4 }, antialias: true, aoQuality: 'high' },
   { id: 'smooth', label: 'Smooth', summary: '70% resolution · softer shadows', density: .7, shadowMap: 1024, chunks: { behind: 2, ahead: 4 }, antialias: true, aoQuality: 'low' },
   { id: 'basic', label: 'Basic', summary: '50% resolution · simple shadows · shortest view', density: .5, shadowMap: 512, chunks: { behind: 1, ahead: 3 }, antialias: false, aoQuality: 'low' },
@@ -33,6 +33,20 @@ export const levelIndex = id => QUALITY_LEVELS.findIndex(level => level.id === i
 const MIN_DENSITY = .5;
 export function renderScale(density, devicePixelRatio = globalThis.devicePixelRatio || 1) {
   return devicePixelRatio * Math.max(MIN_DENSITY, Math.min(1, density));
+}
+
+// Multiplying native density alone still overloads 3x phones and 4K displays.
+// Presets bound both pixel density and total framebuffer area. An explicit
+// slider choice can still request native resolution, independently of Auto.
+export const PIXEL_BUDGETS = {
+  high: { ratio: 2, pixels: 3840000 }, balanced: { ratio: 1.5, pixels: 2073600 },
+  smooth: { ratio: 1.25, pixels: 1280000 }, basic: { ratio: 1, pixels: 640000 },
+};
+export function drawingPixelRatio(settings, devicePixelRatio, width, height) {
+  const native = renderScale(settings.density, devicePixelRatio);
+  if (settings.customDensity) return native;
+  const budget = PIXEL_BUDGETS[settings.id] ?? PIXEL_BUDGETS.high;
+  return Math.min(native, budget.ratio, Math.sqrt(budget.pixels / Math.max(1, width * height)));
 }
 
 // Measure over windows long enough to average a stutter, and ignore the first
@@ -159,7 +173,8 @@ export class Graphics {
   get auto() { return this.mode === 'auto'; }
   get levelId() { return QUALITY_LEVELS[this.level].id; }
   get settings() {
-    return { ...QUALITY_LEVELS[this.level], density: this.densityOverride ?? QUALITY_LEVELS[this.level].density, ambientOcclusion: this.ambientOcclusion };
+    return { ...QUALITY_LEVELS[this.level], density: this.densityOverride ?? QUALITY_LEVELS[this.level].density,
+      customDensity: this.densityOverride !== null, ambientOcclusion: this.ambientOcclusion };
   }
   // Antialiasing belongs to the WebGL context, which cannot be reconfigured
   // without rebuilding it, so it follows the level this page started on.

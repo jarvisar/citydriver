@@ -14,6 +14,8 @@
     "test:city": "node scripts/citydriver-test.mjs",
     "test:layout": "node scripts/city-layout-test.mjs",
     "test:spaces": "node scripts/public-spaces-test.mjs",
+    "test:performance": "node scripts/performance-regression-test.mjs",
+    "benchmark": "node scripts/performance-test.mjs",
     "electron:web": "vite build --outDir dist-electron",
     "electron:dev": "node scripts/electron-launch.mjs",
     "electron:start": "npm run electron:web && node scripts/electron-launch.mjs --built",

@@ -61,10 +61,13 @@ npm run build
 npm run test:browser
 npm run test:taxi
 npm run test:layout
+npm run test:performance
 npm run test:pwa
 ```
 
 Browser checks require a dev server. Set `TEST_URL` for a different URL and `CHROME_PATH` for a different Chrome executable.
+
+`npm run benchmark` captures repeatable rendering and streaming measurements at desktop and phone sizes. See [performance design, research, and measurements](docs/performance.md) for the methodology and device-testing limits.
 
 [Desktop setup](ELECTRON.md) · [Offline installation](PWA.md)
 

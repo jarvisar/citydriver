@@ -3,7 +3,7 @@ import { fitSunShadow, stabilizeShadowFiltering } from './shadows.js';
 import { ThirdPersonCamera } from './third-person-camera.js';
 import { FirstPersonCamera } from './first-person-camera.js';
 import { AmbientOcclusion } from './ambient-occlusion.js';
-import { Graphics, renderScale } from './graphics.js';
+import { Graphics, drawingPixelRatio } from './graphics.js';
 import { XRCameraRig } from './xr-camera.js';
 import { sampleCityWeather } from './world/city-weather.js';
 import { CITY_BLOCK, DISTANT_CITY_RADIUS } from './world/city-grid.js';
@@ -21,7 +21,7 @@ export function createRendering(canvas, graphics = new Graphics()) {
   let canvasWidth, canvasHeight, pixelRatio;
   function resizeCanvas() {
     if (renderer.xr.isPresenting) return;
-    const width = window.innerWidth, height = window.innerHeight, ratio = renderScale(graphics.settings.density, window.devicePixelRatio);
+    const width = window.innerWidth, height = window.innerHeight, ratio = drawingPixelRatio(graphics.settings, window.devicePixelRatio, width, height);
     if (width === canvasWidth && height === canvasHeight && ratio === pixelRatio) return;
     // Update size and density together: setPixelRatio followed by setSize allocates twice.
     renderer.setDrawingBufferSize(width, height, ratio);
@@ -37,6 +37,9 @@ export function createRendering(canvas, graphics = new Graphics()) {
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = .94;
   const scene = new THREE.Scene(); scene.background = new THREE.Color('#b8dfe0');
+  // The scene root never moves. Let static city transforms stay cached while
+  // vehicles, cameras and streamed blocks update their own dirty matrices.
+  scene.matrixAutoUpdate = false;
   const drivingFog = new THREE.Fog('#c2e2db', 460, 860);
   const sky = new THREE.HemisphereLight('#e4f2f5', '#617149', 1.45); scene.add(sky);
   const sun = new THREE.DirectionalLight('#fff1db', 2.5); sun.castShadow = true;
@@ -50,7 +53,9 @@ export function createRendering(canvas, graphics = new Graphics()) {
   scene.add(vrCamera.rig);
   renderer.xr.cameraAutoUpdate = false;
   renderer.xr.addEventListener('sessionend', () => { graphics.suspend(); resizeCanvas(); });
-  const ambientOcclusion = new AmbientOcclusion(renderer, scene, camera);
+  const ambientOcclusion = new AmbientOcclusion(renderer, scene, camera, {
+    onReady: () => { if (!document.hidden && !renderer.xr.isPresenting) render(); },
+  });
   // Resolution, sun-shadow detail and the AO budget follow the quality level;
   // whether AO is on at all is the player's own choice.
   // A new shadow map size only takes effect once the old texture is released.

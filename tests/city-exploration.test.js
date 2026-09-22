@@ -108,7 +108,7 @@ test('all landmark geometry streams with colliders clear of roads and stable dis
       world.animate(0);
       const positions = chunk.peopleMesh.instanceMatrix.array.slice();
       world.animate(15); assert.notDeepEqual(chunk.peopleMesh.instanceMatrix.array, positions);
-      assert.ok(world.distantGroup.children.length <= 14);
+      assert.ok(world.distantGroup.children.length <= 36);
       world.update(place.s + CITY_BLOCK * 4, place.u);
       assert.equal(world.distantChunks.get(place.id).plan.landmark, type);
     }

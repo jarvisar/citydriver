@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { cityAssets, cityTrees } from './city-assets.js';
 import { seededRandom } from './route.js';
 import { residentWindow } from './resident.js';
+import { DistantCity, packDistantChunk } from './distant-city.js';
 import { buildLandmark } from './city-landmarks.js';
 import { buildPublicSpace } from './city-public-spaces.js';
 import { buildCityBuildings, SHOP_NAMES, shopSignMaterial } from './city-buildings.js';
@@ -9,7 +10,7 @@ import { blockStreets, buildStreets } from './city-streets.js';
 import { cityGreen } from '../city-junctions.js';
 import { CITY_PLACES } from './city-places.js';
 import { cityWalker, cityBoat, walkerPose } from './city-life.js';
-import { cityLayout, cityLayoutFrame, cityRigidFrame } from './city-layout.js';
+import { cityLayout, cityLogical, cityLayoutFrame, cityRigidFrame } from './city-layout.js';
 import { cityItemMatrix, cityAffinePoint } from './city-layout-render.js';
 import { addSurfacePolygon, rectanglePolygon } from './city-surfaces.js';
 import { buildRiverGround, buildRivers, riverResidentPose, riverBoatPosition } from './city-rivers.js';
@@ -20,21 +21,24 @@ const boxGeometry = new THREE.BoxGeometry(1, 1, 1);
 const windowGeometry = new THREE.PlaneGeometry(1, 1);
 const transform = new THREE.Object3D();
 const tint = new THREE.Color();
+const dryRoad = new THREE.Color('#666c70'), wetRoad = new THREE.Color('#424e58');
 const GREENS = ['#63924d', '#80a85c', '#4f8054', '#93ab65'];
 const pick = (items, random) => items[Math.floor(random() * items.length)];
 
-function renderBatches(group, batches, distant = false, east = 0, start = 0) {
+function renderBatches(group, batches, east = 0, start = 0) {
   for (const [key, { geometry, material, items }] of batches) {
     if (!items.length) continue;
     const mesh = new THREE.InstancedMesh(geometry, material, items.length); mesh.name = `citydriver-${key}`;
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
-      const matrix = item.worldMatrix ? transform.matrix.fromArray(item.worldMatrix) : cityItemMatrix(item, east, start, transform.matrix);
+      const matrix = cityItemMatrix(item, east, start, transform.matrix);
       mesh.setMatrixAt(i, matrix); tint.set(item.color); mesh.setColorAt(i, tint);
     }
-    mesh.castShadow = !distant && !key.startsWith('surface-') && !['road', 'water', 'lit', 'glass', 'public-water'].includes(key);
-    mesh.receiveShadow = !distant && key !== 'lit';
-    if (distant || key === 'water') mesh.userData.ambientOcclusion = false;
+    mesh.castShadow = !key.startsWith('surface-') && !['road', 'water', 'lit', 'glass', 'public-water'].includes(key);
+    mesh.receiveShadow = key !== 'lit';
+    if (key === 'water') mesh.userData.ambientOcclusion = false;
+    mesh.updateMatrix();
+    mesh.matrixAutoUpdate = false;
     mesh.computeBoundingSphere(); group.add(mesh);
   }
 }
@@ -221,7 +225,7 @@ export class CitydriverChunk {
       }
     }
   }
-  animate(time, signalTime = time) {
+  animate(time, signalTime = time, animatePeople = true) {
     const phase = Math.floor(signalTime % 24);
     if (phase !== this.signalPhase && this.signalMesh) {
       this.signalPhase = phase;
@@ -234,6 +238,7 @@ export class CitydriverChunk {
       }
       this.signalMesh.instanceColor.needsUpdate = true;
     }
+    if (!animatePeople) return;
     const mesh = this.peopleMesh;
     for (let i = 0; i < this.walkers.length; i++) {
       const walker = this.walkers[i], pose = this.plan.kind === 'river' ? riverResidentPose(this, walker, time) : walkerPose(walker, time);
@@ -244,7 +249,7 @@ export class CitydriverChunk {
     if (this.boatMesh) this.boatMesh.position.y = Math.sin(time * .8 + this.plan.seed) * .08;
   }
   finish() {
-    renderBatches(this.group, this.batches, false, this.east, this.start);
+    renderBatches(this.group, this.batches, this.east, this.start);
     this.signalMesh = this.group.getObjectByName('citydriver-lit');
     this.peopleMesh = this.group.getObjectByName('citydriver-residents');
     if (this.peopleMesh) {
@@ -254,6 +259,15 @@ export class CitydriverChunk {
       this.peopleMesh.boundingSphere = new THREE.Sphere(new THREE.Vector3(center.u - this.east, PAVEMENT_LEVEL + 1, this.start - center.s), 100);
     }
     this.boatMesh = this.group.getObjectByName('citydriver-canal-boat');
+    if (this.boatMesh) this.boatMesh.matrixAutoUpdate = true;
+    this.group.matrixAutoUpdate = false;
+    this.collisionBounds = { minX: Infinity, maxX: -Infinity, minZ: Infinity, maxZ: -Infinity };
+    for (const c of this.features.colliders) {
+      this.collisionBounds.minX = Math.min(this.collisionBounds.minX, c.x - c.reach);
+      this.collisionBounds.maxX = Math.max(this.collisionBounds.maxX, c.x + c.reach);
+      this.collisionBounds.minZ = Math.min(this.collisionBounds.minZ, c.z - c.reach);
+      this.collisionBounds.maxZ = Math.max(this.collisionBounds.maxZ, c.z + c.reach);
+    }
     this.batches = null;
   }
   mapFeatures() {
@@ -297,12 +311,18 @@ export class CitydriverWorld {
     this.s = 0; this.u = 2.4; this.materials = resources(); this.pending = [];
     this.distantChunks = new Map(); this.distantGroup = new THREE.Group();
     this.distantGroup.name = 'citydriver-distant-city'; scene.add(this.distantGroup);
+    this.distantGroup.matrixAutoUpdate = false;
+    this.distantCity = new DistantCity(this.distantGroup);
+    this.prefetched = new Map(); this.prefetchPending = []; this.prefetchTarget = null;
+    this.animationFrustum = new THREE.Frustum(); this.animationMatrix = new THREE.Matrix4(); this.animationSphere = new THREE.Sphere();
   }
-  update(s, u = 2.4) {
+  update(s, u = 2.4, { budgetMs = Infinity } = {}) {
+    const deadline = performance.now() + budgetMs, oldOrigin = this.origin;
+    const ds = s - this.s, du = u - this.u;
     this.s = s; this.u = u; this.origin = Math.floor(s / 1024) * 1024;
     const cell = cityCell(s, u), window = residentWindow();
     const radius = window.ahead >= 5 ? 3 : 2;
-    let distantChanged = false;
+    let placementChanged = oldOrigin !== this.origin;
     if (this.center !== cell.key || this.radius !== radius) {
       this.center = cell.key; this.radius = radius;
       for (const [key, chunk] of this.chunks) {
@@ -313,48 +333,69 @@ export class CitydriverWorld {
         if (!this.chunks.has(`${ix},${iz}`)) this.pending.push({ ix, iz, distance: Math.max(Math.abs(ix - cell.ix), Math.abs(iz - cell.iz)) });
       }
       this.pending.sort((a, b) => a.distance - b.distance || a.iz - b.iz || a.ix - b.ix);
-      // The outer city covers Scenic and wide displays without constructing
-      // another hundred fully furnished blocks. All facades keep their glass;
-      // two-triangle windows and combined batches keep the ring inexpensive.
+      // Keep a distant fallback until a detailed replacement is ready. Nearby
+      // collisions load synchronously; optional detail can span several frames.
       for (const [key, chunk] of this.distantChunks) {
-        if (Math.abs(chunk.ix - cell.ix) > DISTANT_CITY_RADIUS || Math.abs(chunk.iz - cell.iz) > DISTANT_CITY_RADIUS || this.chunks.has(key)) this.distantChunks.delete(key);
+        if (Math.abs(chunk.ix - cell.ix) > DISTANT_CITY_RADIUS || Math.abs(chunk.iz - cell.iz) > DISTANT_CITY_RADIUS || this.chunks.has(key)) {
+          this.distantCity.delete(chunk); this.distantChunks.delete(key);
+        }
       }
       for (let ix = cell.ix - DISTANT_CITY_RADIUS; ix <= cell.ix + DISTANT_CITY_RADIUS; ix++) for (let iz = cell.iz - DISTANT_CITY_RADIUS; iz <= cell.iz + DISTANT_CITY_RADIUS; iz++) {
         const key = `${ix},${iz}`;
-        if (Math.max(Math.abs(ix - cell.ix), Math.abs(iz - cell.iz)) <= radius) continue;
-        if (!this.chunks.has(key) && !this.distantChunks.has(key)) this.distantChunks.set(key, new CitydriverChunk(ix, iz, this.materials, true));
+        const distance = Math.max(Math.abs(ix - cell.ix), Math.abs(iz - cell.iz));
+        if (distance <= (Number.isFinite(budgetMs) ? 1 : radius)) continue;
+        if (!this.chunks.has(key) && !this.distantChunks.has(key)) {
+          const chunk = this.prefetched.get(key) ?? new CitydriverChunk(ix, iz, this.materials, true);
+          this.prefetched.delete(key);
+          this.distantChunks.set(key, chunk); this.distantCity.add(chunk);
+        }
       }
-      distantChanged = true;
     }
-    // Build the newly entered strip together so the detailed and distant city
-    // switch in one frame and the combined distant buffers rebuild only once.
+    let built = 0;
     while (this.pending.length) {
+      if (this.pending[0].distance > 1 && built > 0 && performance.now() >= deadline) break;
       const next = this.pending.shift(), chunk = new CitydriverChunk(next.ix, next.iz, this.materials);
       this.chunks.set(chunk.index, chunk); this.scene.add(chunk.group);
-      if (this.distantChunks.delete(chunk.index)) distantChanged = true;
+      const distant = this.distantChunks.get(chunk.index);
+      if (distant) { this.distantCity.delete(distant); this.distantChunks.delete(chunk.index); }
+      placementChanged = true; built++;
     }
-    for (const chunk of this.chunks.values()) chunk.group.position.set(chunk.east, 0, this.origin - chunk.start);
-    if (distantChanged) this.rebuildDistant();
-    this.distantGroup.position.z = this.origin;
+    if (placementChanged) {
+      for (const chunk of this.chunks.values()) {
+        chunk.group.position.set(chunk.east, 0, this.origin - chunk.start); chunk.group.updateMatrix();
+      }
+      this.distantGroup.position.z = this.origin; this.distantGroup.updateMatrix();
+    }
+    this.rebuildDistant();
+    if (Number.isFinite(budgetMs) && !this.pending.length) this.prefetchDistant(cell, ds, du, deadline);
+  }
+  prefetchDistant(cell, ds, du, deadline) {
+    // Prepare the next skyline strip while approaching an edge, one block per
+    // spare frame. This cache owns no GPU objects and is limited to one future
+    // neighbourhood (at most 21 blocks, even on a diagonal).
+    const p = cityLogical(this.s, this.u), x = p.u - cell.ix * CITY_BLOCK, z = p.s - cell.iz * CITY_BLOCK;
+    const dx = du < 0 && x < 48 ? -1 : du > 0 && x > CITY_BLOCK - 48 ? 1 : 0;
+    const dz = ds < 0 && z < 48 ? -1 : ds > 0 && z > CITY_BLOCK - 48 ? 1 : 0;
+    const key = `${cell.ix + dx},${cell.iz + dz}`;
+    if (key !== this.prefetchTarget) {
+      this.prefetchTarget = key; this.prefetchPending = [];
+      const wanted = new Set();
+      if (dx || dz) for (let ix = cell.ix + dx - DISTANT_CITY_RADIUS; ix <= cell.ix + dx + DISTANT_CITY_RADIUS; ix++) {
+        for (let iz = cell.iz + dz - DISTANT_CITY_RADIUS; iz <= cell.iz + dz + DISTANT_CITY_RADIUS; iz++) {
+          if (Math.abs(ix - cell.ix) <= DISTANT_CITY_RADIUS && Math.abs(iz - cell.iz) <= DISTANT_CITY_RADIUS) continue;
+          const index = `${ix},${iz}`; wanted.add(index);
+          if (!this.prefetched.has(index)) this.prefetchPending.push({ ix, iz, index });
+        }
+      }
+      for (const index of this.prefetched.keys()) if (!wanted.has(index)) this.prefetched.delete(index);
+    }
+    if (this.prefetchPending.length && performance.now() < deadline) {
+      const next = this.prefetchPending.shift(), chunk = new CitydriverChunk(next.ix, next.iz, this.materials, true);
+      packDistantChunk(chunk); this.prefetched.set(next.index, chunk);
+    }
   }
   rebuildDistant() {
-    for (const mesh of [...this.distantGroup.children]) { mesh.dispose(); this.distantGroup.remove(mesh); }
-    const batches = new Map();
-    for (const chunk of this.distantChunks.values()) for (const [key, batch] of chunk.batches) {
-      if (!batches.has(key)) batches.set(key, { geometry: batch.geometry, material: batch.material, items: [] });
-      const items = batches.get(key).items;
-      for (const item of batch.items) {
-        // Distant blocks are immutable. Reusing their physical matrices avoids
-        // recalculating thousands of transforms every time one strip streams.
-        if (!item.worldMatrix) {
-          cityItemMatrix(item, chunk.east, chunk.start, transform.matrix);
-          transform.matrix.elements[12] += chunk.east; transform.matrix.elements[14] -= chunk.start;
-          item.worldMatrix = new Float32Array(transform.matrix.elements);
-        }
-        items.push(item);
-      }
-    }
-    renderBatches(this.distantGroup, batches, true);
+    this.distantCity.rebuild();
   }
   *collisionChunks(s, u) {
     const cell = cityCell(s, u);
@@ -364,13 +405,33 @@ export class CitydriverWorld {
   }
   setWetness(amount) {
     const wet = Math.max(0, Math.min(1, amount));
+    if (wet === this.wetness) return;
+    this.wetness = wet;
     this.materials.road.roughness = .85 - wet * .58;
-    this.materials.road.color.set('#666c70').lerp(new THREE.Color('#424e58'), wet);
+    this.materials.road.color.copy(dryRoad).lerp(wetRoad, wet);
   }
-  animate(time, signalTime = time) { for (const chunk of this.chunks.values()) chunk.animate(time, signalTime); }
+  animate(time, signalTime = time, camera = null) {
+    if (camera) {
+      camera.updateMatrixWorld();
+      this.animationMatrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+      this.animationFrustum.setFromProjectionMatrix(this.animationMatrix);
+    }
+    for (const chunk of this.chunks.values()) {
+      let visible = true;
+      if (camera && chunk.peopleMesh) {
+        this.animationSphere.copy(chunk.peopleMesh.boundingSphere);
+        this.animationSphere.center.add(chunk.group.position);
+        // Include residents whose shadows can fall into the visible area.
+        this.animationSphere.radius += 12;
+        visible = this.animationFrustum.intersectsSphere(this.animationSphere);
+      }
+      chunk.animate(time, signalTime, visible);
+    }
+  }
   dispose() {
     for (const chunk of this.chunks.values()) chunk.dispose(); this.chunks.clear(); this.pending = [];
-    for (const mesh of this.distantGroup.children) mesh.dispose(); this.distantGroup.removeFromParent(); this.distantChunks.clear();
+    this.distantCity.dispose(); this.distantGroup.removeFromParent(); this.distantChunks.clear();
+    this.prefetched.clear(); this.prefetchPending = [];
     for (const material of Object.values(this.materials)) { material.map?.dispose(); material.dispose(); }
   }
 }

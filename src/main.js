@@ -667,8 +667,8 @@ async function boot() {
       const densityPercent = Math.round(settings.density * 100);
       $('#graphics-summary').textContent = `${graphics.auto ? 'Auto' : settings.label} · ${densityPercent}%`;
       pixelDensity.value = String(densityPercent);
-      pixelDensityValue.textContent = `${densityPercent}%${densityPercent === 100 ? ' · Native' : ''}`;
-      pixelDensity.setAttribute('aria-valuetext', `${densityPercent}% of native resolution`);
+      pixelDensityValue.textContent = `${densityPercent}%${settings.customDensity ? (densityPercent === 100 ? ' · Native' : '') : ' · Preset limit'}`;
+      pixelDensity.setAttribute('aria-valuetext', `${densityPercent}% of native resolution${settings.customDensity ? '' : ', capped by the preset'}`);
       // The drawing buffer is the thing the quality level actually changes, so
       // show it: it explains a softer picture without any further digging.
       graphicsStatus.textContent = `${graphics.auto ? 'Auto · ' : ''}${settings.label} · ${renderer.domElement.width} × ${renderer.domElement.height} · soft shading ${settings.ambientOcclusion ? 'on' : 'off'}`;
@@ -786,9 +786,9 @@ async function boot() {
       const dt = frameClock.dt;
       if (running) {
         time += dt;
-        world.update(vehicle.s, vehicle.u); vehicle.render(frameClock.alpha, world.origin);
+        world.update(vehicle.s, vehicle.u, { budgetMs: 3 }); vehicle.render(frameClock.alpha, world.origin);
         traffic.render(frameClock.alpha, world.origin);
-        rendering.update(vehicle.car, dt, world.origin); world.animate(time, traffic.time);
+        rendering.update(vehicle.car, dt, world.origin); world.animate(time, traffic.time, vr.active ? null : rendering.camera);
         taxiView.render(taxi, vehicle, world.origin, time);
         weather.update(time, vehicle, world.origin); rendering.setWeather(weather.state, dt);
         world.setWetness(weather.state.wetness); vehicle.setLights(weather.state.lightLevel); traffic.models.setLights(weather.state.lightLevel);
