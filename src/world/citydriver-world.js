@@ -359,6 +359,7 @@ export class CitydriverWorld {
     this.distantCity = new DistantCity(this.distantGroup);
     this.prefetched = new Map(); this.prefetchPending = []; this.prefetchTarget = null;
     this.prefetchedDetails = new Map(); this.prefetchDetailPending = [];
+    this.prefetchDirection = { x: 0, z: 0 };
     this.animationFrustum = new THREE.Frustum(); this.animationMatrix = new THREE.Matrix4(); this.animationSphere = new THREE.Sphere();
   }
   update(s, u = 2.4, { budgetMs = Infinity } = {}) {
@@ -420,20 +421,28 @@ export class CitydriverWorld {
   prefetchDistant(cell, ds, du, deadline) {
     // Prepare the next skyline strip while approaching an edge, one block per
     // spare frame. The skyline cache owns no GPU objects and is limited to one
-    // future neighbourhood (at most 21 blocks, even on a diagonal). The separate
-    // detail cache holds at most five blocks for the next collision neighborhood.
+    // future neighbourhood (at most 21 blocks, even on a diagonal).
     const p = cityLogical(this.s, this.u), x = p.u - cell.ix * CITY_BLOCK, z = p.s - cell.iz * CITY_BLOCK;
-    const dx = du < 0 && x < 48 ? -1 : du > 0 && x > CITY_BLOCK - 48 ? 1 : 0;
-    const dz = ds < 0 && z < 48 ? -1 : ds > 0 && z > CITY_BLOCK - 48 ? 1 : 0;
+    // Rendering can run faster than fixed-step physics. A repeated position is
+    // not a turn: keep preparing the same strip instead of disposing and
+    // rebuilding it on alternating frames. Predict in logical street space,
+    // since a curved northbound road also moves east/west in world space.
+    if (ds || du) {
+      const previous = cityLogical(this.s - ds, this.u - du);
+      this.prefetchDirection.x = Math.abs(p.u - previous.u) > 1e-6 ? Math.sign(p.u - previous.u) : 0;
+      this.prefetchDirection.z = Math.abs(p.s - previous.s) > 1e-6 ? Math.sign(p.s - previous.s) : 0;
+    }
+    const dx = this.prefetchDirection.x < 0 && x < 48 ? -1 : this.prefetchDirection.x > 0 && x > CITY_BLOCK - 48 ? 1 : 0;
+    const dz = this.prefetchDirection.z < 0 && z < 48 ? -1 : this.prefetchDirection.z > 0 && z > CITY_BLOCK - 48 ? 1 : 0;
     const key = `${cell.ix + dx},${cell.iz + dz}/${this.radius}`;
     if (key !== this.prefetchTarget) {
       this.prefetchTarget = key; this.prefetchPending = []; this.prefetchDetailPending = [];
-      // Basic's next collision neighborhood needs at most five new blocks.
-      // Prepare them before the boundary instead of building a whole strip
-      // synchronously during a turn. They own buffers, so retire unused entries.
+      // Prepare the whole next detail strip, including the outer detail at
+      // higher quality. Basic needs at most five blocks; High needs thirteen.
+      // They own buffers, so retire unused entries when the driver turns away.
       const detailWanted = new Set();
-      if (dx || dz) for (let ix = cell.ix + dx - 1; ix <= cell.ix + dx + 1; ix++) {
-        for (let iz = cell.iz + dz - 1; iz <= cell.iz + dz + 1; iz++) {
+      if (dx || dz) for (let ix = cell.ix + dx - this.radius; ix <= cell.ix + dx + this.radius; ix++) {
+        for (let iz = cell.iz + dz - this.radius; iz <= cell.iz + dz + this.radius; iz++) {
           const index = `${ix},${iz}`;
           if (this.chunks.has(index)) continue;
           detailWanted.add(index);

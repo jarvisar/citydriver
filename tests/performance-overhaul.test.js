@@ -87,6 +87,51 @@ test('Basic preloads collision strips in every direction, reuses them and dispos
   } finally { setResidentWindow(previous); }
 });
 
+test('render frames between physics steps retain and finish the prepared city strip', () => {
+  const previous = residentWindow(); setResidentWindow({ behind: 1, ahead: 3 });
+  const world = new CitydriverWorld(new THREE.Scene());
+  const at = (s, u) => { const p = cityLayout(s, u); world.update(p.s, p.u, { budgetMs: 1000 }); };
+  try {
+    at(56, 56); at(80, 56);
+    const target = world.prefetchTarget, [key, chunk] = world.prefetchedDetails.entries().next().value;
+    let disposed = false;
+    chunk.group.children[0].addEventListener('dispose', () => { disposed = true; });
+    for (let frame = 0; frame < 30; frame++) at(80, 56);
+    assert.equal(world.prefetchTarget, target, 'no physics step is not a change of direction');
+    assert.equal(world.prefetchedDetails.get(key), chunk);
+    assert.equal(disposed, false);
+    assert.equal(world.prefetchedDetails.size, 3);
+    assert.equal(world.prefetched.size, 11, 'stationary frames finish loading the same skyline');
+    at(114, 56);
+    assert.equal(world.chunks.get(key), chunk, 'the next block uses the retained buffers');
+    assert.equal([...world.collisionChunks(world.s, world.u)].length, 9);
+  } finally { world.dispose(); setResidentWindow(previous); }
+});
+
+test('curved roads prepare only the logical direction of travel at every detail level', () => {
+  const previous = residentWindow();
+  try {
+    for (const [ahead, radius] of [[3, 1], [4, 2], [5, 3]]) for (const direction of [-1, 1]) {
+      setResidentWindow({ behind: 1, ahead });
+      const world = new CitydriverWorld(new THREE.Scene());
+      const at = (s, budgetMs = 1000) => { const p = cityLayout(s, 3); world.update(p.s, p.u, { budgetMs }); };
+      try {
+        at(56, Infinity);
+        // A road near the cell's west edge curves in world coordinates. That
+        // curvature must not queue a spurious diagonal strip to the west.
+        for (let step = 0; step < 40; step++) at(56 + direction * (14 + step * .5));
+        assert.equal(world.prefetchedDetails.size, radius * 2 + 1);
+        assert.equal(world.prefetched.size, 11);
+        const cached = new Map(world.prefetchedDetails);
+        at(56 + direction * 58);
+        for (let frame = 0; frame < 10; frame++) at(56 + direction * 58);
+        for (const [key, chunk] of cached) assert.equal(world.chunks.get(key), chunk, 'all detail levels reuse the prepared strip');
+        assert.equal([...world.collisionChunks(world.s, world.u)].length, 9);
+      } finally { world.dispose(); }
+    }
+  } finally { setResidentWindow(previous); }
+});
+
 test('traffic lane-coordinate fast path agrees with inverse-mapped repositioning on curved roads', () => {
   const traffic = new CityTraffic(new THREE.Scene(), citydriverRoute, 0);
   try {
