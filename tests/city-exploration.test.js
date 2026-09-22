@@ -160,10 +160,27 @@ test('all landmark geometry streams with colliders clear of roads and stable dis
 });
 
 test('animated residents remain on dry pavements through loops and large times', () => {
-  for (const river of [true, false]) for (const side of [0, 1]) for (let time = 0; time < 3000; time += 13) {
-    const pose = walkerPose({ side, phase: 67, speed: .93 }, time, river);
+  for (const direction of [-1, 1]) for (const river of [true, false]) for (const side of [0, 1]) for (let time = 0; time < 3000; time += 13) {
+    const pose = walkerPose({ side, phase: 67, speed: .93, direction }, time, river);
     assert.ok(pose.x > ROAD_HALF_WIDTH && pose.x < CITY_BLOCK - ROAD_HALF_WIDTH);
     assert.ok(pose.s > ROAD_HALF_WIDTH && pose.s < CITY_BLOCK - ROAD_HALF_WIDTH);
     if (river) assert.ok(pose.x < 28 || pose.x > 84);
+  }
+});
+
+test('residents face their travel direction and ease through block corners in both directions', () => {
+  for (const direction of [-1, 1]) for (const river of [false, true]) {
+    for (const phase of [0, 10, 45, 72, 83, 144, 166, 249, 331.9]) for (const time of [0, 20, 3000]) {
+      const walker = { phase, speed: 1, side: 0, direction };
+      const a = walkerPose(walker, time, river), b = walkerPose(walker, time + .0001, river);
+      const dx = b.x - a.x, ds = b.s - a.s, distance = Math.hypot(dx, ds);
+      const facing = (-Math.sin(a.yaw) * dx + Math.cos(a.yaw) * ds) / distance;
+      assert.ok(facing > .7, `faces travel through corners and river turnarounds: ${JSON.stringify({ direction, river, phase, time, facing })}`);
+    }
+    if (!river) for (const phase of [0, 83, 166, 249, 332]) {
+      const walker = { phase, speed: 1, side: 0, direction };
+      const before = walkerPose(walker, -.001), after = walkerPose(walker, .001);
+      assert.ok(Math.cos(after.yaw - before.yaw) > .999, 'corners turn continuously, including the loop seam');
+    }
   }
 });

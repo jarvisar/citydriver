@@ -11,7 +11,7 @@ import { buildCityBuildings, SHOP_NAMES, shopSignMaterial } from './city-buildin
 import { blockStreets, buildStreets } from './city-streets.js';
 import { cityGreen } from '../city-junctions.js';
 import { CITY_PLACES } from './city-places.js';
-import { cityWalker, cityBoat, walkerPose } from './city-life.js';
+import { cityWalker, cityBoat, walkerPose, walkerFloat, WALKER_COLORS } from './city-life.js';
 import { cityLayout, cityLogical, cityLayoutFrame, cityRigidFrame } from './city-layout.js';
 import { cityItemMatrix, cityAffinePoint } from './city-layout-render.js';
 import { addSurfacePolygon, rectanglePolygon } from './city-surfaces.js';
@@ -23,6 +23,8 @@ export { DISTANT_CITY_RADIUS } from './city-grid.js';
 const boxGeometry = new THREE.BoxGeometry(1, 1, 1);
 const windowGeometry = new THREE.PlaneGeometry(1, 1);
 const transform = new THREE.Object3D();
+const residentItem = { p: [0, 0, 0], scale: [1, 1, 1], yaw: 0, roll: 0 };
+const residentFloat = {};
 const tint = new THREE.Color();
 const dryRoad = new THREE.Color('#666c70'), wetRoad = new THREE.Color('#424e58');
 const GREENS = ['#63924d', '#80a85c', '#4f8054', '#93ab65'];
@@ -60,6 +62,7 @@ function resources() {
     lit: new THREE.MeshBasicMaterial({ color: '#ffffff', toneMapped: false }),
     water: createRiverWaterMaterial(),
     props: standard({ color: '#ffffff', vertexColors: true }),
+    residents: standard({ color: '#ffffff', vertexColors: true, flatShading: false }),
     bark: standard({ color: '#625548', vertexColors: true }),
     leaves: standard({ color: '#ffffff', vertexColors: true }),
   };
@@ -229,10 +232,15 @@ export class CitydriverChunk {
     // Residents stay on the pavement; they never wander into driving lanes.
     const random = seededRandom(this.plan.seed + 912), river = this.plan.kind === 'river';
     const sides = this.plan.rivers.north && this.plan.rivers.east ? 4 : 2;
-    this.walkers = Array.from({ length: this.plan.landmark ? 10 : 4 }, (_, i) => ({ phase: random() * (river ? 144 : 332), speed: .65 + random() * .45, side: i % sides }));
+    this.walkers = Array.from({ length: this.plan.landmark ? 10 : 4 }, (_, i) => ({
+      phase: random() * (river ? 144 : 332), speed: .65 + random() * .45, side: i % sides,
+      direction: i % 2 ? -1 : 1, size: .9 + random() * .22, width: .92 + random() * .16, color: pick(WALKER_COLORS, random),
+    }));
     for (const walker of this.walkers) {
       const pose = river ? riverResidentPose(this, walker, 0) : walkerPose(walker, 0);
-      this.item('residents', cityWalker, this.materials.props, [pose.x, PAVEMENT_LEVEL, -pose.s], [1, 1, 1], '#ffffff', pose.yaw);
+      const motion = walkerFloat(walker, 0, residentFloat), width = walker.size * walker.width;
+      this.item('residents', cityWalker, this.materials.residents, [pose.x, PAVEMENT_LEVEL + motion.lift, -pose.s],
+        [width, walker.size * motion.stretch, width], walker.color, pose.yaw, motion.roll);
     }
     if (river) {
       const x = this.plan.seed % 2 ? 37 : 75, s = 42 + random() * 25;
@@ -267,8 +275,11 @@ export class CitydriverChunk {
     const mesh = this.peopleMesh;
     for (let i = 0; i < this.walkers.length; i++) {
       const walker = this.walkers[i], pose = this.plan.kind === 'river' ? riverResidentPose(this, walker, time) : walkerPose(walker, time);
-      mesh.setMatrixAt(i, cityItemMatrix({ p: [pose.x, PAVEMENT_LEVEL + Math.sin(time * 7 + walker.phase) * .025, -pose.s],
-        yaw: pose.yaw, roll: Math.sin(time * 3.5 + walker.phase) * .025, scale: [1, 1, 1] }, this.east, this.start, transform.matrix));
+      const motion = walkerFloat(walker, time, residentFloat), width = walker.size * walker.width;
+      residentItem.p[0] = pose.x; residentItem.p[1] = PAVEMENT_LEVEL + motion.lift; residentItem.p[2] = -pose.s;
+      residentItem.yaw = pose.yaw; residentItem.roll = motion.roll;
+      residentItem.scale[0] = residentItem.scale[2] = width; residentItem.scale[1] = walker.size * motion.stretch;
+      mesh.setMatrixAt(i, cityItemMatrix(residentItem, this.east, this.start, transform.matrix));
     }
     mesh.instanceMatrix.needsUpdate = true;
     if (this.boatMesh) this.boatMesh.position.y = Math.sin(time * .8 + this.plan.seed) * .08;

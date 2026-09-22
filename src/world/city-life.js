@@ -1,17 +1,31 @@
+import * as THREE from 'three';
 import { Parts } from './city-assets.js';
+
+export const WALKER_COLORS = ['#a9cbbb', '#a8c7e3', '#e8b69e', '#e3cc91', '#c7b5d8', '#d5cbb9'];
 
 function walker() {
   const p = new Parts();
-  p.box([0, 1.06, 0], [.46, .58, .28], '#b67b58');
-  p.box([0, 1.54, 0], [.29, .34, .28], '#d7ad88');
-  p.box([0, 1.71, -.02], [.31, .09, .3], '#4e4b44');
-  for (const side of [-1, 1]) {
-    p.box([side * .12, .4, side * .1], [.16, .72, .18], '#405b66', [side * .18, 0, 0]);
-    p.box([side * .12, .08, side * .15 - .08], [.2, .14, .33], '#414947');
-    p.box([side * .3, 1.02, -side * .08], [.14, .54, .17], '#b67b58', [-side * .2, 0, 0]);
-    p.box([side * .3, .73, -side * .14], [.13, .14, .14], '#d7ad88');
+  // A floating coat and a detached head. All details share one geometry and
+  // material, including the tiny face that makes local -Z read as forward.
+  const profile = [[0, .28], [.24, .33], [.31, .84], [.18, 1.12], [0, 1.14]];
+  const body = new THREE.LatheGeometry(profile.map(([x, y]) => new THREE.Vector2(x, y)), 8);
+  body.scale(1, 1, .8);
+  p.add(body, [0, 0, 0], '#dce4e2');
+  p.add(new THREE.SphereGeometry(.26, 8, 4), [0, 1.5, 0], '#ffead5');
+  const head = p.parts.at(-1), positions = head.attributes.position, colors = head.attributes.color;
+  const hair = new THREE.Color('#4c4745');
+  for (let i = 0; i < positions.count; i += 3) {
+    const y = (positions.getY(i) + positions.getY(i + 1) + positions.getY(i + 2)) / 3;
+    const z = (positions.getZ(i) + positions.getZ(i + 1) + positions.getZ(i + 2)) / 3;
+    if (y > 1.62 || (z > .015 && y > 1.4)) {
+      for (let j = 0; j < 3; j++) colors.setXYZ(i + j, hair.r, hair.g, hair.b);
+    }
   }
-  return p.finish();
+  for (const side of [-1, 1]) {
+    p.add(new THREE.PlaneGeometry(.036, .052), [side * .078, 1.51, -.244], '#344247', [0, Math.PI, 0]);
+  }
+  // Keep the lathe/sphere's smooth normals without adding any triangles.
+  return p.finish({ preserveNormals: true });
 }
 function canalBoat() {
   const p = new Parts();
@@ -29,17 +43,31 @@ function canalBoat() {
 export const cityWalker = walker();
 export const cityBoat = canalBoat();
 
+// Shared by street residents and waiting passengers. Absolute time means
+// culled residents resume in the right place without maintaining a rig.
+export function walkerFloat(walker, time, target = {}) {
+  const phase = walker.phase + time * (2.6 + walker.speed * 1.4);
+  target.lift = .07 + Math.sin(phase) * .075;
+  target.roll = Math.sin(phase * .5) * .055;
+  target.stretch = 1 + Math.cos(phase) * .018;
+  return target;
+}
+
 export function walkerPose(walker, time, river = false) {
-  const travel = walker.phase + time * walker.speed;
+  const direction = walker.direction ?? 1;
+  const travel = walker.phase + time * walker.speed * direction;
   if (river) {
     const offset = ((travel % 144) + 144) % 144;
-    return { x: walker.side ? 97.5 : 14.5, s: 20 + (offset < 72 ? offset : 144 - offset), yaw: offset < 72 ? 0 : Math.PI };
+    const north = offset === 0 || (offset !== 72 && (offset < 72) === (direction > 0));
+    return { x: walker.side ? 97.5 : 14.5, s: 20 + (offset < 72 ? offset : 144 - offset), yaw: north ? 0 : Math.PI };
   }
   const offset = ((travel % 332) + 332) % 332, side = Math.floor(offset / 83), along = offset % 83;
-  return [
-    { x: 14.5, s: 14.5 + along, yaw: 0 },
-    { x: 14.5 + along, s: 97.5, yaw: -Math.PI / 2 },
-    { x: 97.5, s: 97.5 - along, yaw: Math.PI },
-    { x: 97.5 - along, s: 14.5, yaw: Math.PI / 2 },
-  ][side];
+  // Ease the quarter-turn over the last/first 80 cm of each pavement edge.
+  const turn = .8, blend = along < turn ? (along + turn) / (2 * turn) : (along - 83 + turn) / (2 * turn);
+  const eased = THREE.MathUtils.smoothstep(blend, 0, 1);
+  const yaw = -(side + (along < turn ? eased - 1 : eased)) * Math.PI / 2 + (direction < 0 ? Math.PI : 0);
+  if (side === 0) return { x: 14.5, s: 14.5 + along, yaw };
+  if (side === 1) return { x: 14.5 + along, s: 97.5, yaw };
+  if (side === 2) return { x: 97.5, s: 97.5 - along, yaw };
+  return { x: 97.5 - along, s: 14.5, yaw };
 }

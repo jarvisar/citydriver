@@ -97,8 +97,10 @@ export function buildRivers(c) {
 
 export function riverResidentPose(c, walker, time) {
   if (c.plan.rivers.north && c.plan.rivers.east) {
-    const t = (walker.phase + time * walker.speed) % 20, along = t < 10 ? t : 20 - t;
-    return { x: walker.side % 2 ? 97.5 : 14.5, s: (walker.side < 2 ? 14.5 : 87.5) + along, yaw: t < 10 ? 0 : Math.PI };
+    const direction = walker.direction ?? 1;
+    const t = ((walker.phase + time * walker.speed * direction) % 20 + 20) % 20, along = t < 10 ? t : 20 - t;
+    const north = t === 0 || (t !== 10 && (t < 10) === (direction > 0));
+    return { x: walker.side % 2 ? 97.5 : 14.5, s: (walker.side < 2 ? 14.5 : 87.5) + along, yaw: north ? 0 : Math.PI };
   }
   const p = walkerPose(walker, time, true);
   return c.plan.rivers.east ? { x: p.s, s: 112 - p.x, yaw: p.yaw - Math.PI / 2 } : p;

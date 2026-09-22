@@ -39,9 +39,10 @@ export class Parts {
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(ends, 3));
     g.computeVertexNormals(); this.add(g, [0, 0, 0], wall);
   }
-  finish() {
+  finish({ preserveNormals = false } = {}) {
     const g = mergeGeometries(this.parts); this.parts.forEach(part => part.dispose());
-    g.computeVertexNormals(); g.computeBoundingSphere(); return g;
+    if (!preserveNormals) g.computeVertexNormals();
+    g.computeBoundingSphere(); return g;
   }
 }
 
