@@ -17,6 +17,7 @@ import { PAINTS, DEFAULT_PAINT, DEFAULT_PAINT_NAME, paintName, readPaint } from 
 import { SEED, journeyStart } from './world/route.js';
 import { freshSceneStart, resolveWorldSeed } from './world/generation.js';
 import { CityWeather } from './world/city-weather.js';
+import { NightLighting } from './night-lighting.js';
 import { CITY_BLOCK, cityCell, cityDistrict, nearestCityStreet, cityStreetProfile } from './world/city-grid.js';
 import { cityLanePose } from './world/city-layout.js';
 import { CityGuide } from './city-guide.js';
@@ -117,6 +118,12 @@ async function boot() {
     const openPauseMenu = () => !$('#taxi-results').hidden ? $('#taxi-results') : paused && !pauseOverlay.hidden ? pauseOverlay : null;
     scene.add(vehicle.car);
     const traffic = new Traffic(scene, vehicle.route, vehicle.s, journey);
+    const nightLighting = new NightLighting(scene);
+    const drawScene = rendering.render;
+    rendering.render = (...args) => {
+      nightLighting.update(world, vehicle, traffic, weather.state.lightLevel);
+      return drawScene(...args);
+    };
     const cityGuide = new CityGuide(toast, () => vehicle);
     let taxiStorage; try { taxiStorage = localStorage; } catch { /* Optional storage. */ }
     const taxi = new TaxiRun(taxiStorage), taxiView = new TaxiView(scene); cityGuide.taxi = taxi;
@@ -649,7 +656,7 @@ async function boot() {
     window.addEventListener('focus', () => audio.setHidden(hidden()));
     window.addEventListener('pointerdown', () => audio.unlock(), { capture: true, passive: true });
     window.addEventListener('keydown', () => audio.unlock(), { capture: true });
-    window.addEventListener('pagehide', event => { audio.setHidden(true); if (!event.persisted) { world.dispose(); weather.dispose(); traffic.dispose(); taxiView.dispose(); void audio.dispose().catch(() => {}); } });
+    window.addEventListener('pagehide', event => { audio.setHidden(true); if (!event.persisted) { nightLighting.dispose(); world.dispose(); weather.dispose(); traffic.dispose(); taxiView.dispose(); void audio.dispose().catch(() => {}); } });
     window.addEventListener('pageshow', () => { audio.setHidden(document.hidden); needsRender = true; });
     $('#scene').addEventListener('webglcontextlost', event => { event.preventDefault(); setPaused(true); toast('Graphics lost. Reload to restart.'); });
     $('#scene').addEventListener('webglcontextrestored', () => { needsRender = true; });
@@ -821,6 +828,7 @@ async function boot() {
     world.setWetness(weather.state.wetness); vehicle.setLights(weather.state.lightLevel); traffic.models.setLights(weather.state.lightLevel);
     buildCarCards(); buildPaintSwatches(); updateCarUi();
     vehicle.render(1, world.origin); traffic.render(1, world.origin); rendering.update(vehicle.car, 1, world.origin); updateHud(); updateJourneyUi(); updateViewUi(); updateGraphicsUi();
+    nightLighting.update(world, vehicle, traffic, weather.state.lightLevel);
     if (renderer.extensions.has('KHR_parallel_shader_compile')) await renderer.compileAsync(scene, rendering.camera);
     else renderer.compile(scene, rendering.camera);
     changingJourney = false;

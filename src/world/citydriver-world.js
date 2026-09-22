@@ -285,6 +285,14 @@ export class CitydriverChunk {
     if (this.boatMesh) this.boatMesh.position.y = Math.sin(time * .8 + this.plan.seed) * .08;
   }
   finish() {
+    // Record the exact rigid lamp placement, including curved streets and
+    // bridge furniture. Lighting reuses these points without scene traversal.
+    this.features.lamps = (this.batches.get('lamp')?.items ?? []).map(item => {
+      const matrix = cityItemMatrix(item, this.east, this.start, transform.matrix);
+      const point = new THREE.Vector3(-1.75, 7.36, 0).applyMatrix4(matrix);
+      return { x: point.x + this.east, y: point.y, z: point.z - this.start,
+        yaw: Math.atan2(matrix.elements[8], matrix.elements[10]) };
+    });
     renderBatches(this.group, this.batches, this.east, this.start);
     this.signalMesh = this.group.getObjectByName('citydriver-lit');
     this.peopleMesh = this.group.getObjectByName('citydriver-residents');

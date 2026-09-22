@@ -67,6 +67,28 @@ These tests use **Chromium SwiftShader**, not a physical phone GPU. Triangle cou
 
 The broader checks are `npm run test:browser`, `npm run test:taxi`, `npm run test:layout`, `npm run test:pwa`, and `npm run build`. They cover directional driving and bridges, landmarks, weather, resets, taxi pickup/payment/failure, boost, touch drift, pause, saved state, and offline/update behavior at root and subpath deployments.
 
+## Night lighting
+
+Street lamps use glowing lenses and soft ground patches; player and nearby traffic
+headlights use ground patches too. There are no additional Three.js lights, shadow
+passes, fullscreen effects, or render targets. Three instanced draws share two
+64×64 masks, with hard limits of 96 street lamps and 25 headlight patches inside
+145 metres. The whole group is hidden in daylight; it fades in through storms
+and night using the existing weather light level. Lamp selection and static
+instance uploads are cached between movement, streaming, and origin changes.
+The meshes also stay out of the optional AO prepass.
+
+These are inexpensive visual approximations: they brighten horizontal ground,
+do not illuminate walls or vehicles, and do not cast shadows. Existing sun/moon
+shadows retain their current settings. Patches assume the city's level streets
+and bridge decks; they do not project onto arbitrary terrain or stop at obstacles.
+
+`node scripts/night-lighting-test.mjs` checks all six cameras, day/night switching,
+shader errors, and the added draw budget in Chromium. Its seeded Basic-quality
+scene adds three draws and roughly 600 triangles. These counts are not a hardware FPS
+guarantee. Unit tests cover caps, lamp alignment, rebasing, disabled traffic,
+and the Formula car's rear-only running light.
+
 ## Remaining limits and follow-up
 
 The streaming budget is deliberately soft: an individual procedural block is indivisible, and teleports must load nearby collision geometry and complete fallback coverage synchronously. A sufficiently slow device can still hitch during these operations. First startup remains synchronous city generation followed by shader preparation. Moving generation to a worker would be a separate change requiring a tested serialization boundary for shared geometry, materials, and collision data.
