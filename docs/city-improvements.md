@@ -21,7 +21,7 @@ The original clocktower, market, botanical garden, tram depot and sculpture park
 | Athletic Club | Tennis or basketball courts, clubhouse and seating |
 | Engine House | Red engine doors, hose tower and parked heritage fire engine |
 
-Each landmark has three seeded variations. The four park designs and four square designs also become named destinations, for **17 saved discovery categories and 53 public-space designs**. One dedicated landmark still appears in every three-by-three neighborhood; ordinary parks and squares add more stops between them. Existing discovery IDs and the storage key stay compatible with collected stamps.
+Each landmark has three seeded variations. The four park designs and four square designs also become named destinations, for **17 saved discovery categories and 53 public-space designs**. One dedicated landmark appears in every four-by-four neighborhood; 3% of the remaining dry blocks become parks or squares, retaining their 65/35 mix. This gives roughly 30% more ordinary building blocks between destinations. The seed-4817 sample at addresses -200 through 199 on both axes increases normal blocks from 86,984 to 113,033 (+29.9%); roads and rivers retain their layout. Discovery categories and the storage key stay compatible with collected stamps, while individual POI locations change with the new spacing.
 
 Customer pickup options preview their destination and passenger type. Three offers favor different destination categories, and completed fares avoid repeating the three most recent types when alternatives exist. Stops stay on road lanes, outside medians and away from one another. Routes continue to use the connected streets and bridges. Discoveries now update during active taxi runs as well as free drive.
 

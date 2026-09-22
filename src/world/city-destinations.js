@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { PAVEMENT_LEVEL as G } from './city-grid.js';
-import { bed, cafeTable, disk, path, pergola, pool, reserve } from './city-public-space-kit.js';
+import { bed, cafeTable, disk, path, entrancePath, pergola, pool, reserve } from './city-public-space-kit.js';
 import { rectanglePolygon } from './city-surfaces.js';
+import { planet } from './city-public-space-geometry.js';
 import { barrelRoof } from './city-roofs.js';
 
 // Shared instances keep the new venues as inexpensive to stream as a city block.
@@ -21,7 +22,13 @@ function roof(c, x, s, w, d, y, color = copper) {
     c.box(x, G + y + .6, s + side * d / 2, w + .35, 1.2, .35, cream);
   }
 }
-function hall(c, x, s, w, d, h, color, floors = 2) {
+function frontDoor(c, x, s, base = 0, width = 4.8) {
+  c.box(x, G + base + 2.05, s - .24, width, 4, .2, dark, 'glass');
+  for (const dx of [-width / 2 - .1, 0, width / 2 + .1]) c.box(x + dx, G + base + 2.05, s - .37, .14, 4.1, .12, cream);
+  c.box(x, G + base + 4.14, s - .32, width + .4, .18, .3, cream);
+  c.box(x, G + base + .08, s - .25, width + .8, .16, 1, cream);
+}
+function hall(c, x, s, w, d, h, color, floors = 2, doors = [0], doorWidth = 4.8) {
   reserve(c, rectanglePolygon(x, s, w + 1, d + 1));
   c.rigid(x, s, () => {
     c.box(x, G + h / 2, s, w, h, d, color);
@@ -40,6 +47,7 @@ function hall(c, x, s, w, d, h, color, floors = 2) {
         if (!c.distant) c.box(px, y - height / 2 - .2, ps, east ? .4 : width + .5, .22, east ? width + .5 : .4, cream);
       }
     }
+    for (const dx of doors) frontDoor(c, x + dx, s - d / 2, 0, doorWidth);
   });
 }
 function barrel(c, x, s, w, d, y, color) {
@@ -57,7 +65,8 @@ function entry(c, x, s, w, color = '#648c82') {
   });
 }
 function cinema(c, { variant: v, palette: p }) {
-  hall(c, 56, 68, 52, 44, 17, ['#bb6c57', '#c98b76', '#729996'][v], 2);
+  // Doorways fit between the vertical Deco piers and poster cases.
+  hall(c, 56, 68, 52, 44, 17, ['#bb6c57', '#c98b76', '#729996'][v], 2, [-11.5, 11.5], 3.6);
   c.rigid(56, 68, () => {
     // Fluted Art Deco blade and a wraparound illuminated marquee.
     for (const dx of [-9, -6, 6, 9]) c.box(56 + dx, G + 13, 45.6, 1.1, 24, .9, cream);
@@ -79,7 +88,8 @@ function cinema(c, { variant: v, palette: p }) {
     c.box(56, G + 2.2, 43, 5.5, 4.4, 4, '#b56254');
     c.box(56, G + 2.8, 40.9, 4.4, 1.5, .15, '#9cc9c6', 'glass'); c.solid(56, 43, 5.5, 4);
   });
-  path(c, [[56, 16], [56, 36]], 10, p.path);
+  path(c, [[56, 16], [56, 38]], 10, p.path);
+  for (const x of [44.5, 67.5]) entrancePath(c, [[56, 37], [x, 37], [x, 45.25]], 3.5, p.path, [56, 68], [x, 45.25]);
   for (const x of [36, 76]) cafeTable(c, x, 25, p.accent);
   gardenEdge(c, p, [23, 89], v === 1 ? [30, 52, 86] : [30, 86]);
 }
@@ -102,7 +112,7 @@ function hotel(c, { variant: v, palette: p }) {
     for (const dx of [-25, 25]) c.box(56 + dx, G + 16, 44.7, 1.1, 31, .8, cream);
   });
   entry(c, 56, 40.5, 25, '#587d73');
-  path(c, [[56, 16], [56, 39]], 9, p.path);
+  entrancePath(c, [[56, 16], [56, 44.25]], 9, p.path, [56, 66], [56, 44.25]);
   for (const x of [31, 81]) { pool(c, x, 31, 11, 13, p.stone, v === 1); cafeTable(c, x, 91, p.accent); }
   gardenEdge(c, p, [22, 90], [53, 78]);
 }
@@ -120,7 +130,7 @@ function museum(c, { variant: v, palette: p }) {
     sign(c, 'MUSEUM', 56, 43.85, 14.6, 17, 1.2);
     c.box(56, G + 15.8, 70, 26, 1.1, 23, '#84aaa7', 'glass');
   });
-  path(c, [[56, 16], [56, 40]], 10, p.path);
+  entrancePath(c, [[56, 16], [56, 40.5]], 10, p.path, [56, 63], [56, 40.5]);
   for (const x of [33, 79]) {
     c.rigid(x, 29, () => {
       c.box(x, G + .6, 29, 8, 1.2, 8, p.stone);
@@ -135,6 +145,7 @@ function station(c, { variant: v, palette: p }) {
     c.box(56, G + 11, 36, 17, 22, 21, cream); roof(c, 56, 36, 17, 21, 22);
     disk(c, 56, 36, 20, 20, G + 23, 1.5, copper);
     c.box(56, G + 17, 25.35, 7, 7, .2, '#f8e2ac', 'lit');
+    frontDoor(c, 56, 25.5);
     c.box(56, G + 18, 25.2, .2, 2.2, .13, dark); c.box(57, G + 17, 25.19, 2.2, .2, .13, dark);
     sign(c, 'UNION', 56, 25.15, 10, 12, 2.1);
     barrel(c, 56, 71, 41, 43, 9, '#85aaa6');
@@ -148,6 +159,7 @@ function station(c, { variant: v, palette: p }) {
       c.box(x, G + 4.2, s, 5.6, .45, 20.5, cream); c.solid(x, s, 5.6, 20.5);
     }
   });
+  entrancePath(c, [[56, 16], [56, 24.75]], 8, p.path, [56, 64], [56, 24.75]);
   gardenEdge(c, p, [22, 90], [29, 62, 87]);
 }
 function library(c, { variant: v, palette: p }) {
@@ -163,7 +175,7 @@ function library(c, { variant: v, palette: p }) {
     sign(c, 'LIBRARY', 56, 48.9, 12, 20, 2.4);
   });
   entry(c, 56, 46, 17, copper);
-  path(c, [[56, 16], [56, 43]], 8, p.path);
+  entrancePath(c, [[56, 16], [56, 49.25]], 8, p.path, [56, 69], [56, 49.25]);
   for (const x of [32, 80]) {
     pergola(c, x, 31, 13, 16, '#b39570');
     c.prop('bench', x, 27); c.prop('bench', x, 35, Math.PI);
@@ -184,7 +196,8 @@ function hospital(c, { variant: v, palette: p }) {
     for (const dx of [-2.2, 2.2]) c.box(56 + dx, G + 27.53, 72, .6, .035, 7, cream);
     c.box(56, G + 27.53, 72, 4.4, .035, .6, cream);
   });
-  entry(c, 56, 51, 18, '#af6558'); path(c, [[56, 16], [56, 48]], 8, p.path);
+  entry(c, 56, 51, 18, '#af6558');
+  entrancePath(c, [[56, 16], [56, 57.25]], 8, p.path, [56, 72], [56, 57.25]);
   gardenEdge(c, p, [30, 82], [26, 93]);
   for (const x of [34, 78]) c.prop('bench', x, 32);
 }
@@ -208,14 +221,19 @@ function observatory(c, { variant: v, palette: p }) {
     c.box(56, G + 28, 43.5, 4.6, 5.1, 1.1, '#799b98');
     c.box(56, G + 28, 42.85, 3.7, 4.2, .2, '#314c65', 'glass');
     c.solid(56, 66, 43, 43);
-    for (const dx of [-11, 0, 11]) c.box(56 + dx, G + 7, 48.3 + Math.abs(dx) * .25, 3, 6, .25, dark, 'glass');
+    for (const angle of [-Math.PI / 6, 0, Math.PI / 6]) {
+      c.box(56 + Math.sin(angle) * 18.15, G + 7, 66 - Math.cos(angle) * 18.15, 3, 6, .25, dark, 'glass', angle);
+    }
     sign(c, 'PLANETARIUM', 56, 47.8, 12, 15, 1.8);
+    frontDoor(c, 56, 48, 2);
+    for (let i = 0; i < 5; i++) c.box(56, G + (i + 1) * .2, 40.9 + i, 7, (i + 1) * .4, 1.05, p.stone);
   });
-  path(c, [[56, 16], [56, 44]], 8, p.path);
+  entrancePath(c, [[56, 16], [56, 40.375]], 6, p.path, [56, 66], [56, 40.375]);
   // Orbit garden, with small gold planets on stone plinths.
   for (const [x, s, size] of [[29, 32, 3], [80, 31, 4.2], [26, 62, 2.5], [84, 84, 3.3]]) c.rigid(x, s, () => {
     disk(c, x, s, 7, 7, G + .4, .8, p.stone);
-    c.box(x, G + 2.3, s, size, size, size, '#d4b477', 'solid', .4, .35); c.solid(x, s, 7, 7);
+    c.item('public-planet', planet, c.materials.solid, [x, G + .8 + size / 2, -s], [size / 2, size / 2, size / 2], '#d4b477', .4, .35);
+    c.solid(x, s, 7, 7);
   });
   gardenEdge(c, p, [23, 89], [45, 92]);
 }
@@ -231,7 +249,7 @@ function music(c, { variant: v, palette: p }) {
     }
     c.box(47, G + 4.5, 51.5, 27, .6, 6, '#476584');
   });
-  path(c, [[56, 16], [56, 45], [47, 45], [47, 48]], 6, p.path);
+  entrancePath(c, [[56, 16], [56, 45], [47, 45], [47, 54.25]], 6, p.path, [47, 73], [47, 54.25]);
   for (const [x, s] of [[31, 28], [76, 27], [79, 48]]) cafeTable(c, x, s, '#aa7899');
   c.rigid(84, 73, () => {
     c.box(84, G + .5, 73, 13, 1, 18, '#a08671'); c.solid(84, 73, 13, 18);
@@ -268,6 +286,7 @@ function sports(c, { variant: v, palette: p }) {
     }
   });
   for (const x of [21, 91]) for (const s of [33, 58]) c.prop('bench', x, s, Math.PI / 2);
+  entrancePath(c, [[16, 73], [56, 73], [56, 75.75]], 5, p.path, [56, 85], [56, 75.75]);
   gardenEdge(c, p, [23, 89], [22, 93]);
 }
 function firehouse(c, { variant: v, palette: p }) {
@@ -293,6 +312,7 @@ function firehouse(c, { variant: v, palette: p }) {
     for (const dx of [-2.5, 2.5]) for (const ds of [-3.8, 3.8]) c.box(38 + dx, G + .75, 33 + ds, .7, 1.5, 1.5, dark);
     c.solid(38, 33, 5.7, 12);
   });
+  entrancePath(c, [[52, 16], [52, 47.1]], 12, p.path, [52, 68], [52, 47.1]);
   gardenEdge(c, p, [22, 90], [29, 92]);
   pool(c, 76, 28, 13, 10, p.stone);
 }

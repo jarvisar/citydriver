@@ -90,7 +90,7 @@ export function rectanglePolygon(x, s, width, depth, yaw = 0) {
   return [[-.5, -.5], [.5, -.5], [.5, .5], [-.5, .5]].map(([u, v]) => [x + u * width * cos - v * depth * sin, s + u * width * sin + v * depth * cos]);
 }
 
-export function pathPanels(input, width, bounds = [16, 16, 96, 96]) {
+export function pathPanels(input, width, bounds = [16, 16, 96, 96], endSection = null) {
   const points = input.filter((p, i) => !i || Math.hypot(p[0] - input[i - 1][0], p[1] - input[i - 1][1]) > EPS).map(p => [...p]);
   if (points.length < 2) return [];
   const closed = Math.hypot(points[0][0] - points.at(-1)[0], points[0][1] - points.at(-1)[1]) < EPS;
@@ -114,6 +114,7 @@ export function pathPanels(input, width, bounds = [16, 16, 96, 96]) {
     const offset = [(a[0] + b[0]) / dot * width / 2, (a[1] + b[1]) / dot * width / 2];
     return [[p[0] + offset[0], p[1] + offset[1]], [p[0] - offset[0], p[1] - offset[1]]];
   });
+  if (endSection && !closed) sections[sections.length - 1] = endSection;
   const panels = [];
   for (let i = 0; i < points.length - (closed ? 0 : 1); i++) {
     const next = (i + 1) % points.length;

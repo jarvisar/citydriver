@@ -4,6 +4,8 @@ import { PAVEMENT_LEVEL as G } from './city-grid.js';
 import { pitchedRoof, butterflyRoof, mansardRoof, sawtoothRoof } from './city-roofs.js';
 import { placeCityBuildings, rectangleCorners, parcelsOverlap } from './city-parcels.js';
 import { cityRigidFrame } from './city-layout.js';
+import { rectanglePolygon } from './city-surfaces.js';
+import { grassArea } from './city-grass.js';
 
 const pick = (items, random) => items[Math.floor(random() * items.length)];
 const integer = (random, min, max) => min + Math.floor(random() * (max - min + 1));
@@ -176,6 +178,25 @@ function storefront(c, b, baseHeight) {
   for (let side = 0; side < 4; side++) {
     const f = facade(c, b.x, b.s, b.width, b.depth, side), { span } = f;
     const street = b.streetSides[side];
+    if (street || b.openSides[side]) {
+      // Thresholds belong to the building frame; frontage paving reaches the
+      // sidewalk using these exact transformed corners, including moved lots.
+      const eastWest = side < 2, direction = side % 2 ? 1 : -1;
+      const half = (eastWest ? b.width : b.depth) / 2;
+      const span = street ? f.span : Math.min(3, f.span);
+      const at = (along, out) => eastWest
+        ? c.groundPoint(b.x + direction * (half + out), b.s + along)
+        : c.groundPoint(b.x + along, b.s + direction * (half + out));
+      const a = at(-span / 2, -.08), d = at(span / 2, -.08);
+      // Keep the sidewalk edge outward of both wall corners. A rotated
+      // frontage can straddle address 16/96; projecting to it would bow-tie.
+      const axis = eastWest ? 0 : 1;
+      const edge = direction < 0 ? Math.min(16, a[axis] - .25, d[axis] - .25) : Math.max(96, a[axis] + .25, d[axis] + .25);
+      const b0 = street ? (eastWest ? [edge, a[1]] : [a[0], edge]) : at(-span / 2, 1.1);
+      const c0 = street ? (eastWest ? [edge, d[1]] : [d[0], edge]) : at(span / 2, 1.1);
+      c.polygon([a, b0, c0, d], G + .045, .04, '#d5c19e');
+      f.add(0, G + .08, .35, street ? f.span : Math.min(3, f.span), .16, .9, '#d5c19e', 'solid', true);
+    }
     f.add(0, G + .24, .08, span + .16, .48, .2, '#939b98', 'solid', true);
     if (street && b.type !== 'warehouse') {
       f.add(0, G + baseHeight - .55, .13, span - .6, .65, .28, b.accent, 'solid', true);
@@ -335,8 +356,11 @@ export function buildCityBuildings(c) {
   c.features.layout = plan.layout;
   for (const b of placement.buildings) c.rigid(b.x, b.s, () => buildBuilding(c, b), b.frame);
   // Service paving and pocket gardens fill the gaps between buildings.
-  c.surface(56, G + .008, 56, plan.rotation % 2 ? 5.5 : 80, .016, plan.rotation % 2 ? 80 : 5.5, '#999f96');
-  for (const b of placement.open) c.surface(b.x, G + .02, b.s, b.width, .04, b.depth, '#7c956c');
+  c.surface(56, G + .008, 56, plan.rotation % 2 ? 5.5 : 80, .016, plan.rotation % 2 ? 80 : 5.5, '#7e8987');
+  for (const b of placement.open) {
+    c.surface(b.x, G + .02, b.s, b.width, .04, b.depth, '#7c956c');
+    grassArea(c, rectanglePolygon(b.x, b.s, b.width, b.depth), '#7c956c', G + .04);
+  }
   const clear = (x, s, margin) => {
     const corners = rectangleCorners(cityRigidFrame(c.start + s, c.east + x), margin * 2, margin * 2);
     return placement.buildings.every(b => !parcelsOverlap(corners, b.corners, .6));

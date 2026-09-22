@@ -1,10 +1,9 @@
-import * as THREE from 'three';
 import { PAVEMENT_LEVEL as G } from './city-grid.js';
 import { randomAt } from './route.js';
 import { pathPanels, distanceToPath, rectanglePolygon, insetPolygon, subtractPolygon, containsPoint, signedArea } from './city-surfaces.js';
+import { roundDisk, ellipsePoints, pondOutline, basinRim, pondRim, basinWater, pondWater, canopy } from './city-public-space-geometry.js';
 
 // Shared geometry, shared city materials: no per-site meshes or textures.
-const octagon = new THREE.CylinderGeometry(1, 1, 1, 8);
 export const SPACE_NAMES = {
   park: ['Willow pond', 'Orchard garden', 'Meadow walk', 'Terrace garden'],
   plaza: ['Fountain court', 'Pergola square', 'Forum steps', 'Mosaic promenade'],
@@ -25,9 +24,9 @@ export const SPACE_NAMES = {
   firehouse: ['Heritage engine house', 'Station garden', 'Hose tower'],
 };
 const PALETTES = [
-  { stone: '#d5c7ad', path: '#c7b99b', green: '#819668', accent: '#bd785b', flower: '#c597ab' },
-  { stone: '#c6cbbd', path: '#d5ccaf', green: '#74926d', accent: '#648f8b', flower: '#d7b46a' },
-  { stone: '#d9c6b0', path: '#c8bda7', green: '#8b9c6b', accent: '#9c7d95', flower: '#ba795f' },
+  { stone: '#d5c7ad', path: '#e3d2ae', plazaPath: '#a58a68', green: '#819668', accent: '#bd785b', flower: '#c597ab' },
+  { stone: '#c6cbbd', path: '#e0d3b2', plazaPath: '#9b8364', green: '#74926d', accent: '#648f8b', flower: '#d7b46a' },
+  { stone: '#d9c6b0', path: '#ead8b4', plazaPath: '#a08769', green: '#8b9c6b', accent: '#9c7d95', flower: '#ba795f' },
 ];
 export function publicSpacePlan(block) {
   const type = block.landmark || block.kind;
@@ -36,20 +35,33 @@ export function publicSpacePlan(block) {
   const variant = type === 'park' || type === 'plaza'
     ? (((block.ix % 2 + 2) % 2) * 2 + ((block.iz % 2 + 2) % 2) + Math.floor(randomAt(391, 812) * 4)) % 4
     : Math.floor(randomAt(block.seed, 813) * 3);
+  const palette = PALETTES[Math.floor(randomAt(block.seed, 814) * PALETTES.length)];
   return { type, variant, name: SPACE_NAMES[type][variant],
     orientation: Math.floor(randomAt(block.seed, 816) * 4),
-    palette: PALETTES[Math.floor(randomAt(block.seed, 814) * PALETTES.length)],
+    palette: { ...palette, path: type === 'park' || type === 'garden' ? palette.path : palette.plazaPath },
     plantingSeed: Math.floor(randomAt(block.seed, 815) * 1e9) };
 }
 export function disk(c, x, s, w, d, y, h, color, water = false) {
-  c.item(water ? 'public-water' : 'public-stone', octagon, c.materials[water ? 'glass' : 'solid'],
+  c.item(water ? 'public-water' : 'public-stone', water ? basinWater : roundDisk, c.materials[water ? 'glass' : 'solid'],
     [x, y, -s], [w / 2, h, d / 2], color);
 }
-export function pool(c, x, s, w, d, stone, jets = false) {
-  reserve(c, Array.from({ length: 8 }, (_, i) => [x + Math.cos(i * Math.PI / 4) * w / 2, s + Math.sin(i * Math.PI / 4) * d / 2]));
+export function pool(c, x, s, w, d, stone, jets = false, organic = false) {
+  reserve(c, organic ? pondOutline.map(([px, ps]) => [x + px * w / 2, s + ps * d / 2]) : ellipsePoints(x, s, w, d));
   c.rigid(x, s, () => {
-    disk(c, x, s, w, d, G + .22, .44, stone);
-    disk(c, x, s, w - 1.3, d - 1.3, G + .46, .08, '#6faaa7', true);
+    c.item(organic ? 'public-pond-rim' : 'public-basin-rim', organic ? pondRim : basinRim, c.materials.solid,
+      [x, G + .26, -s], [w / 2, .52, d / 2], stone);
+    // Water sits below the coping. A single top face avoids hidden cylinder
+    // walls/bottoms, and shares the rim's exact shoreline vertices.
+    c.item(organic ? 'public-water-pond' : 'public-water', organic ? pondWater : basinWater, c.materials.glass,
+      [x, G + .34, -s], [w * .47, 1, d * .47], '#6faaa7');
+    if (organic && !c.distant) {
+      // Three quiet lily pads reuse the water batch; no animation or textures.
+      for (const [dx, ds, size] of [[-.25, -.16, .8], [-.20, -.21, .65], [-.29, -.22, .55]]) {
+        c.item('public-water-pond', pondWater, c.materials.glass,
+          [x + dx * w, G + .36, -(s + ds * d)], [size, 1, size * .8], '#8da96d');
+      }
+      c.box(x - .25 * w, G + .44, s - .16 * d, .3, .16, .3, '#d7b6b9');
+    }
     c.solid(x, s, w, d);
     if (jets) for (const dx of [-w * .22, 0, w * .22]) {
       c.box(x + dx, G + 1.2, s, .15, 1.5, .15, '#c8e5d8', 'glass');
@@ -133,16 +145,29 @@ export function cafeTable(c, x, s, color) {
   reserve(c, rectanglePolygon(x, s, 7, 6));
   c.rigid(x, s, () => {
     c.box(x, G + 1, s, 2.6, .2, 2.6, '#e2cda6');
-    c.box(x, G + 1.6, s, .15, 3.2, .15, '#736d5c');
-    disk(c, x, s, 5.7, 5.7, G + 3.2, .22, color);
+    c.box(x, G + 1.9, s, .15, 3.8, .15, '#736d5c');
+    c.item('public-canopy', canopy, c.materials.solid, [x, G + 3.35, -s], [2.85, .8, 2.85], color);
     for (const dx of [-2.3, 2.3]) c.prop('bench', x + dx, s, Math.PI / 2);
     c.post(x, s, 1.6);
   });
 }
-export function path(c, points, width, color, bounds = [16, 16, 96, 96]) {
-  c.paths ??= []; c.paths.push({ points, width });
-  c.recordPath(points, width);
-  for (const panel of pathPanels(points, width, bounds)) c.polygon(panel, G + .065, .045, color);
+export function path(c, points, width, color, bounds = [16, 16, 96, 96], endSection = null) {
+  c.paths ??= []; c.paths.push({ points, width, endSection });
+  c.recordPath(points, width, endSection);
+  for (const panel of pathPanels(points, width, bounds, endSection)) c.polygon(panel, G + .065, .045, color);
+}
+// Flexible walks must meet the actual rigid threshold, not its original map
+// address. Match both corners so even a wide entrance stays joined on bends.
+export function entrancePath(c, points, width, color, anchor, edge, yaw = 0) {
+  c.rigid(...anchor, () => {
+    const previous = points.at(-2), dx = edge[0] - previous[0], ds = edge[1] - previous[1], length = Math.hypot(dx, ds);
+    const tangent = [Math.cos(yaw), Math.sin(yaw)];
+    const sign = Math.sign(-ds * tangent[0] + dx * tangent[1]) || 1;
+    const center = [edge[0] + dx / length * .12, edge[1] + ds / length * .12];
+    const endSection = [sign, -sign].map(side => c.groundPoint(center[0] + tangent[0] * width / 2 * side, center[1] + tangent[1] * width / 2 * side));
+    const end = c.groundPoint(...center);
+    path(c, [...points.slice(0, -1), end], width, color, [16, 16, 96, 96], endSection);
+  });
 }
 export function pathClear(c, x, s, radius = 1) {
   return (c.paths ?? []).every(p => distanceToPath(x, s, p.points) >= p.width / 2 + radius);

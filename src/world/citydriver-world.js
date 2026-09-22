@@ -6,6 +6,7 @@ import { DistantCity, packDistantChunk } from './distant-city.js';
 import { buildLandmark, buildDestinationSigns } from './city-landmarks.js';
 import { VENUE_NAMES } from './city-destinations.js';
 import { buildPublicSpace } from './city-public-spaces.js';
+import { buildGrassFringe } from './city-grass.js';
 import { buildCityBuildings, SHOP_NAMES, shopSignMaterial } from './city-buildings.js';
 import { blockStreets, buildStreets } from './city-streets.js';
 import { cityGreen } from '../city-junctions.js';
@@ -36,9 +37,9 @@ function renderBatches(group, batches, east = 0, start = 0) {
       const matrix = cityItemMatrix(item, east, start, transform.matrix);
       mesh.setMatrixAt(i, matrix); tint.set(item.color); mesh.setColorAt(i, tint);
     }
-    mesh.castShadow = !key.startsWith('surface-') && !['road', 'water', 'lit', 'glass', 'public-water'].includes(key);
+    mesh.castShadow = !key.startsWith('surface-') && !key.startsWith('public-water') && !['road', 'water', 'lit', 'glass', 'grass-fringe'].includes(key);
     mesh.receiveShadow = key !== 'lit';
-    if (key === 'water') mesh.userData.ambientOcclusion = false;
+    if (key === 'water' || key === 'grass-fringe') mesh.userData.ambientOcclusion = false;
     mesh.updateMatrix();
     mesh.matrixAutoUpdate = false;
     mesh.computeBoundingSphere();
@@ -92,6 +93,7 @@ export class CitydriverChunk {
     else this.buildBuildings();
     if (!distant) { this.buildFurniture(); this.buildLife(); }
     this.mapFeatures();
+    buildGrassFringe(this);
     if (!distant) this.finish();
     this.layoutFrames = null;
     this.surfacePoints = null;
@@ -117,9 +119,16 @@ export class CitydriverChunk {
   polygon(points, y, height, color, kind = 'solid') {
     addSurfacePolygon(this, points, y, height, color, kind);
   }
-  recordPath(points, width) {
+  groundPoint(x, s) {
+    if (!this.layoutAnchor) return [x, s];
+    const p = cityAffinePoint(this.start + s, this.east + x, this.layoutAnchor,
+      this.layoutPlacement ?? this.layoutFrame(this.layoutAnchor.s, this.layoutAnchor.u));
+    const logical = cityLogical(p.s, p.u);
+    return [logical.u - this.east, logical.s - this.start];
+  }
+  recordPath(points, width, endSection = null) {
     this.features.walkways ??= [];
-    this.features.walkways.push({ points: points.map(p => [...p]), width });
+    this.features.walkways.push({ points: points.map(p => [...p]), width, ...(endSection ? { endSection } : {}) });
   }
   recordPlanting(points) {
     this.features.planting ??= []; this.features.planting.push(points.map(p => [...p]));

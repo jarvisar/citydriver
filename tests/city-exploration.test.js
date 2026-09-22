@@ -3,18 +3,20 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { cityBlock, cityStreetAt, cityRiverAt, CITY_BLOCK, ROAD_HALF_WIDTH } from '../src/world/city-grid.js';
-import { landmarkForBlock, PLACE_TYPES, LANDMARK_TYPES, destinationType } from '../src/world/city-places.js';
+import { landmarkForBlock, PLACE_TYPES, LANDMARK_TYPES, LANDMARK_SPACING, destinationType } from '../src/world/city-places.js';
+import { cityRiverAxes } from '../src/world/city-waterways.js';
+import { randomAt } from '../src/world/route.js';
 import { CitydriverWorld } from '../src/world/citydriver-world.js';
 import { CityExploration, nearbyPlaces, placeRoute, routeDistance } from '../src/city-exploration.js';
 import { walkerPose } from '../src/world/city-life.js';
 import { cityLayout, cityLogical } from '../src/world/city-layout.js';
 
-test('every three-by-three neighbourhood has one reproducible landmark on dry land', () => {
+test('every four-by-four neighbourhood has one reproducible landmark on dry land', () => {
   const types = new Set();
   for (let rx = -12; rx <= 12; rx++) for (let rz = -12; rz <= 12; rz++) {
     const landmarks = [];
-    for (let dx = 0; dx < 3; dx++) for (let dz = 0; dz < 3; dz++) {
-      const ix = rx * 3 + dx, iz = rz * 3 + dz, type = landmarkForBlock(ix, iz), block = cityBlock(ix, iz);
+    for (let dx = 0; dx < LANDMARK_SPACING; dx++) for (let dz = 0; dz < LANDMARK_SPACING; dz++) {
+      const ix = rx * LANDMARK_SPACING + dx, iz = rz * LANDMARK_SPACING + dz, type = landmarkForBlock(ix, iz), block = cityBlock(ix, iz);
       assert.equal(type, landmarkForBlock(ix, iz));
       if (type) {
         landmarks.push(block); types.add(type);
@@ -26,6 +28,28 @@ test('every three-by-three neighbourhood has one reproducible landmark on dry la
     assert.equal(landmarks.length, 1, `neighbourhood ${rx},${rz}`);
   }
   assert.equal(types.size, LANDMARK_TYPES.length);
+});
+
+test('ordinary building blocks increase by roughly 30 percent while parks and plazas remain varied', () => {
+  let previousBuildings = 0, buildings = 0, parks = 0, plazas = 0;
+  // Compare against the former three-by-three landmark / 20% public-space
+  // distribution using identical coordinates, river exclusions and seed.
+  for (let ix = -100; ix < 100; ix++) for (let iz = -100; iz < 100; iz++) {
+    const river = cityRiverAxes(ix, iz), block = cityBlock(ix, iz);
+    if (river.north || river.east) { assert.equal(block.kind, 'river'); continue; }
+    const rx = Math.floor(ix / 3), rz = Math.floor(iz / 3);
+    let x = Math.floor(randomAt(rx, rz + 7200) * 3), z = Math.floor(randomAt(rx, rz + 7201) * 3);
+    if (cityRiverAxes(rx * 3 + x, rz * 3 + z).north) x = (x + 1) % 3;
+    if (cityRiverAxes(rx * 3 + x, rz * 3 + z).east) z = (z + 1) % 3;
+    const wasLandmark = ((ix % 3 + 3) % 3 === x && (iz % 3 + 3) % 3 === z);
+    if (!wasLandmark && randomAt(ix, iz + 7103) >= .2) previousBuildings++;
+    if (block.kind === 'blocks') buildings++;
+    if (block.kind === 'park') parks++;
+    if (block.kind === 'plaza') plazas++;
+  }
+  assert.ok(buildings / previousBuildings > 1.28 && buildings / previousBuildings < 1.32);
+  assert.ok(parks > 100 && plazas > 100);
+  assert.ok(parks / (parks + plazas) > .6 && parks / (parks + plazas) < .7);
 });
 
 test('suggested routes stay on connected streets and bridge decks across all quadrants', () => {
@@ -44,7 +68,8 @@ test('suggested routes stay on connected streets and bridge decks across all qua
           assert.ok(road.onRoad); assert.ok(!cityRiverAt(u, s) || road.bridge);
         }
       }
-      assert.deepEqual(points.at(-1), place.entrance);
+      // Interpolation can differ by a last floating-point bit at the endpoint.
+      assert.ok(Math.hypot(points.at(-1).s - place.entrance.s, points.at(-1).u - place.entrance.u) < 1e-9);
     }
   }
 });

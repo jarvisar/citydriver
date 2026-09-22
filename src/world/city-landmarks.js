@@ -1,7 +1,9 @@
 import { CITY_PLACES } from './city-places.js';
 import { PAVEMENT_LEVEL as G } from './city-grid.js';
-import { publicSpacePlan, pool, bed, pergola, cafeTable, path, reserve } from './city-public-space-kit.js';
+import { publicSpacePlan, pool, bed, pergola, cafeTable, path, entrancePath, reserve } from './city-public-space-kit.js';
 import { rectanglePolygon } from './city-surfaces.js';
+import { curvedPath } from './city-public-space-geometry.js';
+import { grassArea } from './city-grass.js';
 import { DESTINATION_BUILDERS } from './city-destinations.js';
 import { pitchedRoof } from './city-roofs.js';
 export { pitchedRoof } from './city-roofs.js';
@@ -126,12 +128,17 @@ function market(c, design) {
 }
 function glasshouse(c, x, s, w, d, color = '#78aaa9') {
   reserve(c, rectanglePolygon(x, s, w + 3, d + 3));
+  const front = s - (d + 3) / 2;
+  reserve(c, rectanglePolygon(x, front - 1.5, 8, 3));
   c.rigid(x, s, () => {
     c.box(x, G + .5, s, w + 3, 1, d + 3, '#d5ccb2');
     c.box(x, G + 6.4, s, w, 11, d, color, 'glass');
     const eave = G + 11.9 - Math.tan(.36);
     pitchedRoof(c, x, s, w + 2, d + 3, eave, '#91c5bf', color, .36, { wallWidth: w, wallDepth: d });
     c.solid(x, s, w + 3, d + 3);
+    for (let i = 0; i < 3; i++) c.box(x, G + (i + 1) * .125, front - 2.5 + i, 8, (i + 1) * .25, 1.05, '#d5ccb2');
+    c.box(x, G + 3, s - d / 2 - .15, 4.8, 4, .2, '#476e70', 'glass');
+    c.box(x, G + 3, s - d / 2 - .28, .12, 4, .12, '#e3debd');
     for (const dx of [-w / 2 - .2, w / 2 + .2]) for (let ds = -d / 2; ds <= d / 2; ds += 6) c.box(x + dx, G + 6.5, s + ds, .3, 12, .3, '#e3debd');
     for (const ds of [-d / 2 - .2, d / 2 + .2]) for (let dx = -w / 2; dx <= w / 2; dx += 6) c.box(x + dx, G + 6.5, s + ds, .3, 12, .3, '#e3debd');
     for (const y of [2, 7, 12]) {
@@ -144,7 +151,7 @@ function glasshouse(c, x, s, w, d, color = '#78aaa9') {
 function garden(c, design) {
   const v = design.variant, p = design.palette;
   if (v === 0) {
-    path(c, [[56, 16], [56, 38]], 7, p.path);
+    entrancePath(c, [[56, 16], [56, 34.5]], 7, p.path, [56, 64], [56, 34.5]);
     for (const x of [39, 73]) path(c, [[x, 16], [x, 96]], 3, p.path);
     glasshouse(c, 56, 64, 27, 50);
     for (const x of [29, 83]) for (const s of [28, 50, 80]) {
@@ -155,17 +162,17 @@ function garden(c, design) {
     for (const x of [33, 79]) glasshouse(c, x, 70, 21, 36);
     pool(c, 56, 33, 24, 18, p.stone, true);
     path(c, [[56, 47], [56, 96]], 7, p.path);
-    path(c, [[56, 47], [39, 47], [37, 33], [39, 21], [73, 21], [75, 33], [73, 47], [56, 47]], 3.5, p.path);
+    path(c, curvedPath([[56, 47], [39, 47], [37, 33], [39, 21], [73, 21], [75, 33], [73, 47], [56, 47]]), 3.5, p.path);
     path(c, [[56, 16], [56, 21]], 5, p.path);
-    for (const x of [33, 79]) path(c, [[56, 47], [x, 47], [x, 51.5]], 3.5, p.path);
+    for (const x of [33, 79]) entrancePath(c, [[56, 47], [x, 47], [x, 47.5]], 3.5, p.path, [x, 70], [x, 47.5]);
     for (const x of [25, 87]) for (const s of [27, 39]) { bed(c, x, s, 10, 6, p.flower); }
     for (const x of [25, 87]) c.tree(x, 93, 8);
     for (const x of [48, 64]) c.prop('bench', x, 62, Math.PI / 2);
   } else {
     glasshouse(c, 56, 80, 51, 20);
-    pool(c, 47, 43, 34, 27, p.stone);
-    path(c, [[16, 30], [28, 25], [54, 23], [73, 38], [71, 58], [56, 65], [56, 69.5]], 3.5, p.path);
-    path(c, [[72.2, 46], [84, 46]], 3.5, p.path);
+    pool(c, 47, 43, 34, 27, p.stone, false, true);
+    entrancePath(c, curvedPath([[16, 30], [28, 25], [54, 23], [73, 38], [71, 58], [60, 63], [56, 65.5]]), 3.5, p.path, [56, 80], [56, 65.5]);
+    entrancePath(c, [[72.2, 46], [77.75, 46]], 3.5, p.path, [84, 46], [77.75, 46], Math.PI / 2);
     pergola(c, 84, 46, 11, 27);
     for (const [x, s] of [[24, 44], [27, 59], [87, 25]]) { bed(c, x, s, 9, 9, p.flower); c.tree(x, s, 8); }
     for (const x of [41, 55]) c.prop('bench', x, 61);
@@ -258,6 +265,7 @@ function art(c, design) {
 export function buildLandmark(c) {
   const type = c.plan.landmark, place = CITY_PLACES[type], design = publicSpacePlan(c.plan);
   c.surface(56, G + .015, 56, 80, .03, 80, type === 'garden' ? design.palette.green : design.palette.stone);
+  if (type === 'garden') grassArea(c, rectanglePolygon(56, 56, 80, 80), design.palette.green, G + .03);
   for (const p of [17, 95]) {
     c.surface(p, G + .04, 56, .25, .04, 78, '#e4d5b6');
     c.surface(56, G + .04, p, 78, .04, .25, '#e4d5b6');

@@ -1,18 +1,22 @@
 import { PAVEMENT_LEVEL as G } from './city-grid.js';
 import { seededRandom } from './route.js';
-import { publicSpacePlan, pool, bed, ribbonBed, pergola, cafeTable, path, disk, pathClear, reserve } from './city-public-space-kit.js';
+import { publicSpacePlan, pool, bed, ribbonBed, pergola, cafeTable, path, entrancePath, disk, pathClear, reserve } from './city-public-space-kit.js';
 import { offsetPath, rectanglePolygon } from './city-surfaces.js';
+import { ellipsePoints, curvedPath } from './city-public-space-geometry.js';
+import { grassArea } from './city-grass.js';
 
 // Rotate the composition in address space before placing each rigid assembly.
 // Collider dimensions rotate with the structures; architecture is never bent.
 function orientedSite(c, turn) {
   if (!turn) return c;
   const point = (x, s) => turn === 1 ? [112 - s, x] : turn === 2 ? [112 - x, 112 - s] : [s, 112 - x];
+  const inverse = (x, s) => turn === 1 ? [s, 112 - x] : turn === 2 ? [112 - x, 112 - s] : [112 - s, x];
   const angle = turn * Math.PI / 2, odd = turn % 2;
   return {
     distant: c.distant, materials: c.materials,
     polygon(points, y, height, color, kind) { c.polygon(points.map(p => point(...p)), y, height, color, kind); },
-    recordPath(points, width) { c.recordPath(points.map(p => point(...p)), width); },
+    groundPoint(x, s) { return inverse(...c.groundPoint(...point(x, s))); },
+    recordPath(points, width, endSection) { c.recordPath(points.map(p => point(...p)), width, endSection?.map(p => point(...p))); },
     recordPlanting(points) { c.recordPlanting(points.map(p => point(...p))); },
     recordReserve(points) { c.recordReserve(points.map(p => point(...p))); },
     polygonSolid(points) { c.polygonSolid(points.map(p => point(...p))); },
@@ -60,12 +64,12 @@ function benchBay(c, points, width, x, s, color) {
 }
 function pondGarden(c, p, random) {
   const { stone, path: paving, flower } = p;
-  path(c, [[31, 43], [44, 29], [66, 27], [85, 40], [91, 61], [78, 81], [58, 87], [38, 77], [27, 61], [31, 43]], 3.3, paving);
+  path(c, curvedPath([[31, 43], [44, 29], [66, 27], [85, 40], [91, 61], [78, 81], [58, 87], [38, 77], [27, 61], [31, 43]], 4), 3.3, paving);
   path(c, [[16, 48], [31, 43]], 3.3, paving);
   path(c, [[58, 87], [56, 96]], 3.3, paving);
-  path(c, [[58, 87], [58, 79.7]], 3.3, paving);
-  pool(c, 58, 54, 41, 32, stone);
-  // A straight timber viewing deck projects over the faceted water.
+  entrancePath(c, [[58, 87], [58, 79.55]], 3.3, paving, [58, 74], [58, 79.55]);
+  pool(c, 58, 54, 41, 32, stone, false, true);
+  // A straight timber viewing deck meets the gently lobed shoreline.
   c.rigid(58, 74, () => {
     c.box(58, G + .65, 72, 17, .4, 10, '#a18b6d'); c.solid(58, 72, 17, 10);
     for (const [s, h] of [[78.9, .28], [77.65, .56]]) c.box(58, G + h / 2, s, 5, h, 1.3, stone);
@@ -80,7 +84,7 @@ function pondGarden(c, p, random) {
 function orchard(c, p, random) {
   path(c, [[16, 55], [96, 55]], 5, p.path);
   path(c, [[58, 16], [58, 96]], 4, p.path);
-  path(c, [[58, 32], [78, 32]], 3, p.path);
+  entrancePath(c, [[58, 32], [68.75, 32]], 3, p.path, [78, 32], [68.75, 32], Math.PI / 2);
   path(c, [[78, 55], [78, 62]], 4, p.path);
   c.surface(78, G + .065, 76.5, 14, .045, 29, p.path);
   grove(c, [[28, 28], [43, 28], [28, 43], [43, 43], [28, 70], [43, 70], [28, 87], [43, 87]], random);
@@ -90,26 +94,29 @@ function orchard(c, p, random) {
   for (const x of [27, 43]) c.prop('bench', x, 60);
 }
 function meadow(c, p, random) {
-  const points = Array.from({ length: 17 }, (_, i) => {
-    const t = i / 16; return [16 + t * 80, 54 + Math.sin(t * Math.PI * 2) * 16];
+  const points = Array.from({ length: 33 }, (_, i) => {
+    const t = i / 32; return [16 + t * 80, 54 + Math.sin(t * Math.PI * 2) * 16];
   });
   path(c, points, 4.5, p.path);
   path(c, [[53, 16], [56, 32], [56, 54]], 3, p.path);
   path(c, [[65, 96], [61, 77], [56, 54]], 3, p.path);
-  path(c, [[56, 32], [67, 27], [79, 27]], 3, p.path);
+  entrancePath(c, [[56, 32], [67, 27], [69.25, 27]], 3, p.path, [79, 27], [69.25, 27], Math.PI / 2);
   // An open lawn is the focal point; dense planting is kept at the edges.
   grove(c, [[23, 26], [35, 23], [25, 38], [85, 72], [89, 86], [74, 88], [24, 83], [36, 89]], random);
   pergola(c, 79, 27, 18, 10);
   benchBay(c, points, 4.5, 37, 66, p.path);
   benchBay(c, points, 4.5, 72, 43, p.path);
   benchBay(c, [[65, 96], [61, 77], [56, 54]], 3, 65.5, 79, p.path);
-  ribbonBed(c, [[23, 69], [28, 73], [34, 76], [41, 77], [48, 74]], 3.2, p.flower, p.stone);
-  ribbonBed(c, offsetPath(points.slice(10, 15), 8), 3.2, p.flower, p.stone);
+  ribbonBed(c, curvedPath([[23, 69], [28, 73], [34, 76], [41, 77], [48, 74]], 2), 3.2, p.flower, p.stone);
+  // The inside of this tight bend has a shorter radius: keep bed panels
+  // broad enough to hold soil and flowers, even as the walk gains detail.
+  ribbonBed(c, offsetPath(points.slice(20, 29).filter((_, i) => i % 2 === 0), 8), 3.2, p.flower, p.stone);
 }
 function terrace(c, p, random) {
   for (const points of [[[56, 16], [56, 43.5]], [[56, 68.5], [56, 96]]]) path(c, points, 8, p.path);
   for (const points of [[[16, 56], [43.5, 56]], [[68.5, 56], [96, 56]]]) path(c, points, 5, p.path);
-  path(c, Array.from({ length: 9 }, (_, i) => [56 + Math.cos(i * Math.PI / 4) * 12.5, 56 + Math.sin(i * Math.PI / 4) * 12.5]), 4, p.path);
+  const loop = ellipsePoints(56, 56, 25, 25);
+  path(c, [...loop, loop[0]], 4, p.path);
   for (const s of [21, 91]) path(c, [[16, s], [96, s]], 4, p.path);
   for (const s of [29, 41, 71, 83]) for (const x of [32, 80]) {
     bed(c, x, s, 21, 7, s === 29 || s === 83 ? p.flower : '#657e58', p.stone);
@@ -121,7 +128,7 @@ function terrace(c, p, random) {
 function fountainCourt(c, p, random) {
   // Treat the paving as ground so it follows the square and cannot cast
   // striped self-shadows onto the nearly coplanar plaza below it.
-  c.polygon(Array.from({ length: 8 }, (_, i) => [54 + Math.cos(i * Math.PI / 4) * 24.5, 52 + Math.sin(i * Math.PI / 4) * 24.5]), G + .065, .045, p.path);
+  c.polygon(ellipsePoints(54, 52, 49, 49), G + .065, .045, p.path);
   pool(c, 54, 52, 27, 27, p.stone, true);
   for (const [x, s, yaw] of [[35, 52, -Math.PI / 2], [73, 52, Math.PI / 2], [54, 33, 0], [54, 71, Math.PI]]) c.prop('bench', x, s, yaw);
   for (const x of [28, 46, 65, 84]) { bed(c, x, 87, 10, 7, p.green, p.stone); c.tree(x, 87, 7 + random()); }
@@ -166,6 +173,7 @@ function mosaic(c, p, random) {
 export function buildPublicSpace(c) {
   const plan = publicSpacePlan(c.plan), p = plan.palette, park = plan.type === 'park';
   c.surface(56, G + .016, 56, 80, .03, 80, park ? p.green : p.stone);
+  if (park) grassArea(c, rectanglePolygon(56, 56, 80, 80), p.green, G + .03);
   // Plan randomness is separate from street furniture and near-only details.
   const random = seededRandom(plan.plantingSeed);
   (park ? [pondGarden, orchard, meadow, terrace] : [fountainCourt, pergolaSquare, forum, mosaic])[plan.variant](orientedSite(c, plan.orientation), p, random);

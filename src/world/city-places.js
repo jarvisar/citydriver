@@ -25,14 +25,16 @@ export const LANDMARK_TYPES = PLACE_TYPES.filter(type => type !== 'park' && type
 export const destinationType = block => block.landmark || (block.kind === 'park' || block.kind === 'plaza' ? block.kind : null);
 const mod = (n, d) => ((n % d) + d) % d;
 
-// One landmark in each three-by-three neighbourhood. Move a river selection
+export const LANDMARK_SPACING = 4;
+
+// One landmark in each four-by-four neighbourhood. Move a river selection
 // to dry land so every neighbourhood has a destination, including negatives.
 export function landmarkForBlock(ix, iz) {
-  const rx = Math.floor(ix / 3), rz = Math.floor(iz / 3);
-  let localX = Math.floor(randomAt(rx, rz + 7200) * 3);
-  let localZ = Math.floor(randomAt(rx, rz + 7201) * 3);
-  if (cityRiverAxes(rx * 3 + localX, rz * 3 + localZ).north) localX = (localX + 1) % 3;
-  if (cityRiverAxes(rx * 3 + localX, rz * 3 + localZ).east) localZ = (localZ + 1) % 3;
-  if (mod(ix, 3) !== localX || mod(iz, 3) !== localZ) return null;
+  const span = LANDMARK_SPACING, rx = Math.floor(ix / span), rz = Math.floor(iz / span);
+  let localX = Math.floor(randomAt(rx, rz + 7200) * span);
+  let localZ = Math.floor(randomAt(rx, rz + 7201) * span);
+  if (cityRiverAxes(rx * span + localX, rz * span + localZ).north) localX = (localX + 1) % span;
+  if (cityRiverAxes(rx * span + localX, rz * span + localZ).east) localZ = (localZ + 1) % span;
+  if (mod(ix, span) !== localX || mod(iz, span) !== localZ) return null;
   return LANDMARK_TYPES[Math.floor(randomAt(rx, rz + 7202) * LANDMARK_TYPES.length)];
 }

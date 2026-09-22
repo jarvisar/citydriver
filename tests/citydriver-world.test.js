@@ -58,7 +58,9 @@ test('streamed blocks are bounded, move in both axes, and retain collision coord
       assert.equal(scene.children.length, 26);
       assert.equal(world.chunks.size + world.distantChunks.size, (2 * DISTANT_CITY_RADIUS + 1) ** 2);
       assert.ok(world.distantGroup.children.length <= 36, 'the distant city is bounded to local two-by-two tiles');
-      assert.ok(world.distantGroup.children.every(tile => tile.children.length <= 14), 'each tile batches by geometry and material');
+      // Separate shared basin rims, canopies and planet sculptures preserve
+      // their silhouettes without per-site meshes; keep the tile budget tight.
+      assert.ok(world.distantGroup.children.every(tile => tile.children.length <= 17), 'each tile batches by geometry and material');
       assert.equal([...world.collisionChunks(s, u)].length, 9);
       const cell = cityCell(s, u);
       assert.ok(world.chunks.has(cell.key));
