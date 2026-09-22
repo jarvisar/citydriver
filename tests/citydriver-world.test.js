@@ -89,8 +89,9 @@ test('streamed blocks are bounded, move in both axes, and retain collision coord
         }
       }
     }
+    const dryRoughness = world.materials.road.roughness;
     world.setWetness(1); assert.ok(world.materials.road.roughness < .3);
-    world.setWetness(0); assert.equal(world.materials.road.roughness, .85);
+    world.setWetness(0); assert.equal(world.materials.road.roughness, dryRoughness);
   } finally { world.dispose(); setResidentWindow(previous); }
   assert.equal(scene.children.length, 0);
   assert.equal(world.chunks.size, 0);

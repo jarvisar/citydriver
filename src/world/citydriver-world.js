@@ -63,17 +63,23 @@ function* renderBatchSteps(group, batches, east = 0, start = 0) {
 
 function resources() {
   const standard = options => new THREE.MeshStandardMaterial({ roughness: .9, flatShading: true, ...options });
+  // Everything used to sit at roughness .9, so masonry, asphalt, painted
+  // steel and foliage all answered the sun in exactly the same way. Spreading
+  // these apart is what separates one material from another. Metalness stays
+  // at zero outside the glass: there is no environment map for metal to
+  // reflect, so it would only darken the surface.
   const result = {
     solid: standard({ color: '#ffffff' }),
-    road: standard({ color: '#666c70', roughness: .85 }),
-    glass: standard({ color: '#ffffff', roughness: .32, metalness: .25 }),
+    road: standard({ color: '#666c70', roughness: .6 }),
+    glass: standard({ color: '#ffffff', roughness: .2, metalness: .25 }),
     lit: new THREE.MeshBasicMaterial({ color: '#ffffff', toneMapped: false }),
     clock: new THREE.MeshBasicMaterial({ color: '#ffffff', vertexColors: true, toneMapped: false }),
     water: createRiverWaterMaterial(),
-    props: standard({ color: '#ffffff', vertexColors: true }),
+    // Lamp posts, signals, benches and bins: painted steel, not stucco.
+    props: standard({ color: '#ffffff', vertexColors: true, roughness: .62 }),
     residents: createWalkerMaterial(),
-    bark: standard({ color: '#625548', vertexColors: true }),
-    leaves: standard({ color: '#ffffff', vertexColors: true }),
+    bark: standard({ color: '#625548', vertexColors: true, roughness: .97 }),
+    leaves: standard({ color: '#ffffff', vertexColors: true, roughness: .8 }),
   };
   result.signs = createSignMaterial();
   for (const [name, [w, h]] of Object.entries(VENUE_SIGNS)) {
@@ -560,7 +566,7 @@ export class CitydriverWorld {
     const wet = Math.max(0, Math.min(1, amount));
     if (wet === this.wetness) return;
     this.wetness = wet;
-    this.materials.road.roughness = .85 - wet * .58;
+    this.materials.road.roughness = .6 - wet * .33;
     this.materials.road.color.copy(dryRoad).lerp(wetRoad, wet);
   }
   animate(time, signalTime = time, camera = null, contacts = null) {
