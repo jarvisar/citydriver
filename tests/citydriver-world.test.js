@@ -54,8 +54,8 @@ test('streamed blocks are bounded, move in both axes, and retain collision coord
     const locations = [[24, 2.4], [-210, -150], [2150, 980], [-4200, -3100]];
     for (const [s, u] of locations) {
       for (let frame = 0; frame < 8; frame++) world.update(s, u);
-      assert.equal(world.chunks.size, 25);
-      assert.equal(scene.children.length, 26);
+      assert.equal(world.chunks.size, 9);
+      assert.equal(scene.children.length, 10);
       assert.equal(world.chunks.size + world.distantChunks.size, (2 * DISTANT_CITY_RADIUS + 1) ** 2);
       assert.ok(world.distantGroup.children.length <= 36, 'the distant city is bounded to local two-by-two tiles');
       // Separate shared basin rims, canopies and planet sculptures preserve
@@ -75,7 +75,7 @@ test('streamed blocks are bounded, move in both axes, and retain collision coord
       assert.equal(world.distantGroup.position.z, world.origin);
       for (const chunk of world.distantChunks.values()) assert.equal(chunk.features.colliders.length, 0);
       for (const chunk of world.chunks.values()) {
-        assert.ok(Math.abs(chunk.ix - cell.ix) <= 2 && Math.abs(chunk.iz - cell.iz) <= 2);
+        assert.ok(Math.abs(chunk.ix - cell.ix) <= 1 && Math.abs(chunk.iz - cell.iz) <= 1);
         assert.equal(chunk.group.position.x, chunk.ix * CITY_BLOCK);
         assert.equal(chunk.group.position.z, world.origin - chunk.iz * CITY_BLOCK);
         for (const collider of chunk.features.colliders) {

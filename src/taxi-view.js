@@ -19,6 +19,7 @@ export class TaxiView {
     this.skidGeometry = new THREE.PlaneGeometry(.22, 1.2); this.skidGeometry.rotateX(-Math.PI / 2);
     this.skidMaterial = new THREE.MeshBasicMaterial({ color: '#202526', transparent: true, opacity: .52, depthWrite: false });
     this.skids = new THREE.InstancedMesh(this.skidGeometry, this.skidMaterial, 160); this.skids.count = 0;
+    this.skids.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.skids.frustumCulled = false; this.skids.userData.ambientOcclusion = false;
     this.group.add(this.skids); this.trails = []; this.trailIndex = 0; this.lastTrail = 0; this.transform = new THREE.Object3D();
   }
@@ -76,17 +77,18 @@ export class TaxiView {
     if (vehicle.drifting && time - this.lastTrail > .065) {
       this.lastTrail = time;
       for (const side of [-1, 1]) {
-        this.trails[this.trailIndex] = { x: vehicle.u - Math.sin(vehicle.heading) * 1.3 + Math.cos(vehicle.heading) * side * .8,
+        const trail = { x: vehicle.u - Math.sin(vehicle.heading) * 1.3 + Math.cos(vehicle.heading) * side * .8,
           z: -vehicle.s + Math.cos(vehicle.heading) * 1.3 + Math.sin(vehicle.heading) * side * .8, heading: vehicle.heading };
+        this.trails[this.trailIndex] = trail;
+        this.transform.position.set(trail.x, ROAD_LEVEL + .08, trail.z);
+        this.transform.rotation.set(0, -trail.heading, 0); this.transform.updateMatrix();
+        this.skids.setMatrixAt(this.trailIndex, this.transform.matrix);
+        this.skids.instanceMatrix.addUpdateRange(this.trailIndex * 16, 16);
         this.trailIndex = (this.trailIndex + 1) % 160;
       }
+      this.skids.instanceMatrix.needsUpdate = true;
     }
     this.skids.count = this.trails.length;
-    for (let i = 0; i < this.trails.length; i++) {
-      const trail = this.trails[i]; this.transform.position.set(trail.x, ROAD_LEVEL + .08, trail.z);
-      this.transform.rotation.set(0, -trail.heading, 0); this.transform.updateMatrix(); this.skids.setMatrixAt(i, this.transform.matrix);
-    }
-    this.skids.instanceMatrix.needsUpdate = true;
   }
   hud(run, vehicle) {
     $('taxi-hud').hidden = !run.running; $('taxi-nav').hidden = !run.running; $('taxi-task').hidden = !run.running;

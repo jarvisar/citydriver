@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { compactGeometry } from './compact-geometry.js';
 
 // Reusable closed solids replace stacks of overlapping boxes at sloped ends.
 // All roof pieces keep the building's rigid frame at both detail levels.
@@ -6,6 +7,7 @@ const triangle = new THREE.Shape();
 triangle.moveTo(-.5, 0); triangle.lineTo(.5, 0); triangle.lineTo(.5, 1); triangle.closePath();
 export const roofWedge = new THREE.ExtrudeGeometry(triangle, { depth: 1, steps: 1, bevelEnabled: false });
 roofWedge.translate(0, 0, -.5);
+compactGeometry(roofWedge);
 const vaultProfile = new THREE.Shape();
 for (let i = 0; i <= 12; i++) {
   const a = i / 12 * Math.PI;
@@ -15,6 +17,7 @@ for (let i = 12; i >= 0; i--) { const a = i / 12 * Math.PI; vaultProfile.lineTo(
 vaultProfile.closePath();
 export const vaultGeometry = new THREE.ExtrudeGeometry(vaultProfile, { depth: 1, steps: 1, bevelEnabled: false });
 vaultGeometry.translate(0, 0, -.5);
+compactGeometry(vaultGeometry);
 export const mansardGeometry = new THREE.BoxGeometry(1, 1, 1);
 const vertices = mansardGeometry.attributes.position;
 for (let i = 0; i < vertices.count; i++) {

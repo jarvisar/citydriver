@@ -358,6 +358,7 @@ export class CitydriverWorld {
     this.distantGroup.matrixAutoUpdate = false;
     this.distantCity = new DistantCity(this.distantGroup);
     this.prefetched = new Map(); this.prefetchPending = []; this.prefetchTarget = null;
+    this.prefetchedDetails = new Map(); this.prefetchDetailPending = [];
     this.animationFrustum = new THREE.Frustum(); this.animationMatrix = new THREE.Matrix4(); this.animationSphere = new THREE.Sphere();
   }
   update(s, u = 2.4, { budgetMs = Infinity } = {}) {
@@ -366,7 +367,7 @@ export class CitydriverWorld {
     this.s = s; this.u = u; this.origin = Math.floor(s / 1024) * 1024;
     this.materials.water.userData.origin.value = this.origin;
     const cell = cityCell(s, u), window = residentWindow();
-    const radius = window.ahead >= 5 ? 3 : 2;
+    const radius = window.ahead >= 5 ? 3 : window.ahead >= 4 ? 2 : 1;
     let placementChanged = oldOrigin !== this.origin;
     if (this.center !== cell.key || this.radius !== radius) {
       this.center = cell.key; this.radius = radius;
@@ -399,7 +400,9 @@ export class CitydriverWorld {
     let built = 0;
     while (this.pending.length) {
       if (this.pending[0].distance > 1 && built > 0 && performance.now() >= deadline) break;
-      const next = this.pending.shift(), chunk = new CitydriverChunk(next.ix, next.iz, this.materials);
+      const next = this.pending.shift(), key = `${next.ix},${next.iz}`;
+      const chunk = this.prefetchedDetails.get(key) ?? new CitydriverChunk(next.ix, next.iz, this.materials);
+      this.prefetchedDetails.delete(key);
       this.chunks.set(chunk.index, chunk); this.scene.add(chunk.group);
       const distant = this.distantChunks.get(chunk.index);
       if (distant) { this.distantCity.delete(distant); this.distantChunks.delete(chunk.index); }
@@ -416,14 +419,30 @@ export class CitydriverWorld {
   }
   prefetchDistant(cell, ds, du, deadline) {
     // Prepare the next skyline strip while approaching an edge, one block per
-    // spare frame. This cache owns no GPU objects and is limited to one future
-    // neighbourhood (at most 21 blocks, even on a diagonal).
+    // spare frame. The skyline cache owns no GPU objects and is limited to one
+    // future neighbourhood (at most 21 blocks, even on a diagonal). The separate
+    // detail cache holds at most five blocks for the next collision neighborhood.
     const p = cityLogical(this.s, this.u), x = p.u - cell.ix * CITY_BLOCK, z = p.s - cell.iz * CITY_BLOCK;
     const dx = du < 0 && x < 48 ? -1 : du > 0 && x > CITY_BLOCK - 48 ? 1 : 0;
     const dz = ds < 0 && z < 48 ? -1 : ds > 0 && z > CITY_BLOCK - 48 ? 1 : 0;
-    const key = `${cell.ix + dx},${cell.iz + dz}`;
+    const key = `${cell.ix + dx},${cell.iz + dz}/${this.radius}`;
     if (key !== this.prefetchTarget) {
-      this.prefetchTarget = key; this.prefetchPending = [];
+      this.prefetchTarget = key; this.prefetchPending = []; this.prefetchDetailPending = [];
+      // Basic's next collision neighborhood needs at most five new blocks.
+      // Prepare them before the boundary instead of building a whole strip
+      // synchronously during a turn. They own buffers, so retire unused entries.
+      const detailWanted = new Set();
+      if (dx || dz) for (let ix = cell.ix + dx - 1; ix <= cell.ix + dx + 1; ix++) {
+        for (let iz = cell.iz + dz - 1; iz <= cell.iz + dz + 1; iz++) {
+          const index = `${ix},${iz}`;
+          if (this.chunks.has(index)) continue;
+          detailWanted.add(index);
+          if (!this.prefetchedDetails.has(index)) this.prefetchDetailPending.push({ ix, iz, index });
+        }
+      }
+      for (const [index, chunk] of this.prefetchedDetails) if (!detailWanted.has(index)) {
+        chunk.dispose(); this.prefetchedDetails.delete(index);
+      }
       const wanted = new Set();
       if (dx || dz) for (let ix = cell.ix + dx - DISTANT_CITY_RADIUS; ix <= cell.ix + dx + DISTANT_CITY_RADIUS; ix++) {
         for (let iz = cell.iz + dz - DISTANT_CITY_RADIUS; iz <= cell.iz + dz + DISTANT_CITY_RADIUS; iz++) {
@@ -433,6 +452,11 @@ export class CitydriverWorld {
         }
       }
       for (const index of this.prefetched.keys()) if (!wanted.has(index)) this.prefetched.delete(index);
+    }
+    if (this.prefetchDetailPending.length && performance.now() < deadline) {
+      const next = this.prefetchDetailPending.shift();
+      if (!this.chunks.has(next.index)) this.prefetchedDetails.set(next.index, new CitydriverChunk(next.ix, next.iz, this.materials));
+      return;
     }
     if (this.prefetchPending.length && performance.now() < deadline) {
       const next = this.prefetchPending.shift(), chunk = new CitydriverChunk(next.ix, next.iz, this.materials, true);
@@ -478,6 +502,8 @@ export class CitydriverWorld {
     for (const chunk of this.chunks.values()) chunk.dispose(); this.chunks.clear(); this.pending = [];
     this.distantCity.dispose(); this.distantGroup.removeFromParent(); this.distantChunks.clear();
     this.prefetched.clear(); this.prefetchPending = [];
+    for (const chunk of this.prefetchedDetails.values()) chunk.dispose();
+    this.prefetchedDetails.clear(); this.prefetchDetailPending = [];
     for (const material of Object.values(this.materials)) { material.map?.dispose(); material.dispose(); }
   }
 }

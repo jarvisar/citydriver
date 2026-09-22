@@ -55,14 +55,19 @@ export class CityTraffic {
       Object.assign(car, pose, { axis, direction, lane });
       car.stopKey = null; car.stopWait = 0; car.stopReleased = false;
       car.cruiseSpeed = street.speed * (.75 + r(4) * .25); car.speed = car.cruiseSpeed;
-      this.pose(car); car.previousPosition.copy(car.position); car.previousQuaternion.copy(car.quaternion);
+      this.pose(car, along); car.previousPosition.copy(car.position); car.previousQuaternion.copy(car.quaternion);
       return true;
     }
     // A crowded area can wait until the next update; never force an overlap.
     return false;
   }
-  pose(car) {
-    const address = cityLogical(car.s, car.u), along = car.axis === 'north' ? address.s : address.u;
+  pose(car, along = null) {
+    // Callers moving along a known lane already have the logical coordinate.
+    // Keep inverse mapping only for external repositioning/debug tools.
+    if (along === null) {
+      const address = cityLogical(car.s, car.u);
+      along = car.axis === 'north' ? address.s : address.u;
+    }
     Object.assign(car, cityLanePose(car.axis, car.lane, along, car.direction));
     car.logicalS = car.axis === 'north' ? along : car.lane;
     car.logicalU = car.axis === 'north' ? car.lane : along;
@@ -102,8 +107,7 @@ export class CityTraffic {
     for (const car of this.vehicles) {
       car.speed += clamp(car.targetSpeed - car.speed, -16 * dt, 3 * dt);
       const along = (car.axis === 'north' ? car.logicalS : car.logicalU) + car.direction * car.speed * dt / car.stretch;
-      Object.assign(car, cityLanePose(car.axis, car.lane, along, car.direction));
-      this.pose(car);
+      this.pose(car, along);
       const p = player.groundedPosition;
       if (Math.abs(car.position.x - p.x) > 7 || Math.abs(car.position.z - p.z) > 7) continue;
       const v = player.velocity;

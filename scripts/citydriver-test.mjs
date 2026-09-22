@@ -102,7 +102,9 @@ try {
       const pilot = new CityAutodrive({ random: () => .9 });
       v.knock.x = v.knock.z = v.knock.spin = 0; v.update(0, {}); a.world.update(v.s, v.u);
       guide.exploration.target = place;
-      for (let tick = 0; tick < 300; tick++) {
+      // A five-second drive can end while the pilot is waiting at a red light.
+      // Allow a full signal cycle, but stop as soon as the stamp is collected.
+      for (let tick = 0; tick < 1800 && !guide.exploration.found.has(type); tick++) {
         v.update(1 / 60, pilot.update(v, { enabled: false })); collideScenery(v, a.world.chunks, 1 / 60); a.world.update(v.s, v.u);
         guide.update(true);
       }

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { vehicleGeometry, TRAFFIC_MODELS } from '../traffic-models.js';
+import { compactGeometry } from './compact-geometry.js';
 
 // Small merged, flat-shaded street furniture with its colours baked into
 // vertex colours, so one instanced mesh per kind draws a whole chunk's worth.
@@ -42,7 +43,7 @@ export class Parts {
   finish({ preserveNormals = false } = {}) {
     const g = mergeGeometries(this.parts); this.parts.forEach(part => part.dispose());
     if (!preserveNormals) g.computeVertexNormals();
-    g.computeBoundingSphere(); return g;
+    compactGeometry(g); g.computeBoundingSphere(); return g;
   }
 }
 

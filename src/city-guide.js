@@ -1,5 +1,5 @@
-import { CITY_BLOCK, cityBlock, cityStreetProfile, cityMedianRange, cityCell } from './world/city-grid.js';
-import { cityRoutePoints } from './world/city-layout.js';
+import { cityCell } from './world/city-grid.js';
+import { CityMapCache } from './city-map.js';
 import { CITY_PLACES, PLACE_TYPES } from './world/city-places.js';
 import { CityExploration, placeRoute, routeDistance } from './city-exploration.js';
 import { taxiRoute } from './taxi-run.js';
@@ -10,6 +10,7 @@ export class CityGuide {
   constructor(notify, position) {
     let storage; try { storage = localStorage; } catch { /* Optional storage. */ }
     this.exploration = new CityExploration(storage); this.notify = notify; this.position = position;
+    this.mapCache = new CityMapCache();
     this.canvas = $('city-map'); this.ctx = this.canvas.getContext('2d'); this.expanded = true;
     this.canvas.addEventListener('click', event => {
       if (this.taxi?.status !== 'pickup') return;
@@ -80,45 +81,14 @@ export class CityGuide {
   draw(vehicle, route, places = this.exploration.places, target = this.exploration.target) {
     const ctx = this.ctx, width = 208, height = 144, scale = MAP_SCALE;
     const ratio = Math.min(window.devicePixelRatio || 1, 2);
-    if (this.canvas.width !== width * ratio || this.canvas.height !== height * ratio) { this.canvas.width = width * ratio; this.canvas.height = height * ratio; }
+    const pixelWidth = Math.floor(width * ratio), pixelHeight = Math.floor(height * ratio);
+    if (this.canvas.width !== pixelWidth || this.canvas.height !== pixelHeight) { this.canvas.width = pixelWidth; this.canvas.height = pixelHeight; }
     ctx.setTransform(ratio, 0, 0, ratio, 0, 0); ctx.clearRect(0, 0, width, height);
     ctx.fillStyle = '#20383e'; ctx.fillRect(0, 0, width, height);
     const point = p => [width / 2 + (p.u - vehicle.u) * scale, height / 2 - (p.s - vehicle.s) * scale];
     const { ix, iz } = cityCell(vehicle.s, vehicle.u);
-    const polygon = (x0, z0, x1, z1) => {
-      const points = cityRoutePoints([{ u: x0, s: z0 }, { u: x1, s: z0 }, { u: x1, s: z1 }, { u: x0, s: z1 }, { u: x0, s: z0 }], 14);
-      ctx.beginPath(); points.forEach((p, i) => { const [x, y] = point(p); if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y); });
-      ctx.closePath(); ctx.fill();
-    };
-    for (let x = ix - 4; x <= ix + 4; x++) for (let z = iz - 3; z <= iz + 3; z++) {
-      const west = cityStreetProfile('north', x), east = cityStreetProfile('north', x + 1), south = cityStreetProfile('east', z), north = cityStreetProfile('east', z + 1);
-      const b = cityBlock(x, z), u = x * CITY_BLOCK, s = z * CITY_BLOCK;
-      ctx.fillStyle = b.kind === 'park' || b.landmark === 'garden' ? '#4e705d' : b.landmark ? '#697369' : '#3a5155';
-      polygon(u + west.halfWidth, s + south.halfWidth, u + CITY_BLOCK - east.halfWidth, s + CITY_BLOCK - north.halfWidth);
-      if (b.kind === 'river') {
-        ctx.fillStyle = '#477e8b';
-        if (b.rivers.north) polygon(u + 28, s, u + 84, s + CITY_BLOCK);
-        if (b.rivers.east) polygon(u, s + 28, u + CITY_BLOCK, s + 84);
-        ctx.fillStyle = '#718e8d';
-        if (b.rivers.north) {
-          polygon(u + 27, s - south.halfWidth, u + 85, s + south.halfWidth);
-          polygon(u + 27, s + CITY_BLOCK - north.halfWidth, u + 85, s + CITY_BLOCK + north.halfWidth);
-        }
-        if (b.rivers.east) {
-          polygon(u - west.halfWidth, s + 27, u + west.halfWidth, s + 85);
-          polygon(u + CITY_BLOCK - east.halfWidth, s + 27, u + CITY_BLOCK + east.halfWidth, s + 85);
-        }
-      }
-      ctx.fillStyle = '#7c9667';
-      if (west.median && !b.rivers.east) {
-        const [start, end] = cityMedianRange('north', z);
-        polygon(u - west.median, s + start, u + west.median, s + end);
-      }
-      if (south.median && !b.rivers.north) {
-        const [start, end] = cityMedianRange('east', x);
-        polygon(u + start, s - south.median, u + end, s + south.median);
-      }
-    }
+    this.mapCache.update(ix, iz);
+    this.mapCache.draw(ctx, vehicle, scale, width, height);
     ctx.lineJoin = 'round'; ctx.lineCap = 'round'; ctx.lineWidth = 2; ctx.strokeStyle = '#efca8b';
     ctx.beginPath(); route.forEach((p, i) => { const [x, y] = point(p); if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y); }); ctx.stroke();
     for (const place of places) {

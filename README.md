@@ -79,6 +79,8 @@ Browser checks require a dev server. Set `TEST_URL` for a different URL and `CHR
 
 `npm run benchmark` captures repeatable rendering and streaming measurements at desktop and phone sizes. See [performance design, research, and measurements](docs/performance.md) for the methodology and device-testing limits.
 
+`npm run benchmark:cpu` profiles minimap updates, resident animation, traffic, and visible mesh workloads. The [mobile performance follow-up](docs/performance-overhaul.md) describes Basic's shorter detail range, prefetching, geometry compaction, and the latest regression checks.
+
 [Desktop setup](ELECTRON.md) · [Offline installation](PWA.md)
 
 ## GitHub Pages

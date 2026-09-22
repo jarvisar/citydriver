@@ -16,6 +16,39 @@ try {
   await page.goto(`${url}/?seed=4817`, { waitUntil: 'networkidle' });
   await page.waitForFunction(() => window.__citydriver && document.querySelector('#loading.loaded'), null, { timeout: 90000 });
   assert.ok(!requests.some(url => url.includes('ambient-occlusion-pass')), 'optional shading is not requested at startup');
+  const minimap = await page.evaluate(async () => {
+    const { CityMapCache, buildMapBlock } = await import('/src/city-map.js');
+    const { cityCell } = await import('/src/world/city-grid.js');
+    const cache = new CityMapCache(), results = [];
+    for (const vehicle of [{ s: 24, u: 3 }, { s: -2100, u: -1400 }, { s: 4200, u: 980 }]) {
+      const { ix, iz } = cityCell(vehicle.s, vehicle.u);
+      for (const ratio of [1, 1.1, 2]) {
+        const canvases = [document.createElement('canvas'), document.createElement('canvas')];
+        for (const canvas of canvases) { canvas.width = Math.floor(208 * ratio); canvas.height = Math.floor(144 * ratio); }
+        const [cached, direct] = canvases.map(canvas => canvas.getContext('2d', { willReadFrequently: true }));
+        for (const ctx of [cached, direct]) {
+          ctx.setTransform(ratio, 0, 0, ratio, 0, 0); ctx.fillStyle = '#20383e'; ctx.fillRect(0, 0, 208, 144);
+        }
+        cache.update(ix, iz); cache.draw(cached, vehicle, .36, 208, 144);
+        // Replay the original pixel-space polygon algorithm as an independent
+        // reference for cached Path2D transforms, curves and painter ordering.
+        for (let x = ix - 4; x <= ix + 4; x++) for (let z = iz - 3; z <= iz + 3; z++) {
+          for (const shape of buildMapBlock(x, z).shapes) {
+            direct.fillStyle = shape.color; direct.beginPath();
+            shape.points.forEach((p, i) => direct[i ? 'lineTo' : 'moveTo'](104 + (p.u - vehicle.u) * .36, 72 - (p.s - vehicle.s) * .36));
+            direct.closePath(); direct.fill();
+          }
+        }
+        const [a, b] = [cached, direct].map(ctx => ctx.getImageData(0, 0, ctx.canvas.width, ctx.canvas.height).data);
+        let difference = 0;
+        for (let i = 0; i < a.length; i++) difference += Math.abs(a[i] - b[i]);
+        results.push({ ...vehicle, ratio, meanChannelDifference: difference / a.length, blocks: cache.blocks.size });
+      }
+    }
+    return results;
+  });
+  assert.ok(minimap.every(result => result.meanChannelDifference < .15 && result.blocks === 63), 'cached minimap matches direct rendering');
+  report.push({ minimap });
   const shading = await page.evaluate(async () => {
     const a = window.__citydriver, r = a.rendering.renderer, ao = a.rendering.ambientOcclusion;
     a.beginFree(); a.action('pause'); r.setAnimationLoop(null);
@@ -87,5 +120,5 @@ try {
   assert.deepEqual(override, [844 * 3, 390 * 3], 'explicit native resolution is preserved');
   assert.deepEqual(errors, []);
   await writeFile('.artifacts/performance/regressions/report.json', JSON.stringify(report, null, 2));
-  console.log('Performance regressions passed: lazy AO, GPU cleanup, all six cameras, staged coverage, origin rebasing, portrait/landscape, and native-density override.');
+  console.log('Performance regressions passed: cached minimap equivalence, lazy AO, GPU cleanup, all six cameras, staged coverage, origin rebasing, portrait/landscape, and native-density override.');
 } finally { await browser.close(); }

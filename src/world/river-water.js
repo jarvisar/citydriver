@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { RIVER_PERIOD, RIVER_COLUMN, CROSS_RIVER_PERIOD, CROSS_RIVER_ROW } from './city-waterways.js';
+import { compactGeometry } from './compact-geometry.js';
 
 // Subdivide the shared surface triangle, retaining identical edge vertices on
 // adjacent instances. Shading follows the current rather than triangle edges.
@@ -22,6 +23,7 @@ for (let x = 0; x < segments; x++) for (let z = 0; z < segments - x; z++) {
 export const riverWaterGeometry = new THREE.BufferGeometry();
 riverWaterGeometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
 riverWaterGeometry.computeVertexNormals();
+compactGeometry(riverWaterGeometry);
 
 // Address-space coordinates follow the river bends and survive origin shifts.
 // Each batch owns its small attribute buffer, including merged distant tiles.

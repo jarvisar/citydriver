@@ -25,10 +25,11 @@ function coverage(world, s, u) {
 test('budgeted streaming preserves continuous coverage and collisions through teleports, turns and quality changes', () => {
   const previous = residentWindow(), world = new CitydriverWorld(new THREE.Scene());
   try {
-    for (const [s, u, ahead] of [[24, 3, 3], [145, 3, 5], [-4200, -3100, 3], [2130, 980, 5]]) {
+    for (const [s, u, ahead] of [[24, 3, 3], [145, 3, 5], [-4200, -3100, 4], [2130, 980, 5], [2130, 980, 3]]) {
       setResidentWindow({ ahead, behind: 1 });
       world.update(s, u, { budgetMs: 0 }); coverage(world, s, u);
-      assert.ok(world.pending.length, 'optional detail is deferred');
+      if (ahead > 3) assert.ok(world.pending.length, 'optional detail is deferred');
+      else assert.equal(world.pending.length, 0, 'Basic needs only the complete collision neighborhood');
       let frames = 0;
       while (world.pending.length) {
         const pending = world.pending.length;
@@ -36,7 +37,7 @@ test('budgeted streaming preserves continuous coverage and collisions through te
         assert.ok(world.pending.length < pending, 'even a zero budget makes progress');
         assert.ok(++frames < 50);
       }
-      assert.equal(world.chunks.size, ahead === 5 ? 49 : 25);
+      assert.equal(world.chunks.size, ahead === 5 ? 49 : ahead >= 4 ? 25 : 9);
       world.scene.updateMatrixWorld();
       for (const chunk of world.chunks.values()) {
         assert.equal(chunk.group.matrixWorld.elements[12], chunk.east);

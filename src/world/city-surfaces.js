@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { cityLayout } from './city-layout.js';
 import { riverWaterGeometry } from './river-water.js';
+import { compactGeometry } from './compact-geometry.js';
 
 // One shared triangular prism. Ground pieces share their actual corner
 // positions instead of overlapping independently rotated tangent boxes.
@@ -10,6 +11,7 @@ indexed.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
 indexed.setIndex([3, 4, 5, 2, 1, 0, 0, 1, 4, 0, 4, 3, 1, 2, 5, 1, 5, 4, 2, 0, 3, 2, 3, 5]);
 export const surfaceGeometry = indexed.toNonIndexed();
 surfaceGeometry.computeVertexNormals(); indexed.dispose();
+compactGeometry(surfaceGeometry);
 export const surfaceTopGeometry = new THREE.BufferGeometry();
 surfaceTopGeometry.setAttribute('position', new THREE.Float32BufferAttribute([0, .5, 0, 1, .5, 0, 0, .5, -1], 3));
 surfaceTopGeometry.computeVertexNormals();

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { compactGeometry } from './compact-geometry.js';
 
 // Spend vertices on broad silhouettes, not tiny props. These templates are
 // shared by every site and detail level; none are rebuilt during streaming.
@@ -40,7 +41,7 @@ function basinGeometry(outline) {
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
   geometry.computeVertexNormals();
-  return geometry;
+  return compactGeometry(geometry);
 }
 function waterGeometry(outline) {
   const vertices = [];
@@ -51,7 +52,7 @@ function waterGeometry(outline) {
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
   geometry.computeVertexNormals();
-  return geometry;
+  return compactGeometry(geometry);
 }
 export const basinRim = basinGeometry(circle);
 export const pondRim = basinGeometry(pondOutline);

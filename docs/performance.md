@@ -1,6 +1,6 @@
 # Rendering and streaming performance
 
-This overhaul targets GPU work, city-boundary stalls, memory churn, and startup cost while preserving the generated city, driving physics, collision shapes, traffic rules, weather, and camera coverage. The city still has a complete 11 × 11 block footprint and either 25 or 49 furnished blocks after streaming settles.
+The city has a complete 11 × 11 block footprint. High keeps 49 furnished blocks, Balanced/Smooth keep 25, and Basic keeps the immediate 9-block collision neighborhood. The [mobile performance follow-up](performance-overhaul.md) documents the latest changes, measurements, and checks. The sections below record the earlier rendering and streaming overhaul.
 
 ## Research and priorities
 
@@ -29,7 +29,7 @@ The original app already used instancing, fixed-step physics, adaptive quality, 
    An explicit density-slider choice overrides these preset caps and remains remembered. The UI distinguishes a preset limit from a native-resolution override. XR continues using its own framebuffer.
 5. **Optional shading loads on demand.** The default path neither imports the AO implementation nor allocates its render targets. Enabling it keeps ordinary rendering active during loading, then redraws even if paused. Disabling it releases its GPU resources. Import completion respects current camera, quality, disabled state, and disposal. The PWA precaches the optional chunk so it remains available offline.
 
-## Measurements
+## Measurements from the earlier streaming overhaul
 
 Use `npm run benchmark` against a running dev server. The harness uses seed 4817, a fixed position and weather, close overhead and third-person views, a 1280 × 800 High desktop profile, and a 390 × 844 Basic phone profile at DPR 3. Each view records 30 measured frames after warmup. It also measures six complete strip loads and a continuous 776 m drive with the live streaming budget. Raw reports and screenshots go to `.artifacts/performance/<PERF_LABEL>/`.
 
@@ -59,7 +59,7 @@ The captured fixed desktop screenshot is byte-for-byte identical before and afte
 
 These tests use **Chromium SwiftShader**, not a physical phone GPU. Triangle counts and buffer sizes are deterministic workload measures. Frame timings are useful for comparing these two builds on the same machine; they do not predict a phone's FPS, battery life, or thermal behavior. Small timing differences are also affected by JIT compilation and garbage collection.
 
-## Verification
+## Verification of the earlier streaming overhaul
 
 `npm test` passes all **202 tests**, including nine new performance regressions for uninterrupted coverage during staged loads, immediate nearby collisions, positive/negative coordinates, rebasing, quality changes at rest, immutable tile reuse, instance disposal, matrix/color preservation, bounded prefetch, resident catch-up, collision equivalence, resolution budgets, and asynchronous AO lifetime.
 
