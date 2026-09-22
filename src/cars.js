@@ -134,6 +134,9 @@ export function carStats(id) {
   const { topSpeed, acceleration, braking, grip, offRoad } = carEntry(id).stats;
   return {
     topSpeed, acceleration, braking, grip, offRoad,
+    // Full-lock radius in metres at city-corner speeds. Keep the heavy cars
+    // less nimble, but give every car enough lock for a small intersection.
+    turnRadius: 3.8 / Math.sqrt(grip),
     reverseSpeed: topSpeed * .25,
     launch: acceleration * 1.68,   // Pulling out of a reverse roll.
     creep: braking * .325,         // Brake pedal used as reverse throttle.

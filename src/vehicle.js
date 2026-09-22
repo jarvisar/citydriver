@@ -390,7 +390,16 @@ export class DrivingController {
     if (input.handbrake && oldSpeed * this.speed < 0) this.speed = 0;
     const frame = roadFrame(this.s);
     const assist = this.route.laneAssist !== false && (!this.freeDriving || looseness === 0);
-    if (!touch) this.heading += this.steer * this.speed / 3.3 * (.52 * grip / (1 + Math.abs(this.speed) * .105)) * (drifting ? 1.7 : 1) * dt;
+    if (!touch) {
+      // Hold a tight turning circle up to 6 m/s (13 mph), then smoothly
+      // ease into the gentler highway steering by 20 m/s (45 mph).
+      // Slowing down now gives every car enough lock to turn onto side roads.
+      const highwayBlend = THREE.MathUtils.smoothstep(Math.abs(this.speed), 6, 20);
+      const cityCurvature = (1 - .25 * looseness) / stats.turnRadius;
+      const highwayCurvature = .55 * grip / (3.3 * (1 + Math.abs(this.speed) * .105));
+      const curvature = THREE.MathUtils.lerp(cityCurvature, highwayCurvature, highwayBlend);
+      this.heading += this.steer * this.speed * curvature * (drifting ? 1.7 : 1) * dt;
+    }
     let difference = Math.atan2(Math.sin(this.heading - frame.angle), Math.cos(this.heading - frame.angle));
     // Free driving keeps the chosen heading off-road; normal driving assists bends.
     if (!touch && assist && Math.abs(this.steer) < .08 && Math.abs(this.speed) > .2 && Math.abs(difference) < 1.15) {

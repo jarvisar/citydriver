@@ -7,6 +7,7 @@ import { trafficContact } from './traffic.js';
 import { collisionImpulse, contactPoint } from './impact.js';
 import { junctionSpeed } from './city-junctions.js';
 const up = new THREE.Vector3(0, 1, 0);
+const SPAWN_CLEARANCE = 170, RECYCLE_BEHIND = 190, LOCAL_RADIUS = 380;
 
 // A bounded fleet on both street axes. Vehicles obey a shared intersection
 // cycle, yield to the player, and recycle beyond the local view in any direction.
@@ -24,6 +25,7 @@ export class CityTraffic {
   }
   reset(route, s, journey = 'city', u = 2.4) {
     this.route = route; this.journey = journey; this.time = 0; this.lastS = s; this.lastU = u;
+    this.travelS = 0; this.travelU = 0; this.lookAhead = 0;
     this.junctionReservations = new Map();
     for (const car of this.vehicles) this.spawn(car, s, u, true);
   }
@@ -33,28 +35,31 @@ export class CityTraffic {
   }
   spawn(car, s, u, initial = false) {
     car.generation++;
-    car.axis = car.index % 2 ? 'east' : 'north';
-    car.direction = Math.floor(car.index / 2) % 2 ? -1 : 1;
+    const axis = car.index % 2 ? 'east' : 'north';
+    const direction = Math.floor(car.index / 2) % 2 ? -1 : 1;
     const r = salt => randomAt(car.index + car.generation * 97, 8100 + salt);
-    const address = cityLogical(s, u);
-    const lateral = Math.round((car.axis === 'north' ? address.u : address.s) / CITY_BLOCK) + Math.floor(r(1) * 5) - 2;
-    const street = cityStreetProfile(car.axis, lateral);
-    car.lane = lateral * CITY_BLOCK + (car.axis === 'north' ? 1 : -1) * street.lane * car.direction;
-    car.stopKey = null; car.stopWait = 0; car.stopReleased = false;
-    const center = car.axis === 'north' ? address.s : address.u;
-    // Place each new car into an empty stretch. A lane can already contain a
-    // queue at a red light when it is recycled, so spacing only from the player
-    // would allow two traffic models to appear inside one another.
-    let along = center + (initial ? (r(2) - .5) * 520 : (r(2) < .5 ? -1 : 1) * (260 + r(3) * 90));
+    // Populate where the player will be in a few seconds, favoring the nearest
+    // street while retaining traffic on neighboring and crossing streets.
+    const address = cityLogical(s + this.travelS * this.lookAhead, u + this.travelU * this.lookAhead);
     for (let attempt = 0; attempt < 80; attempt++) {
-      Object.assign(car, cityLanePose(car.axis, car.lane, along, car.direction));
-      const occupied = Math.hypot(car.s - s, car.u - u) < 25 || this.vehicles.some(other =>
-        other !== car && Math.hypot(car.s - other.s, car.u - other.u) < 13);
-      if (!occupied) break;
-      along = center + (initial ? (r(10 + attempt) - .5) * 520 : (attempt % 2 ? -1 : 1) * (260 + (attempt * 17 % 91)));
+      const choice = r(10 + attempt * 2);
+      const lateral = Math.round((axis === 'north' ? address.u : address.s) / CITY_BLOCK) + (choice < .65 ? 0 : choice < .825 ? -1 : 1);
+      const street = cityStreetProfile(axis, lateral);
+      const lane = lateral * CITY_BLOCK + (axis === 'north' ? 1 : -1) * street.lane * direction;
+      const along = (axis === 'north' ? address.s : address.u) + (r(11 + attempt * 2) - .5) * 520;
+      const pose = cityLanePose(axis, lane, along, direction);
+      const ds = pose.s - s, du = pose.u - u, distance = Math.hypot(ds, du);
+      if (distance < (initial ? 25 : SPAWN_CLEARANCE) || distance > LOCAL_RADIUS) continue;
+      if (!initial && this.lookAhead && ds * this.travelS + du * this.travelU < 90) continue;
+      if (this.vehicles.some(other => other !== car && Math.hypot(pose.s - other.s, pose.u - other.u) < 13)) continue;
+      Object.assign(car, pose, { axis, direction, lane });
+      car.stopKey = null; car.stopWait = 0; car.stopReleased = false;
+      car.cruiseSpeed = street.speed * (.75 + r(4) * .25); car.speed = car.cruiseSpeed;
+      this.pose(car); car.previousPosition.copy(car.position); car.previousQuaternion.copy(car.quaternion);
+      return true;
     }
-    car.cruiseSpeed = street.speed * (.75 + r(4) * .25); car.speed = car.cruiseSpeed;
-    this.pose(car); car.previousPosition.copy(car.position); car.previousQuaternion.copy(car.quaternion);
+    // A crowded area can wait until the next update; never force an overlap.
+    return false;
   }
   pose(car) {
     const address = cityLogical(car.s, car.u), along = car.axis === 'north' ? address.s : address.u;
@@ -68,9 +73,17 @@ export class CityTraffic {
   update(dt, player) {
     if (!this.enabled) return;
     if (Math.hypot(player.s - this.lastS, player.u - this.lastU) > 130) this.reset(this.route, player.s, 'city', player.u);
+    const ds = player.s - this.lastS, du = player.u - this.lastU, moved = Math.hypot(ds, du);
+    const speed = dt > 0 ? moved / dt : 0;
+    this.travelS = speed > 2 ? ds / moved : 0;
+    this.travelU = speed > 2 ? du / moved : 0;
+    this.lookAhead = Math.min(180, speed > 2 ? speed * 3.5 : 0);
     this.lastS = player.s; this.lastU = player.u; this.time += dt;
     for (const car of this.vehicles) {
-      if (Math.hypot(car.s - player.s, car.u - player.u) > 430) this.spawn(car, player.s, player.u);
+      const ds = car.s - player.s, du = car.u - player.u;
+      const behind = ds * this.travelS + du * this.travelU < -RECYCLE_BEHIND;
+      const beside = Math.abs(du * this.travelS - ds * this.travelU) > 260;
+      if (Math.hypot(ds, du) > LOCAL_RADIUS || behind || beside) this.spawn(car, player.s, player.u);
       car.previousPosition.copy(car.position); car.previousQuaternion.copy(car.quaternion);
       let target = car.cruiseSpeed;
       const along = car.axis === 'north' ? car.logicalS : car.logicalU;
