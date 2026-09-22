@@ -1,7 +1,7 @@
 import { cityCell } from './world/city-grid.js';
 import { CityMapCache } from './city-map.js';
 import { CITY_PLACES, PLACE_TYPES } from './world/city-places.js';
-import { CityExploration, placeRoute, routeDistance } from './city-exploration.js';
+import { CityExploration } from './city-exploration.js';
 import { taxiRoute } from './taxi-run.js';
 
 const $ = id => document.getElementById(id);
@@ -25,8 +25,7 @@ export class CityGuide {
       }
       if (closest && this.taxi.select(closest.id)) this.updateTaxi();
     });
-    $('city-notebook').innerHTML = PLACE_TYPES.map(type => `<button type="button" class="notebook-place" data-place-type="${type}" title="${CITY_PLACES[type].description}" style="--place-color:${CITY_PLACES[type].color}"><span class="notebook-stamp">${CITY_PLACES[type].symbol}</span><span><strong>${CITY_PLACES[type].name}</strong><small>${CITY_PLACES[type].short}</small></span><span class="notebook-check" aria-hidden="true">○</span></button>`).join('');
-    for (const button of document.querySelectorAll('[data-place-type]')) button.addEventListener('click', () => this.next(button.dataset.placeType));
+    $('city-notebook').innerHTML = PLACE_TYPES.map(type => `<div class="notebook-place" data-place-type="${type}" title="${CITY_PLACES[type].description}" style="--place-color:${CITY_PLACES[type].color}"><span class="notebook-stamp">${CITY_PLACES[type].symbol}</span><span><strong>${CITY_PLACES[type].name}</strong><small>${CITY_PLACES[type].short}</small></span><span class="notebook-check" aria-hidden="true">○</span></div>`).join('');
     $('next-city-stop').addEventListener('click', () => { this.next(); $('next-city-stop').blur(); });
     $('city-map-toggle').addEventListener('click', () => {
       this.expanded = !this.expanded; this.canvas.hidden = !this.expanded;
@@ -36,12 +35,8 @@ export class CityGuide {
     });
     this.refreshNotebook();
   }
-  next(type = null) {
-    if (this.taxi?.running) { this.taxi.next(); this.updateTaxi(); return; }
-    const { s, u } = this.position(), place = this.exploration.next(s, u, type);
-    if (place) this.notify(place.name);
-    else this.notify('No stop nearby');
-    this.update(false);
+  next() {
+    if (this.taxi?.running) { this.taxi.next(); this.updateTaxi(); }
   }
   refreshNotebook() {
     const found = this.exploration.found;
@@ -53,7 +48,7 @@ export class CityGuide {
       const collected = found.has(button.dataset.placeType);
       button.dataset.found = String(collected);
       button.querySelector('.notebook-check').textContent = collected ? '✓' : '○';
-      button.setAttribute('aria-label', `${CITY_PLACES[button.dataset.placeType].name}, ${collected ? 'discovered' : 'undiscovered'}. Set as destination`);
+      button.setAttribute('aria-label', `${CITY_PLACES[button.dataset.placeType].name}, ${collected ? 'discovered' : 'undiscovered'}`);
     }
   }
   update(active) {
@@ -64,12 +59,9 @@ export class CityGuide {
       this.refreshNotebook();
     }
     if (this.taxi?.running) { this.updateTaxi(); return; }
-    $('next-city-stop').disabled = false; $('next-city-stop').textContent = 'Next stop';
-    const target = e.target, route = placeRoute(vehicle.s, vehicle.u, target), distance = routeDistance(route);
-    $('city-stop-name').textContent = target?.name ?? 'Destination';
-    $('city-stop-context').textContent = target ? `${target.short} · ${target.district}` : '';
-    $('city-stop-distance').textContent = e.justArrived?.id === target?.id ? 'Visited' : `${distance < 1000 ? `${Math.round(distance / 10) * 10} m` : `${(distance / 1000).toFixed(1)} km`}`;
-    if (this.expanded) this.draw(vehicle, route);
+    this.canvas.title = 'Local street map';
+    this.canvas.setAttribute('aria-label', 'Local street map. North is up; the white arrow is your car.');
+    if (this.expanded) this.draw(vehicle, [], [], null);
   }
   updateTaxi() {
     const run = this.taxi, vehicle = this.position(), target = run.target;
@@ -78,6 +70,7 @@ export class CityGuide {
       ? target ? `Next passenger · $${target.fare}` : 'Choose passenger'
       : `Fare $${run.fare.fare + run.tips}`;
     this.canvas.title = run.status === 'pickup' ? 'Tap a customer dot to choose your pickup' : 'Route to the drop-off';
+    this.canvas.setAttribute('aria-label', 'Local street map. North is up; the white arrow is your car, gold marks your route, and colored dots mark taxi stops.');
     if (this.expanded) this.draw(vehicle, taxiRoute(vehicle, target), run.status === 'pickup' ? run.customers : [{ ...target, color: '#ffd238' }], target);
   }
   draw(vehicle, route, places = this.exploration.places, target = this.exploration.target) {

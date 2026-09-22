@@ -61,6 +61,7 @@
 #city-map { display: block; width: 100%; height: auto; border-radius: 7px; border: 1px solid #b6c7b918; }
 #city-map[hidden] { display: none; }
 .city-guide-stop { display: grid; gap: 5px; padding: 13px 1px 11px; }
+body[data-mode=free] :is(.city-guide-stop, #next-city-stop) { display: none; }
 .city-guide-eyebrow { color: #b7c9bd; font-size: 8px; letter-spacing: 1.25px; }
 #city-stop-name { font-family: Georgia, serif; font-size: 21px; font-weight: 400; letter-spacing: -.3px; }
 #city-stop-distance { font-size: 10px; color: #c4d2c8; }
