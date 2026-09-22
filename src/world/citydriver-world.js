@@ -258,7 +258,7 @@ export class CitydriverChunk {
     const random = seededRandom(this.plan.seed + 912), river = this.plan.kind === 'river';
     const sides = this.plan.rivers.north && this.plan.rivers.east ? 4 : 2;
     this.walkers = Array.from({ length: this.plan.landmark ? 10 : 4 }, (_, i) => ({
-      phase: random() * (river ? 144 : 332), speed: .65 + random() * .45, side: i % sides,
+      phase: random() * (river ? 144 : 332), speed: 1.1 + random() * 1.1, side: i % sides,
       direction: i % 2 ? -1 : 1, size: .9 + random() * .22, width: .92 + random() * .16, color: pick(WALKER_COLORS, random),
       appearance: walkerAppearance(this.plan.seed + i * 719),
     }));
