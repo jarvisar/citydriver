@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { cityLayout } from './city-layout.js';
+import { riverWaterGeometry } from './river-water.js';
 
 // One shared triangular prism. Ground pieces share their actual corner
 // positions instead of overlapping independently rotated tangent boxes.
@@ -57,7 +58,7 @@ export function surfacePolygons(points) {
 export function addSurfacePolygon(c, points, y, height, color, kind = 'solid') {
   const flat = height <= .08 || kind === 'water';
   const key = kind === 'road' || kind === 'water' ? kind : `surface-${kind}${flat ? '' : '-volume'}`;
-  if (!c.batches.has(key)) c.batches.set(key, { geometry: flat ? surfaceTopGeometry : surfaceGeometry, material: c.materials[kind], items: [] });
+  if (!c.batches.has(key)) c.batches.set(key, { geometry: kind === 'water' ? riverWaterGeometry : flat ? surfaceTopGeometry : surfaceGeometry, material: c.materials[kind], items: [] });
   const items = c.batches.get(key).items;
   c.surfacePoints ??= new Map();
   const mapped = ([x, s]) => {
@@ -73,7 +74,7 @@ export function addSurfacePolygon(c, points, y, height, color, kind = 'solid') {
     const p = mapped([x0 + tx * (x1 - x0), s0 + ts * (s1 - s0)]);
     if (Math.hypot(p.u - a.u - (b.u - a.u) * tx - (d.u - a.u) * ts, p.s - a.s - (b.s - a.s) * tx - (d.s - a.s) * ts) > 1e-8) affine = false;
   }
-  const pieces = affine ? [signedArea(points) < 0 ? [...points].reverse() : points] : surfacePolygons(points);
+  const pieces = affine && kind !== 'water' ? [signedArea(points) < 0 ? [...points].reverse() : points] : surfacePolygons(points);
   for (const polygon of pieces) {
     const world = polygon.map(mapped);
     for (let i = 1; i < world.length - 1; i++) {

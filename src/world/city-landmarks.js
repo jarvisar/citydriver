@@ -3,17 +3,11 @@ import { PAVEMENT_LEVEL as G } from './city-grid.js';
 import { publicSpacePlan, pool, bed, pergola, cafeTable, path, reserve } from './city-public-space-kit.js';
 import { rectanglePolygon } from './city-surfaces.js';
 import { DESTINATION_BUILDERS } from './city-destinations.js';
+import { pitchedRoof } from './city-roofs.js';
+export { pitchedRoof } from './city-roofs.js';
 
 // All landmark pieces join the city's existing instance batches. The same
 // silhouette is used at both detail levels; only small furnishings disappear.
-export function pitchedRoof(c, x, s, width, depth, y, color, gable = null) {
-  const pitch = .36, half = width / 4;
-  for (const side of [-1, 1]) c.box(x + side * half, y, s, width / 2 / Math.cos(pitch), .5, depth, color, 'solid', 0, -side * pitch);
-  if (gable) {
-    const rise = width / 2 * Math.tan(pitch), step = rise / 12;
-    for (const side of [-1, 1]) for (let i = 0; i < 12; i++) c.box(x, y - rise / 2 + step * (i + .5) - .2, s + side * (depth / 2 - .6), width * (1 - (i + .5) / 12), step, .35, gable);
-  }
-}
 function planter(c, x, s, w, d, color = '#7a9a68') {
   c.rigid(x, s, () => {
     c.box(x, G + .28, s, w, .56, d, '#c5bba5');
@@ -55,13 +49,13 @@ function clockSquare(c, design) {
       // Open belfry: a different crown with a smaller, taller roof.
       for (const dx of [-5, 5]) for (const ds of [-5, 5]) c.box(56 + dx, G + 44, 56 + ds, .8, 7, .8, '#e3cdab');
       c.box(56, G + 44, 56, 3, 3.5, 3, '#ab8962');
-      pitchedRoof(c, 56, 56, 14, 14, G + 49, '#537b76');
+      pitchedRoof(c, 56, 56, 14, 14, G + 47.5 - 1.6 * Math.tan(.36), '#537b76');
       c.box(56, G + 52, 56, .3, 5, .3, '#dfc384');
     } else if (v === 1) {
       for (let i = 0; i < 4; i++) c.box(56, G + 41 + i, 56, 13 - i * 2.5, 1, 13 - i * 2.5, '#648c87');
       c.box(56, G + 46, 56, .3, 5, .3, '#dfc384');
     } else {
-      pitchedRoof(c, 56, 56, 16, 16, G + 42, '#537b76', '#637e79');
+      pitchedRoof(c, 56, 56, 16, 16, G + 40.5 - .5 * Math.tan(.36), '#537b76', '#637e79', .36, { wallWidth: 15, wallDepth: 15 });
       c.box(56, G + 47, 56, .32, 8, .32, '#dfc384');
     }
     c.solid(56, 56, 19, 19);
@@ -89,7 +83,7 @@ function marketHall(c, x, s, w, d, color) {
   c.rigid(x, s, () => {
     c.box(x, G + 5, s, w, 10, d, color);
     c.box(x, G + 1.6, s, w + 1, 3.2, d + 1, '#e5c398');
-    pitchedRoof(c, x, s, w + 4, d + 4, G + 12 + w * .045, '#805c51', color);
+    pitchedRoof(c, x, s, w + 4, d + 4, G + 10 - 2 * Math.tan(.36), '#805c51', color, .36, { wallWidth: w, wallDepth: d });
     c.solid(x, s, w + 1, d + 1);
     for (const edge of [-1, 1]) for (let dx = -w / 2 + 6; dx < w / 2 - 2; dx += 8) {
       c.box(x + dx, G + 5.4, s + edge * (d / 2 + .1), 5, 7, .2, '#355c60', 'glass');
@@ -135,7 +129,8 @@ function glasshouse(c, x, s, w, d, color = '#78aaa9') {
   c.rigid(x, s, () => {
     c.box(x, G + .5, s, w + 3, 1, d + 3, '#d5ccb2');
     c.box(x, G + 6.4, s, w, 11, d, color, 'glass');
-    pitchedRoof(c, x, s, w + 2, d + 3, G + 11.2 + w * .09, '#91c5bf', color);
+    const eave = G + 11.9 - Math.tan(.36);
+    pitchedRoof(c, x, s, w + 2, d + 3, eave, '#91c5bf', color, .36, { wallWidth: w, wallDepth: d });
     c.solid(x, s, w + 3, d + 3);
     for (const dx of [-w / 2 - .2, w / 2 + .2]) for (let ds = -d / 2; ds <= d / 2; ds += 6) c.box(x + dx, G + 6.5, s + ds, .3, 12, .3, '#e3debd');
     for (const ds of [-d / 2 - .2, d / 2 + .2]) for (let dx = -w / 2; dx <= w / 2; dx += 6) c.box(x + dx, G + 6.5, s + ds, .3, 12, .3, '#e3debd');
@@ -143,7 +138,7 @@ function glasshouse(c, x, s, w, d, color = '#78aaa9') {
       for (const dx of [-w / 2 - .2, w / 2 + .2]) c.box(x + dx, G + y, s, .3, .25, d + 1, '#e3debd');
       for (const ds of [-d / 2 - .2, d / 2 + .2]) c.box(x, G + y, s + ds, w + 1, .25, .3, '#e3debd');
     }
-    for (let ds = -d / 2; ds <= d / 2; ds += 6) pitchedRoof(c, x, s + ds, w + 2.5, .3, G + 11.45 + w * .09, '#d8d9b9');
+    for (let ds = -d / 2; ds <= d / 2; ds += 6) pitchedRoof(c, x, s + ds, w + 2, .3, eave + .38, '#d8d9b9', null, .36, { thickness: .13, trim: null });
   });
 }
 function garden(c, design) {
@@ -181,7 +176,7 @@ function depot(c, design) {
   for (const x of v === 1 ? [36, 76] : v === 2 ? [32, 56] : [32, 56, 80]) c.rigid(x, 58, () => {
     {
       c.box(x, G + 4.3, 77, 22, 8.6, 30, '#9e6854');
-      pitchedRoof(c, x, 77, 24, 34, G + 10.5, '#526a70', '#9e6854');
+      pitchedRoof(c, x, 77, 24, 34, G + 8.6 - Math.tan(.36), '#526a70', '#9e6854', .36, { wallWidth: 22, wallDepth: 30 });
       c.box(x, G + 3.4, 61.9, 12, 6.8, .22, '#35474c', 'glass');
       c.box(x, G + 6.3, 92.1, 13, 2.4, .2, '#819c9c', 'glass');
       c.solid(x, 77, 22, 30);

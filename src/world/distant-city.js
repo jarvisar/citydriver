@@ -77,7 +77,9 @@ export class DistantCity {
         // transform on their first draw, including a quality downgrade at rest.
         mesh.updateMatrix();
         mesh.matrixAutoUpdate = false;
-        mesh.computeBoundingSphere(); tile.group.add(mesh);
+        mesh.computeBoundingSphere();
+        if (key === 'water') mesh.boundingSphere.radius += .12;
+        tile.group.add(mesh);
       }
     }
     this.dirty.clear();

@@ -14,7 +14,7 @@ test('autodrive completes left and right turns from every direction on varied an
   player.freeDriving = true;
   try {
     for (const axis of ['north', 'east']) for (const direction of [-1, 1]) {
-      for (const index of [-3, 0, 1, 2]) for (const crossing of [0, 3]) for (const side of [-1, 1]) {
+      for (const index of [-3, 0, 1, 2]) for (const crossing of [0, 2, 3]) for (const side of [-1, 1]) {
         const profile = cityStreetProfile(axis, index);
         const lane = index * B + (axis === 'north' ? 1 : -1) * direction * profile.lane;
         Object.assign(player, cityLanePose(axis, lane, crossing * B - direction * 45, direction));
@@ -72,6 +72,28 @@ test('left turns yield to oncoming traffic before entering the curve', () => {
   assert.equal(pilot.update(player, traffic).touchDrive.amount, 0);
   traffic.vehicles = [];
   assert.ok(pilot.update(player, traffic).touchDrive.amount > 0);
+});
+
+test('turning from a side street stops, waits, and then enters the outgoing lane', () => {
+  const player = new DrivingController(citydriverRoute, { s: -45 });
+  player.freeDriving = true;
+  try {
+    for (const choice of [.1, .3]) {
+      Object.assign(player, cityLanePose('north', B + 2.7, -45));
+      player.speed = 10; player.update(0, {});
+      const pilot = new CityAutodrive({ random: () => choice });
+      const traffic = { enabled: true, vehicles: [], time: 0 };
+      let stopped = 0, completed = false;
+      for (let tick = 0; tick < 1800; tick++) {
+        traffic.time += 1 / 60;
+        player.update(1 / 60, pilot.update(player, traffic));
+        if (player.speed < .4 && cityLogical(player.s, player.u).s < -10) stopped += 1 / 60;
+        if (pilot.path.axis === 'east') { completed = true; break; }
+      }
+      assert.ok(stopped >= .7);
+      assert.equal(completed, true);
+    }
+  } finally { player.disposeModel(); }
 });
 
 test('straight decisions and joining inside a junction keep the current street', () => {

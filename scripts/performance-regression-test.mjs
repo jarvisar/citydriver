@@ -47,6 +47,11 @@ try {
   report.push({ shading });
   for (const viewport of [{ width: 390, height: 844 }, { width: 844, height: 390 }]) {
     await page.setViewportSize(viewport);
+    // Viewport emulation can finish before the application's resize event.
+    await page.waitForFunction(({ width, height }) => {
+      const canvas = window.__citydriver.rendering.renderer.domElement;
+      return canvas.width === width && canvas.height === height;
+    }, viewport);
     const views = await page.evaluate(async () => {
       const a = window.__citydriver, r = a.rendering.renderer;
       const { cityLayout } = await import('/src/world/city-layout.js');

@@ -31,6 +31,10 @@ The notebook scrolls within the pause panel. Choosing a category searches farthe
 
 Four new styles join the original six: mansard townhouses with dormers and shutters, industrial lofts with monitor roofs and chimneys, low pavilions with butterfly roofs, and stepped atrium buildings with glazed rooftop lanterns. There are eight roof families and ten storefront signs. Palettes favor terracotta and copper in old town, pastel walls in garden districts, glass and pale trim in midtown, and warmer brickwork in industrial blocks.
 
+The roof integration pass keeps the butterfly profile, with glazed end infills, a continuous fascia, a narrow central gutter and downpipes. Eave heights now follow the building support height and roof width. Pitched roofs have closed triangular infills and ridge caps, mansards use a continuous tapered solid, factory sawteeth have closed ends, and the station vault uses a single closed shell. Parapet corners meet without overlapping coplanar faces. Shared roof geometry is defined in `src/world/city-roofs.js` and used by ordinary buildings and landmarks at both detail levels.
+
+`node scripts/roof-review.mjs` captures all eight building roof families and seven landmark roof sites from opposite approaches. The local review is `.artifacts/roof-review/gallery.html`, with 30 full-resolution images. Geometry checks verify closed solids and uninterrupted roof coverage across narrow and wide lots.
+
 Existing parcel fitting, rigid transforms, street clearance, four-sided facades, and near/distant geometry remain shared. Small sign lettering, flowers and furnishings disappear at distance; building silhouettes and main materials remain consistent. The new landmark dome shares one reusable geometry; signs share textures by label.
 
 ## Visual review and checks
@@ -49,9 +53,9 @@ The existing baseline is preserved; `node scripts/city-tour.mjs before` is only 
 
 Validation covers all building families, every public-space variant, dry road access and collisions, distant silhouettes, old discovery saves, all 17 notebook destinations, and a sequence of varied passenger trips. Browser suites exercise real pickup/payment, discoveries, saved progress, desktop/touch controls, weather, and city streaming. The public-space gallery also renders all 53 designs plus three river joins.
 
-The completed pass has 204 passing unit tests, a successful production build, and passing city, taxi, public-space and rendering regression browser checks. Rendering checks include all six cameras, both phone orientations, staged streaming, and repeated optional-shading cleanup. That cleanup test now uploads the shared sign textures before measuring; seeing a new shop in a different camera must not be confused with a leaked shading target.
+The roof integration pass finished with 212 passing unit tests and a successful production build. Its 30 roof review images, all 53 public-space variants, and rendering regression browser checks completed without errors; city and taxi browser checks also passed during the original city expansion. Rendering checks include all six cameras, both phone orientations, staged streaming, and repeated optional-shading cleanup. That cleanup test now uploads the shared sign textures before measuring; seeing a new shop in a different camera must not be confused with a leaked shading target.
 
-The fixed-camera studies record the cost of the added geometry. These counts include the screenshot lighting/shadow passes; they are not frame-rate measurements:
+The initial city-improvement pass recorded the following geometry cost, before the subsequent roof integration refinements. These counts include the screenshot lighting/shadow passes; they are not frame-rate measurements. Current captures write their measurements to `.artifacts/city-tour/after/report.json`:
 
 | View | Draw calls before → after | Triangles before → after |
 | --- | --- | --- |

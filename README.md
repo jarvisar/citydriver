@@ -19,7 +19,7 @@ On the main menu, press forward to enter free drive, or press **R** to generate 
 
 Explore **17 discovery categories**, including a cinema, grand hotel, museum, railway station, library, hospital, observatory, jazz club, athletic club, and historic firehouse. Parks and city squares are destinations too. Passenger offers show the customer and destination, favor varied trips, and collect discovery stamps during taxi runs as well as free drive. Choose any destination from **Pause → City discoveries**; existing stamps stay saved.
 
-Blocks mix ten architectural styles: shops, brick buildings, balcony apartments, glass offices, Art Deco towers, warehouses, mansard townhouses, factory lofts, butterfly-roofed pavilions, and glazed atrium buildings. Neighborhood palettes, ten storefront signs, roof gardens and eight roof types give the streets distinct character. Weather defaults to Auto, starting at golden hour and cycling through conditions; your selected weather is saved.
+Blocks mix ten architectural styles: shops, brick buildings, balcony apartments, glass offices, Art Deco towers, warehouses, mansard townhouses, factory lofts, pavilions with butterfly roofs, and glazed atrium buildings. Neighborhood palettes, ten storefront signs, roof gardens and eight roof types give the streets distinct character. Weather defaults to Auto, starting at golden hour and cycling through conditions; your selected weather is saved.
 
 The [city improvement notes](docs/city-improvements.md) describe the destinations, art direction, and repeatable before/after screenshot tour.
 

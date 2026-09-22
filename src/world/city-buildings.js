@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { seededRandom } from './route.js';
 import { PAVEMENT_LEVEL as G } from './city-grid.js';
-import { pitchedRoof } from './city-landmarks.js';
+import { pitchedRoof, butterflyRoof, mansardRoof, sawtoothRoof } from './city-roofs.js';
 import { placeCityBuildings, rectangleCorners, parcelsOverlap } from './city-parcels.js';
 import { cityRigidFrame } from './city-layout.js';
 
@@ -108,8 +108,8 @@ function roofEdge(c, x, s, width, depth, roof, color, parapet = .85, surface = '
   c.box(x, roof + .12, s, width + .5, .24, depth + .5, color);
   c.box(x, roof + .26, s, width - .6, .06, depth - .6, surface);
   for (const sign of [-1, 1]) {
-    c.box(x + sign * (width / 2 - .15), roof + parapet / 2, s, .34, parapet, depth, color);
-    c.box(x, roof + parapet / 2, s + sign * (depth / 2 - .15), width, parapet, .34, color);
+    c.box(x + sign * (width / 2 - .17), roof + parapet / 2, s, .34, parapet, depth - .68, color);
+    c.box(x, roof + parapet / 2, s + sign * (depth / 2 - .17), width, parapet, .34, color);
   }
 }
 
@@ -211,8 +211,8 @@ function roofDetails(c, b, x, s, w, d, roof) {
   const garden = (b.type === 'apartment' || b.type === 'shop') && b.variation >= 2;
   for (let i = 0; i < equipment; i++) {
     const px = x + (random() - .5) * (w - 7), ps = garden ? s - d * .28 : s + (random() - .5) * (d - 7), size = 1.4 + random() * 2;
-    c.box(px, roof + .4 + size / 3, ps, size, size * .66, size * 1.15, '#919b9b');
-    c.box(px, roof + .44 + size * .66, ps, size + .1, .13, size * 1.15 + .1, '#58656d');
+    c.box(px, roof + .3 + size * .33, ps, size, size * .66, size * 1.15, '#919b9b');
+    c.box(px, roof + .365 + size * .66, ps, size + .1, .13, size * 1.15 + .1, '#58656d');
   }
   if (b.type === 'brick' && b.variation < 2) {
     c.prop('tank', x - w * .22, s + d * .2, 0, roof + .28);
@@ -245,14 +245,11 @@ function roofDetails(c, b, x, s, w, d, roof) {
 function signatureRoof(c, b, x, s, w, d, roof) {
   if (b.roofType === 'mansard') {
     // A steep copper/slate skirt and inset cap distinguish the old-town houses.
-    const inset = Math.min(3, w * .17, d * .17), rise = 4.2;
-    for (let i = 0; i < 7; i++) {
-      const t = (i + .5) / 7;
-      c.box(x, roof + t * rise, s, w - 2 * inset * t, rise / 7 + .025, d - 2 * inset * t, b.roof);
-    }
-    c.box(x, roof + rise + .15, s, w - inset * 2 + .25, .35, d - inset * 2 + .25, b.roof);
+    const rise = 4.2;
+    mansardRoof(c, x, s, w, d, roof, rise, b.roof);
+    c.box(x, roof + rise + .12, s, w * .7 + .2, .24, d * .7 + .2, b.roof);
     for (let side = 0; side < 4; side++) {
-      const f = facade(c, x, s, w - inset, d - inset, side), count = Math.max(1, Math.floor(f.span / 8));
+      const f = facade(c, x, s, w * .83, d * .83, side), count = Math.max(1, Math.floor(f.span / 8));
       for (let i = 0; i < count; i++) {
         const offset = (i - (count - 1) / 2) * 6.5;
         f.add(offset, roof + 2.4, .1, 2.9, 2.8, 1.6, creamTrim, 'solid', true);
@@ -264,21 +261,16 @@ function signatureRoof(c, b, x, s, w, d, roof) {
   } else if (b.roofType === 'monitor') {
     const mw = w * .56, md = d * .68;
     c.box(x, roof + 1.55, s, mw, 2.5, md, '#769c9a', 'glass');
-    pitchedRoof(c, x, s, mw + .5, md + .7, roof + 3.2, b.roof);
+    pitchedRoof(c, x, s, mw + .5, md + .7, roof + 2.8 - .25 * Math.tan(.36), b.roof, '#769c9a', .36, { wallWidth: mw, wallDepth: md });
     for (const side of [-1, 1]) for (let i = -2; i <= 2; i++) c.box(x + side * mw / 2, roof + 1.55, s + i * md / 5, .22, 2.7, .22, creamTrim);
     c.box(x - w * .32, roof + 4.5, s + d * .32, 2, 9, 2, b.wall);
     c.box(x - w * .32, roof + 8.7, s + d * .32, 2.5, .7, 2.5, creamTrim);
   } else if (b.roofType === 'butterfly') {
-    const pitch = .19, half = w / 4;
-    for (const side of [-1, 1]) {
-      c.box(x + side * half, roof + 1.3, s, w / 2 / Math.cos(pitch), .55, d + .7, b.accent, 'solid', 0, side * pitch);
-      c.box(x + side * half, roof + 1.05, s, w / 2 / Math.cos(pitch), .12, d + .6, '#dccba6', 'solid', 0, side * pitch);
-    }
-    c.box(x, roof + .45, s, .4, .4, d + .5, '#566f75');
+    butterflyRoof(c, b, roof);
   } else if (b.roofType === 'lantern') {
     const lw = w * .67, ld = d * .67;
     c.box(x, roof + 2, s, lw, 3.6, ld, '#86b5b3', 'glass');
-    pitchedRoof(c, x, s, lw + .6, ld + .6, roof + 4.1, '#8cbdb6');
+    pitchedRoof(c, x, s, lw + .6, ld + .6, roof + 3.8 - .3 * Math.tan(.36), '#8cbdb6', '#86b5b3', .36, { wallWidth: lw, wallDepth: ld });
     for (const side of [-1, 1]) for (let i = -2; i <= 2; i++) {
       c.box(x + side * lw / 2, roof + 2, s + i * ld / 5, .25, 3.9, .25, creamTrim);
       c.box(x + i * lw / 5, roof + 2, s + side * ld / 2, .25, 3.9, .25, creamTrim);
@@ -300,11 +292,11 @@ function buildBuilding(c, b) {
   const trim = b.type === 'office' ? '#b8cccd' : '#d6c9b1';
   if (b.roofType === 'gable') {
     const rise = width / 2 * Math.tan(.36);
-    pitchedRoof(c, x, s, width + .7, depth + .9, roof + rise / 2 + .1, b.variation % 2 ? '#8a6555' : '#586e79', b.wall);
+    pitchedRoof(c, x, s, width + .7, depth + .9, roof - .35 * Math.tan(.36), b.variation % 2 ? '#8a6555' : '#586e79', b.wall, .36, { wallWidth: width, wallDepth: depth });
     c.box(x + width * .23, roof + rise * .65 + 1, s + depth * .22, 1.2, 3.5, 1.4, b.wall);
     return;
   }
-  roofEdge(c, x, s, width, depth, roof, trim, b.type === 'deco' ? 1.2 : .65, b.roof);
+  if (b.roofType !== 'butterfly') roofEdge(c, x, s, width, depth, roof, trim, b.type === 'deco' ? 1.2 : .65, b.roof);
   if (lowerFloors < b.floors) {
     const inset = Math.min(4, width * .15, depth * .15), upperHeight = (b.floors - lowerFloors) * 3.6;
     width -= inset * 2; depth -= inset * 2;
@@ -320,12 +312,7 @@ function buildBuilding(c, b) {
   }
   if (['mansard', 'monitor', 'butterfly', 'lantern'].includes(b.roofType)) signatureRoof(c, b, x, s, width, depth, roof);
   else if (b.roofType === 'sawtooth') {
-    const count = Math.max(2, Math.floor(width / 9)), pitch = (width - 2) / count;
-    for (let i = 0; i < count; i++) {
-      const px = x - (width - 2) / 2 + (i + .5) * pitch;
-      c.box(px, roof + 1.2, s, pitch - .8, .35, depth - 3, b.roof, 'solid', 0, .22);
-      c.box(px + (pitch - .8) / 2, roof + .85, s, .15, 1.3, depth - 3, '#829d9f', 'glass');
-    }
+    sawtoothRoof(c, b, roof);
   } else roofDetails(c, b, x, s, width, depth, roof);
   // One rear fire escape adds depth without covering every facade in trim.
   const escapeSide = [b.x < 56 ? 1 : 0, 2, 3].find(side => b.openSides[side]);

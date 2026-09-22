@@ -15,6 +15,7 @@ import { cityLayout, cityLogical, cityLayoutFrame, cityRigidFrame } from './city
 import { cityItemMatrix, cityAffinePoint } from './city-layout-render.js';
 import { addSurfacePolygon, rectanglePolygon } from './city-surfaces.js';
 import { buildRiverGround, buildRivers, riverResidentPose, riverBoatPosition } from './city-rivers.js';
+import { createRiverWaterMaterial } from './river-water.js';
 import { CITY_BLOCK, DISTANT_CITY_RADIUS, PAVEMENT_LEVEL, WATER_LEVEL, cityCell, cityBlock } from './city-grid.js';
 export { DISTANT_CITY_RADIUS } from './city-grid.js';
 
@@ -40,7 +41,9 @@ function renderBatches(group, batches, east = 0, start = 0) {
     if (key === 'water') mesh.userData.ambientOcclusion = false;
     mesh.updateMatrix();
     mesh.matrixAutoUpdate = false;
-    mesh.computeBoundingSphere(); group.add(mesh);
+    mesh.computeBoundingSphere();
+    if (key === 'water') mesh.boundingSphere.radius += .12;
+    group.add(mesh);
   }
 }
 
@@ -51,7 +54,7 @@ function resources() {
     road: standard({ color: '#666c70', roughness: .85 }),
     glass: standard({ color: '#ffffff', roughness: .32, metalness: .25 }),
     lit: new THREE.MeshBasicMaterial({ color: '#ffffff', toneMapped: false }),
-    water: standard({ color: '#527c86', roughness: .24, metalness: .28 }),
+    water: createRiverWaterMaterial(),
     props: standard({ color: '#ffffff', vertexColors: true }),
     bark: standard({ color: '#625548', vertexColors: true }),
     leaves: standard({ color: '#ffffff', vertexColors: true }),
@@ -321,6 +324,7 @@ export class CitydriverWorld {
     const deadline = performance.now() + budgetMs, oldOrigin = this.origin;
     const ds = s - this.s, du = u - this.u;
     this.s = s; this.u = u; this.origin = Math.floor(s / 1024) * 1024;
+    this.materials.water.userData.origin.value = this.origin;
     const cell = cityCell(s, u), window = residentWindow();
     const radius = window.ahead >= 5 ? 3 : 2;
     let placementChanged = oldOrigin !== this.origin;
@@ -412,6 +416,7 @@ export class CitydriverWorld {
     this.materials.road.color.copy(dryRoad).lerp(wetRoad, wet);
   }
   animate(time, signalTime = time, camera = null) {
+    this.materials.water.userData.time.value = time;
     if (camera) {
       camera.updateMatrixWorld();
       this.animationMatrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);

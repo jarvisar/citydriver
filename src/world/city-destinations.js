@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { PAVEMENT_LEVEL as G } from './city-grid.js';
 import { bed, cafeTable, disk, path, pergola, pool, reserve } from './city-public-space-kit.js';
 import { rectanglePolygon } from './city-surfaces.js';
+import { barrelRoof } from './city-roofs.js';
 
 // Shared instances keep the new venues as inexpensive to stream as a city block.
 const lettering = new THREE.PlaneGeometry(1, 1);
@@ -16,8 +17,8 @@ function sign(c, label, x, s, y, width, height = 2.4, yaw = 0) {
 function roof(c, x, s, w, d, y, color = copper) {
   c.box(x, G + y, s, w + .6, .5, d + .6, color);
   for (const side of [-1, 1]) {
-    c.box(x + side * w / 2, G + y + .6, s, .35, 1.2, d, cream);
-    c.box(x, G + y + .6, s + side * d / 2, w, 1.2, .35, cream);
+    c.box(x + side * w / 2, G + y + .6, s, .35, 1.2, d - .35, cream);
+    c.box(x, G + y + .6, s + side * d / 2, w + .35, 1.2, .35, cream);
   }
 }
 function hall(c, x, s, w, d, h, color, floors = 2) {
@@ -42,17 +43,7 @@ function hall(c, x, s, w, d, h, color, floors = 2) {
   });
 }
 function barrel(c, x, s, w, d, y, color) {
-  // Twelve touching roof panels make a vaulted silhouette without a new mesh batch.
-  const radius = w / 2, segments = 12;
-  for (let i = 0; i < segments; i++) {
-    const a = i / segments * Math.PI, b = (i + 1) / segments * Math.PI;
-    const x0 = Math.cos(a) * radius, x1 = Math.cos(b) * radius, y0 = Math.sin(a) * radius * .55, y1 = Math.sin(b) * radius * .55;
-    c.box(x + (x0 + x1) / 2, G + y + (y0 + y1) / 2, s,
-      Math.hypot(x1 - x0, y1 - y0) + .015, .28, d, color, 'solid', 0, Math.atan2(y1 - y0, x1 - x0));
-    // Raised ribs make the barrel legible from either end without coplanar seams.
-    for (const edge of [-1, 1]) c.box(x + (x0 + x1) / 2, G + y + (y0 + y1) / 2 + .2, s + edge * (d / 2 - .15),
-      Math.hypot(x1 - x0, y1 - y0) + .02, .25, .35, cream, 'solid', 0, Math.atan2(y1 - y0, x1 - x0));
-  }
+  barrelRoof(c, x, s, w, d, G + y, color, cream);
 }
 function gardenEdge(c, p, xs = [25, 87], ss = [31, 84]) {
   for (const x of xs) for (const s of ss) { bed(c, x, s, 8, 8, p.green, p.stone); c.tree(x, s, 8); }
@@ -203,6 +194,15 @@ function observatory(c, { variant: v, palette: p }) {
     disk(c, 56, 66, 36, 36, G + 8, 14, '#d8ccb0');
     disk(c, 56, 66, 38, 38, G + 15.2, 1, cream);
     c.item('public-dome', dome, c.materials.solid, [56, G + 15.7, -66], [19, 16, 19], [copper, '#7a91a7', '#a7775e'][v]);
+    // Raised rails finish both edges of the telescope slot, including its crown.
+    for (const side of [-1, 1]) for (let i = 0; i < 10; i++) {
+      const phi = Math.PI / 2 + side * .16;
+      const point = t => [-19 * Math.cos(phi) * Math.sin(t), 16 * Math.cos(t), 19 * Math.sin(phi) * Math.sin(t)];
+      const a = point(i / 10 * Math.PI / 2), b = point((i + 1) / 10 * Math.PI / 2);
+      const dx = b[0] - a[0], dy = b[1] - a[1], dz = b[2] - a[2], length = Math.hypot(dx, dy, dz);
+      c.box(56 + (a[0] + b[0]) / 2, G + 15.8 + (a[1] + b[1]) / 2, 66 - (a[2] + b[2]) / 2,
+        .35, length + .05, .35, '#d6c8a6', 'solid', Math.atan2(dz, -dx), Math.acos(dy / length));
+    }
     c.box(56, G + 24.8, 64, 2.8, 13, 2.8, '#698b8a');
     c.box(56, G + 28, 56, 3.8, 4.3, 25, '#d9d3bc');
     c.box(56, G + 28, 43.5, 4.6, 5.1, 1.1, '#799b98');

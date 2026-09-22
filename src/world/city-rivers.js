@@ -91,7 +91,7 @@ export function buildRivers(c) {
       b.tree(x, s, 6.5); b.prop('bench', x + (x < 56 ? 5 : -5), s + 5, x < 56 ? Math.PI : 0);
       if (s === 26 || s === 92) b.prop('lamp', x, s - 7);
     }
-    for (let k = 0; k < 6; k++) b.surface(34 + c.random() * 44, W + .012, 15 + c.random() * 82, 2 + c.random() * 6, .018, .16, '#80a8aa', 'glass');
+    // Surface highlights belong to the shared animated water material.
   }
 }
 
