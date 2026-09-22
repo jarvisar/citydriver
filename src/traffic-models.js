@@ -97,7 +97,9 @@ export function vehicleGeometry(spec, { separateWheels = false } = {}) {
     }
   }
   for (const end of [-1, 1]) {
-    box([w * .88, .14, .14], [0, .66, end * l / 2], 'details', '#bbc0b6');
+    // Meet the corner caps at their inner edges so the exposed top faces
+    // share a seam instead of overlapping.
+    box([w * .91 - .12, .14, .14], [0, .66, end * l / 2], 'details', '#bbc0b6');
     box([w * .8, .075, .16], [0, .57, end * (l / 2 - .035)], 'details', '#2b3434');
     for (const side of [-1, 1]) box([.12, .14, .22], [side * w * .455, .66, end * (l / 2 - .075)], 'details', '#46514f');
   }

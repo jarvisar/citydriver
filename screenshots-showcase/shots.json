@@ -1,0 +1,206 @@
+[
+  {
+    "key": "01-golden-city",
+    "title": "Golden city",
+    "s": 56,
+    "u": 56,
+    "span": 200,
+    "offset": [
+      -260,
+      335,
+      295
+    ],
+    "weather": "sunset"
+  },
+  {
+    "key": "02-river-district",
+    "title": "River district",
+    "s": 200,
+    "u": 392,
+    "span": 200,
+    "offset": [
+      260,
+      350,
+      295
+    ],
+    "weather": "clear"
+  },
+  {
+    "key": "04-cityhall",
+    "title": "City Hall",
+    "ix": -5,
+    "iz": 168,
+    "span": 110,
+    "focusHeight": 45,
+    "offset": [
+      -170,
+      175,
+      230
+    ],
+    "weather": "sunset"
+  },
+  {
+    "key": "05-donut",
+    "title": "Lucky Donut",
+    "ix": -7,
+    "iz": -7,
+    "span": 90,
+    "focusHeight": 30,
+    "offset": [
+      -170,
+      175,
+      230
+    ],
+    "weather": "sunset"
+  },
+  {
+    "key": "06-garden",
+    "title": "Botanical gardens",
+    "ix": -14,
+    "iz": 3,
+    "span": 90,
+    "focusHeight": 30,
+    "offset": [
+      -170,
+      175,
+      230
+    ],
+    "weather": "sunset"
+  },
+  {
+    "key": "08-bathhouse",
+    "title": "Mosaic Baths",
+    "ix": -5,
+    "iz": 6,
+    "span": 90,
+    "focusHeight": 30,
+    "offset": [
+      -170,
+      175,
+      230
+    ],
+    "weather": "sunset"
+  },
+  {
+    "key": "09-farmersmarket",
+    "title": "Harvest Market",
+    "ix": -3,
+    "iz": 1,
+    "span": 90,
+    "focusHeight": 30,
+    "offset": [
+      -170,
+      175,
+      230
+    ],
+    "weather": "sunset"
+  },
+  {
+    "key": "10-station",
+    "title": "Union Station",
+    "ix": -2,
+    "iz": -4,
+    "span": 90,
+    "focusHeight": 30,
+    "offset": [
+      -170,
+      175,
+      230
+    ],
+    "weather": "sunset"
+  },
+  {
+    "key": "13-taxi-donut",
+    "title": "Coffee stop at Lucky Donut",
+    "ix": -7,
+    "iz": -7,
+    "car": true,
+    "perspective": true,
+    "span": 90,
+    "offset": [
+      -14,
+      6,
+      15
+    ],
+    "focusHeight": 2,
+    "look": [
+      0,
+      5,
+      -12
+    ],
+    "fov": 63,
+    "weather": "sunset"
+  },
+  {
+    "key": "14-taxi-cinema",
+    "title": "Night fare at the Rivoli",
+    "ix": -5,
+    "iz": 3,
+    "car": true,
+    "perspective": true,
+    "span": 90,
+    "offset": [
+      -12,
+      6,
+      9
+    ],
+    "focusHeight": 2,
+    "look": [
+      0,
+      5,
+      -12
+    ],
+    "fov": 63,
+    "weather": "night"
+  },
+  {
+    "key": "15-taxi-boulevard",
+    "title": "Ready for the next fare",
+    "s": 56,
+    "u": 2.8,
+    "car": true,
+    "perspective": true,
+    "span": 80,
+    "offset": [
+      -8,
+      3,
+      10
+    ],
+    "look": [
+      0,
+      1,
+      -6
+    ],
+    "weather": "clear",
+    "heading": 0
+  },
+  {
+    "key": "16-waterfront-panorama",
+    "title": "Waterfront panorama",
+    "s": 200,
+    "u": 392,
+    "span": 220,
+    "perspective": true,
+    "offset": [
+      230,
+      170,
+      280
+    ],
+    "focusHeight": 15,
+    "weather": "sunset",
+    "fov": 48
+  },
+  {
+    "key": "17-city-overhead",
+    "title": "City from above",
+    "s": 56,
+    "u": 56,
+    "span": 210,
+    "offset": [
+      0,
+      500,
+      5
+    ],
+    "weather": "clear"
+  }
+]

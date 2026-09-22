@@ -7,9 +7,28 @@ import { planBuildings } from '../src/world/city-buildings.js';
 import { publicSpacePlan, SPACE_NAMES } from '../src/world/city-public-space-kit.js';
 import { CITY_HALL_BLOCK } from '../src/world/city-places.js';
 import { clockFace } from '../src/world/city-detail-assets.js';
+import { TRAFFIC_MODELS, vehicleGeometry } from '../src/traffic-models.js';
 import { exposedOverlaps } from './helpers/exposed-overlaps.js';
 
 class Capture extends CitydriverChunk { *finishSteps() {} }
+
+test('vehicle bumper bars meet their corner caps without gaps or overlapping top faces', () => {
+  const material = new THREE.MeshBasicMaterial(), ray = new THREE.Raycaster();
+  try {
+    for (const spec of TRAFFIC_MODELS) {
+      const { wheels, ...geometries } = vehicleGeometry(spec);
+      const mesh = new THREE.Mesh(geometries.details, material);
+      try {
+        for (const end of [-1, 1]) for (const side of [-1, 1]) for (const offset of [-.01, .01]) {
+          const x = side * (spec.width * .455 - .06 + offset);
+          ray.set(new THREE.Vector3(x, 2, end * (spec.length / 2 + .02)), new THREE.Vector3(0, -1, 0));
+          const tops = ray.intersectObject(mesh).filter(hit => Math.abs(hit.point.y - .73) < 1e-6);
+          assert.equal(tops.length, 1, `${spec.name}: end=${end}, side=${side}, offset=${offset}`);
+        }
+      } finally { Object.values(geometries).forEach(geometry => geometry.dispose()); }
+    }
+  } finally { material.dispose(); }
+});
 
 test('clock dials, hands and hour marks form one continuous front surface', () => {
   const material = new THREE.MeshBasicMaterial(), mesh = new THREE.Mesh(clockFace, material);

@@ -2,6 +2,12 @@
 
 Taxi driving game built with [Three.js](https://threejs.org/). The city generates as you drive.
 
+![Main menu](screenshots-showcase/main-menu.png)
+
+| City overview | Lucky Donut |
+| --- | --- |
+| ![City blocks and waterfront](screenshots-showcase/share-jpg/01-golden-city.jpg) | ![Taxi outside Lucky Donut](screenshots-showcase/share-jpg/13-taxi-donut.jpg) |
+
 ## How to play
 
 Start a **Taxi run** to pick up passengers and earn money. You start with 90 seconds. Stop in a pickup ring, follow the arrow, then stop in the yellow drop-off ring before the fare timer runs out.
