@@ -15,6 +15,7 @@ button { touch-action: manipulation; }
 .controls > [data-control-help] { padding-right: 0; }
 .controls .dismiss-control-help { position: static; min-width: 44px; padding: 0; font-size: 20px; }
 body[data-control-help-dismissed=true] [data-control-help], body[data-control-help-dismissed=true] .control-separator { display: none !important; }
+body[data-driving-help-expired=true] :is(.controls, #stick-help) { display: none !important; }
 @media (pointer: fine) {
   body[data-control-help-dismissed=true] .controls { display: none !important; }
 }

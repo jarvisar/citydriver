@@ -1,6 +1,7 @@
 /* Navigation stays quiet enough to leave the streets in view. */
 #change-journey, #next-journey { display: none !important; }
 .city-hud {
+  max-width: 360px; margin-right: auto;
   display: flex; align-items: center; gap: 13px; padding: 10px 16px 10px 10px;
   background: #20323dde; color: #f5f4e9; border: 1px solid #ffffff26;
   border-radius: 18px; box-shadow: 0 6px 24px #13252c1a; backdrop-filter: blur(16px);

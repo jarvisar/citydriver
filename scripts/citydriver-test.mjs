@@ -62,7 +62,7 @@ try {
     for (let i = 0; i < 16; i++) a.world.update(v.s, v.u);
     v.render(1, a.world.origin); a.rendering.snap(); a.rendering.update(v.car, 1, a.world.origin);
   });
-  for (const mode of ['clear', 'rain', 'storm', 'sunset', 'night']) {
+  for (const mode of ['clear', 'rain', 'storm', 'snow', 'sunset', 'night']) {
     await page.selectOption('#city-weather', mode);
     assert.equal(await page.evaluate(() => window.__citydriver.weather.state.id), mode);
     await page.evaluate(() => { document.querySelector('#pause-overlay').hidden = true; window.__citydriver.rendering.render(); });

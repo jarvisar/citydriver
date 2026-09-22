@@ -1,24 +1,25 @@
 import * as THREE from 'three';
 import { Rainfall } from './rainfall.js';
+import { Snowfall } from './snowfall.js';
 
 // A complete cycle takes fourteen minutes of driving. This clock belongs to
-// the game, so pausing or hiding the tab also pauses the sky and the rain.
+// the game, so pausing or hiding the tab also pauses the sky and precipitation.
 export const WEATHER_INTERVAL = 105;
 export const WEATHER_TRANSITION = 22;
 // Shuffle once per game load so sampling the clock stays stable while driving.
-const middlePhases = ['clear', 'clear', 'overcast', 'rain', 'storm', 'rain'];
+const middlePhases = ['clear', 'clear', 'overcast', 'rain', 'storm', 'snow'];
 for (let i = middlePhases.length - 1; i > 0; i--) {
   const j = Math.floor(Math.random() * (i + 1));
   [middlePhases[i], middlePhases[j]] = [middlePhases[j], middlePhases[i]];
 }
 export const WEATHER_CYCLE = Object.freeze(['sunset', ...middlePhases, 'night']);
-const NUMBER_KEYS = ['rain', 'wetness', 'lightLevel', 'skyIntensity', 'sunIntensity', 'exposure', 'fogNear', 'fogFar', 'drivingFogNear', 'drivingFogFar', 'sunX', 'sunY', 'sunZ'];
+const NUMBER_KEYS = ['rain', 'snow', 'wetness', 'lightLevel', 'skyIntensity', 'sunIntensity', 'exposure', 'fogNear', 'fogFar', 'drivingFogNear', 'drivingFogFar', 'sunX', 'sunY', 'sunZ'];
 const COLOR_KEYS = ['background', 'fogColor', 'skyColor', 'groundColor', 'sunColor'];
 const clamp = value => Math.max(0, Math.min(1, value));
 const ease = value => { const t = clamp(value); return t * t * (3 - 2 * t); };
 
 function preset(label, values) {
-  const result = { label, ...values };
+  const result = { label, snow: 0, ...values };
   for (const key of COLOR_KEYS) result[key] = new THREE.Color(result[key]);
   return result;
 }
@@ -37,6 +38,9 @@ export const WEATHER_PRESETS = {
   storm: preset('Thunderstorm', { rain: 1, wetness: 1, lightLevel: .8,
     background: '#606e81', fogColor: '#7b899b', skyColor: '#a5bcd6', groundColor: '#465465', sunColor: '#b5c8e1',
     skyIntensity: 1.4, sunIntensity: .55, exposure: .59, fogNear: 185, fogFar: 495, drivingFogNear: 75, drivingFogFar: 260, sunX: -150, sunY: 210, sunZ: 110 }),
+  snow: preset('Snow', { rain: 0, snow: 1, wetness: .15, lightLevel: .4,
+    background: '#becddc', fogColor: '#cedae5', skyColor: '#e0ebf5', groundColor: '#7d8997', sunColor: '#e4edff',
+    skyIntensity: 1.9, sunIntensity: .9, exposure: .76, fogNear: 210, fogFar: 530, drivingFogNear: 80, drivingFogFar: 280, sunX: -150, sunY: 210, sunZ: 110 }),
   sunset: preset('Golden hour', { rain: 0, wetness: .12, lightLevel: .65,
     background: '#d8c2b4', fogColor: '#d9c8b8', skyColor: '#c5d6e7', groundColor: '#777685', sunColor: '#ffd09a',
     skyIntensity: 1.65, sunIntensity: 3.1, exposure: .82, fogNear: 340, fogFar: 740, drivingFogNear: 170, drivingFogFar: 395, sunX: -210, sunY: 105, sunZ: 140 }),
@@ -97,6 +101,9 @@ export class CityWeather {
     this.rainfall = new Rainfall();
     this.rainfall.points.visible = false;
     scene.add(this.rainfall.points);
+    this.snowfall = new Snowfall();
+    this.snowfall.points.visible = false;
+    scene.add(this.snowfall.points);
     this.anchor = new THREE.Vector3();
   }
   get flash() { return this.state.flash; }
@@ -122,12 +129,15 @@ export class CityWeather {
     this.state.flash = weatherLightning(this.time, this.state.rain, this.reducedMotion);
     this.rainfall.points.visible = this.state.rain > .01;
     this.rainfall.material.opacity = .92 * this.state.rain;
-    if (this.rainfall.points.visible) {
+    this.snowfall.points.visible = this.state.snow > .01;
+    this.snowfall.material.opacity = .85 * this.state.snow;
+    if (this.rainfall.points.visible || this.snowfall.points.visible) {
       const position = vehicle?.position ?? vehicle?.car?.position ?? vehicle?.groundedPosition ?? vehicle?.mesh?.position;
       this.anchor.set(vehicle?.u ?? position?.x ?? 0, (position?.y ?? 24) + 55, -(vehicle?.s ?? 0));
-      this.rainfall.update(this.time, this.anchor, origin);
+      if (this.rainfall.points.visible) this.rainfall.update(this.time, this.anchor, origin);
+      if (this.snowfall.points.visible) this.snowfall.update(this.time, this.anchor, origin);
     }
     return this.state;
   }
-  dispose() { this.rainfall.dispose(); }
+  dispose() { this.rainfall.dispose(); this.snowfall.dispose(); }
 }

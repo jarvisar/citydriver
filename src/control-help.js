@@ -1,8 +1,16 @@
 const storageKey = 'citydriver-control-help-dismissed';
 let dismissed = false;
+let drivingHelpStarted = false;
 try { dismissed = localStorage.getItem(storageKey) === 'true'; } catch { /* Storage is optional. */ }
 
 export const controlHelpDismissed = () => dismissed;
+
+export function updateControlHelp(speed) {
+  if (dismissed || drivingHelpStarted || Math.abs(speed) < .5) return;
+  drivingHelpStarted = true;
+  // Use elapsed time so the hint lasts five seconds even at low frame rates.
+  setTimeout(() => { document.body.dataset.drivingHelpExpired = 'true'; }, 5000);
+}
 
 export function setupControlHelp() {
   document.body.dataset.controlHelpDismissed = String(dismissed);

@@ -226,22 +226,27 @@ export class CitydriverChunk {
   buildRiver() { buildRivers(this); }
   buildFurniture() {
     if (this.plan.kind === 'river') return;
+    const { west, east, south, north } = blockStreets(this.ix, this.iz);
+    // Keep the existing furniture placement unless the wider curb needs room.
+    const lampInset = profile => Math.max(10.6, profile.halfWidth + .6);
+    const treeInset = profile => Math.max(11.6, profile.halfWidth + 1.6);
     const streetTree = (x, s) => {
       this.box(x, PAVEMENT_LEVEL + .055, s, 2.2, .11, 2.2, '#c0bba5');
       this.box(x, PAVEMENT_LEVEL + .12, s, 1.7, .03, 1.7, '#778568');
       this.tree(x, s, 8 + this.random() * 2);
     };
     for (const s of [27, 83]) {
-      this.prop('lamp', 10.6, s); this.post(10.6, s, .25);
-      this.prop('lamp', 101.4, s, Math.PI); this.post(101.4, s, .25);
+      this.prop('lamp', lampInset(west), s); this.post(lampInset(west), s, .25);
+      this.prop('lamp', 112 - lampInset(east), s, Math.PI); this.post(112 - lampInset(east), s, .25);
     }
     for (const x of [27, 83]) {
-      this.prop('lamp', x, 10.6, -Math.PI / 2); this.post(x, 10.6, .25);
-      this.prop('lamp', x, 101.4, Math.PI / 2); this.post(x, 101.4, .25);
-      streetTree(x + 12, 11.6); streetTree(x - 12, 100.4);
+      this.prop('lamp', x, lampInset(south), -Math.PI / 2); this.post(x, lampInset(south), .25);
+      this.prop('lamp', x, 112 - lampInset(north), Math.PI / 2); this.post(x, 112 - lampInset(north), .25);
+      streetTree(x + 12, treeInset(south)); streetTree(x - 12, 112 - treeInset(north));
     }
-    for (const s of [38, 70]) { streetTree(11.6, s); streetTree(100.4, s + 7); }
-    this.prop('bin', 11.8, 43); this.post(11.8, 43, .36);
+    for (const s of [38, 70]) { streetTree(treeInset(west), s); streetTree(112 - treeInset(east), s + 7); }
+    const binX = Math.max(11.8, west.halfWidth + 1.8);
+    this.prop('bin', binX, 43); this.post(binX, 43, .36);
   }
   buildLife() {
     // Residents stay on the pavement; they never wander into driving lanes.

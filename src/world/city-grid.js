@@ -9,7 +9,7 @@ export { RIVER_PERIOD, RIVER_COLUMN, RIVER_MARGIN } from './city-waterways.js';
 // city-layout maps those addresses to the streets' actual world positions.
 export const CITY_BLOCK = 112;
 export const DISTANT_CITY_RADIUS = 5;
-export const ROAD_HALF_WIDTH = 8;
+export const ROAD_HALF_WIDTH = 9;
 export const ROAD_LEVEL = 24;
 export const PAVEMENT_LEVEL = 24.12;
 export const WATER_LEVEL = 17.8;
@@ -17,9 +17,10 @@ export const BRIDGE_HALF_WIDTH = 10.8;
 
 export const positiveModulo = (value, divisor) => ((value % divisor) + divisor) % divisor;
 const STREET_PROFILES = Object.freeze({
-  side: Object.freeze({ kind: 'side', halfWidth: 5.5, lane: 2.7, speed: 10, median: 0 }),
-  avenue: Object.freeze({ kind: 'avenue', halfWidth: 8, lane: 3, speed: 16, median: 0 }),
-  boulevard: Object.freeze({ kind: 'boulevard', halfWidth: 10, lane: 5.7, speed: 20, median: 1.4 }),
+  // One extra unit of asphalt on each edge; lane paths and medians keep their size.
+  side: Object.freeze({ kind: 'side', halfWidth: 6.5, lane: 2.7, speed: 10, median: 0 }),
+  avenue: Object.freeze({ kind: 'avenue', halfWidth: ROAD_HALF_WIDTH, lane: 3, speed: 16, median: 0 }),
+  boulevard: Object.freeze({ kind: 'boulevard', halfWidth: 11, lane: 5.7, speed: 20, median: 1.4 }),
 });
 export function cityStreetProfile(axis, index) {
   const phase = positiveModulo(index, 5);

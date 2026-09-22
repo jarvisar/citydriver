@@ -37,7 +37,7 @@ import { touchDrivingInput, thirdPersonDrivingInput } from './touch-stick.js';
 import { DriveAudio } from './audio.js';
 import { setupAudioMixer } from './audio/mixer.js';
 import { FrameClock } from './timing.js';
-import { setupControlHelp, controlHelpDismissed } from './control-help.js';
+import { setupControlHelp, controlHelpDismissed, updateControlHelp } from './control-help.js';
 import { BrowserVR } from './vr.js';
 import { VRStatus } from './vr-status.js';
 import { setupPwaFullscreen } from './pwa-fullscreen.js';
@@ -228,6 +228,7 @@ async function boot() {
       if (wasTaxi && freeTraffic !== undefined) traffic.setEnabled(freeTraffic, vehicle);
       $('#traffic').setAttribute('aria-pressed', String(traffic.enabled)); $('#autodrive').setAttribute('aria-pressed', 'false');
       $('#taxi-results').hidden = true; $('#welcome').classList.add('hidden');
+      rendering.setView(4); updateViewUi();
       taxiView.render(taxi, vehicle, world.origin, time); setPaused(false, { preserveInput }); modeUi(); updateHud();
     }
     function start() {
@@ -804,6 +805,7 @@ async function boot() {
       if (paused || changingJourney) return;
       if (taxi.running) state = taxi.controls(dt, state);
       vehicle.update(dt, state);
+      if (started) updateControlHelp(vehicle.speed);
       collideScenery(vehicle, world.chunks, dt);
       traffic.update(dt, vehicle);
       if (started && taxi.running) {

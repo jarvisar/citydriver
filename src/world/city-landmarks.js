@@ -6,6 +6,7 @@ import { curvedPath } from './city-public-space-geometry.js';
 import { grassArea } from './city-grass.js';
 import { DESTINATION_BUILDERS } from './city-destinations.js';
 import { pitchedRoof } from './city-roofs.js';
+import { balancingBeam } from './city-sculptures.js';
 export { pitchedRoof } from './city-roofs.js';
 
 // All landmark pieces join the city's existing instance batches. The same
@@ -227,7 +228,7 @@ function art(c, design) {
     if (v === 0) {
       c.box(56, G + 2, 56, 12, 4, 10, '#eee1c5');
       c.box(53, G + 11, 56, 5, 22, 5, '#d87450', 'solid', 0, -.35);
-      c.box(60, G + 19, 56, 5, 17, 5, '#dfaa57', 'solid', 0, .8);
+      c.item('art-balance', balancingBeam, c.materials.solid, [56, G, -56], [1, 1, 1], '#dfaa57');
       c.box(56, G + 26, 56, 19, 4, 6, '#7d93aa', 'solid', .2);
     } else if (v === 1) {
       for (let i = 0; i < 3; i++) {

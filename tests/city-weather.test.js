@@ -31,7 +31,7 @@ test('automatic weather covers every condition, repeats, and stays continuous at
   const period = WEATHER_CYCLE.length * WEATHER_INTERVAL;
   assert.equal(WEATHER_CYCLE[0], 'sunset');
   assert.equal(WEATHER_CYCLE.at(-1), 'night');
-  assert.deepEqual(WEATHER_CYCLE.slice(1, -1).sort(), ['clear', 'clear', 'overcast', 'rain', 'rain', 'storm']);
+  assert.deepEqual(WEATHER_CYCLE.slice(1, -1).sort(), ['clear', 'clear', 'overcast', 'rain', 'snow', 'storm']);
   assert.deepEqual(new Set(WEATHER_CYCLE), new Set(Object.keys(WEATHER_PRESETS)));
   for (let phase = 0; phase < WEATHER_CYCLE.length; phase++) {
     const start = phase * WEATHER_INTERVAL;
@@ -39,7 +39,7 @@ test('automatic weather covers every condition, repeats, and stays continuous at
     assert.deepEqual(sampleCityWeather(start + 11), sampleCityWeather(start + 11 + period));
     const before = sampleCityWeather(start + WEATHER_INTERVAL - .001);
     const after = sampleCityWeather(start + WEATHER_INTERVAL + .001);
-    for (const field of ['rain', 'wetness', 'lightLevel', 'exposure', 'fogNear', 'sunY']) {
+    for (const field of ['rain', 'snow', 'wetness', 'lightLevel', 'exposure', 'fogNear', 'sunY']) {
       assert.ok(Math.abs(before[field] - after[field]) < .00001, `${field} jumps between weather phases`);
     }
     for (const channel of ['r', 'g', 'b']) assert.ok(Math.abs(before.background[channel] - after.background[channel]) < .00001);
@@ -80,6 +80,63 @@ test('rain follows east and west movement, bridges, and the rebased north-south 
   weather.rainfall.geometry.addEventListener('dispose', () => { disposed = true; });
   weather.dispose();
   assert.equal(scene.children.length, 0); assert.equal(disposed, true);
+});
+
+test('snow crossfades, stays still when paused, and does no particle work when inactive', () => {
+  const weather = new CityWeather(new THREE.Scene(), { mode: 'clear' });
+  weather.update(10);
+  const positions = weather.snowfall.geometry.attributes.position;
+  const dormantVersion = positions.version;
+  weather.update(11);
+  assert.equal(positions.version, dormantVersion);
+  assert.equal(weather.snowfall.points.visible, false);
+  weather.setMode('snow'); weather.update(14);
+  assert.equal(weather.state.snow, .5);
+  assert.equal(weather.snowfall.points.visible, true);
+  weather.update(17);
+  assert.equal(weather.state.snow, 1);
+  assert.equal(weather.state.rain, 0);
+  assert.equal(weather.flash, 0);
+  assert.equal(weather.rainfall.points.visible, false);
+  const flakes = positions.array.slice();
+  weather.update(17);
+  assert.deepEqual(positions.array, flakes);
+  weather.update(18);
+  assert.notDeepEqual(positions.array, flakes);
+  weather.setMode('clear', { immediate: true }); weather.update(18);
+  const stoppedVersion = positions.version;
+  weather.update(19);
+  assert.equal(weather.snowfall.points.visible, false);
+  assert.equal(positions.version, stoppedVersion);
+  weather.dispose();
+});
+
+test('snow stays world-anchored through driving and origin rebases and releases its resources', () => {
+  const scene = new THREE.Scene(), weather = new CityWeather(scene, { mode: 'snow' });
+  const car = { u: -5000, s: 3180, car: { position: { y: 39 } } };
+  weather.update(10, car, 3072);
+  const points = weather.snowfall.geometry.attributes.position;
+  assert.ok(points.count <= 2000);
+  assert.deepEqual(weather.snowfall.points.position.toArray(), [-5000, 94, -108]);
+  const before = points.array.slice();
+  car.u += 1;
+  weather.update(10, car, 3200);
+  assert.deepEqual(weather.snowfall.points.position.toArray(), [-4999, 94, 20]);
+  for (let i = 0; i < points.count; i++) {
+    assert.ok(Math.abs(points.getX(i)) <= 120);
+    assert.ok(Math.abs(points.getY(i)) <= 80);
+    assert.ok(Math.abs(points.getZ(i)) <= 140);
+    assert.equal(points.getY(i), before[i * 3 + 1]);
+    assert.equal(points.getZ(i), before[i * 3 + 2]);
+    const dx = points.getX(i) - before[i * 3];
+    assert.ok([-1, 71, 239].some(expected => Math.abs(dx - expected) < .00002));
+  }
+  let disposed = 0;
+  weather.snowfall.geometry.addEventListener('dispose', () => disposed++);
+  weather.snowfall.material.addEventListener('dispose', () => disposed++);
+  weather.dispose();
+  assert.equal(disposed, 2);
+  assert.equal(scene.children.length, 0);
 });
 
 test('manual weather transitions can be interrupted and paused selections apply immediately', () => {
