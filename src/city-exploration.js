@@ -2,13 +2,14 @@ import { CITY_BLOCK, cityBlock, cityCell, cityStreetAt, nearestCityStreet } from
 import { CITY_PLACES, PLACE_TYPES, CITY_HALL_BLOCK, destinationType } from './world/city-places.js';
 import { publicSpacePlan } from './world/city-public-space-kit.js';
 import { cityLayout, cityLogical, cityRoutePoints } from './world/city-layout.js';
+import { venueBrand } from './world/city-businesses.js';
 
 export function placeForBlock(block) {
   const type = destinationType(block); if (!type) return null;
   const { ix, iz } = block, logicalS = (iz + .5) * CITY_BLOCK, logicalU = (ix + .5) * CITY_BLOCK;
   const design = publicSpacePlan(block);
   return { id: block.key, type, ...CITY_PLACES[type], design: design.name, district: block.district,
-    name: block.landmark ? CITY_PLACES[type].name : design.name, logicalS, logicalU,
+    name: venueBrand(type, design.variant)?.name ?? (block.landmark ? CITY_PLACES[type].name : design.name), logicalS, logicalU,
     ...cityLayout(logicalS, logicalU), entrance: cityLayout(iz * CITY_BLOCK, logicalU) };
 }
 export function nearbyPlaces(s, u, radius = 8) {

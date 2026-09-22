@@ -140,8 +140,13 @@ export const DRAG = { rolling: .7, air: .0095 };
 
 // Keep low-speed lock separate from cornering capacity: a long Formula car
 // needs room to maneuver, but its slicks hold a much tighter line at speed.
+// The default lock is drawn from both ends of that: the tires decide how hard
+// the car can be hustled, the body decides how much room it needs to swing its
+// tail through, so a microcar turns inside a junction that a pickup fills.
 export function carStats(id) {
-  const { topSpeed, acceleration, braking, grip, offRoad, turnRadius = 4.6 / Math.sqrt(grip) } = carEntry(id).stats;
+  const entry = carEntry(id);
+  const { topSpeed, acceleration, braking, grip, offRoad,
+    turnRadius = (3.55 + .26 * entry.shape.length) / Math.sqrt(grip) } = entry.stats;
   return {
     topSpeed, acceleration, braking, grip, offRoad,
     // Full-lock radius in metres at city-corner speeds. Keep the heavy cars

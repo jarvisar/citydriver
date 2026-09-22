@@ -11,7 +11,7 @@ test('night lighting has a fixed budget, switches off by day, and survives rebas
   const player = new DrivingController(), traffic = new CityTraffic(scene, player.route, player.s);
   const lighting = new NightLighting(scene);
   try {
-    world.update(player.s, player.u); player.render(1, world.origin); traffic.render(1, world.origin);
+    world.update(player.s, player.u); player.render(0, world.origin); traffic.render(1, world.origin);
     lighting.update(world, player, traffic, 1);
     assert.equal(lighting.group.children.length, 3);
     assert.ok(lighting.pools.count > 0 && lighting.pools.count <= 96);

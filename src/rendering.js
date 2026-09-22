@@ -97,7 +97,10 @@ export function createRendering(canvas, graphics = new Graphics(), { showCarSilh
     // farther at the corners. Keep its entire far plane inside the distant
     // city ring, with room for the chase camera behind the car.
     const loadedDistance = graphics.settings.chunks.ahead >= 5 ? 310 : 205;
-    const lens = activeCamera(), slope = Math.tan(THREE.MathUtils.degToRad(lens.getEffectiveFOV()) / 2);
+    // A lens that opens up with speed reports the widest it will ever be, so
+    // the horizon stays covered without refitting the fog every frame.
+    const lens = activeCamera(), widest = Math.max(lens.userData.widestFov ?? 0, lens.getEffectiveFOV());
+    const slope = Math.tan(THREE.MathUtils.degToRad(widest) / 2);
     const horizonDistance = (CITY_BLOCK * DISTANT_CITY_RADIUS - 20) / Math.hypot(1, slope, slope * lens.aspect);
     scene.fog.far = Math.min(profile.thirdFar, loadedDistance, horizonDistance);
     scene.fog.near = weatherFog ? Math.min(profile.thirdNear, scene.fog.far * .5) : profile.thirdNear;

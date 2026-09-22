@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { TaxiRun, taxiRoute, leadStop, SHIFT_SECONDS } from '../src/taxi-run.js';
 import { citydriverRoute, cityStreetAt, cityRiverAt } from '../src/world/city-grid.js';
 import { DrivingController, createCar } from '../src/vehicle.js';
+import { steerCurve } from '../src/handling.js';
 import { cityLayout } from '../src/world/city-layout.js';
 
 const player = (s = 25, u = 3, heading = 0) => ({ s, u, heading, speed: 0, drifting: false, spec: { width: 2 }, audioTelemetry: { impactSerial: 0, impact: 0 } });
@@ -355,7 +356,7 @@ test('arcade steering straightens and countersteers promptly at different tick r
       for (let i = 0; i < Math.ceil(hz * .06); i++) car.update(1 / hz, { forward: 1, left: 1 });
       assert.ok(car.steer < 0, 'countersteering responds in time to catch a slide');
       for (let i = 0; i < hz; i++) car.update(1 / hz, { forward: 1, right: .25 });
-      assert.ok(Math.abs(car.steer - .25) < .001, 'analog steering retains its range');
+      assert.ok(Math.abs(car.steer - steerCurve(.25)) < .001, 'analog steering retains its range');
     } finally { car.disposeModel(); }
   }
 });

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { CAR_IDS, carStats, DRAG } from '../src/cars.js';
-import { turningRadius, turnRate } from '../src/handling.js';
+import { steerCurve, turningRadius, turnRate } from '../src/handling.js';
 import { DrivingController } from '../src/vehicle.js';
 import { citydriverRoute, cityStreetAt, cityStreetProfile, CITY_BLOCK } from '../src/world/city-grid.js';
 import { cityLanePose } from '../src/world/city-layout.js';
@@ -15,10 +15,20 @@ test('all radius curves widen smoothly, preserve reverse symmetry and retain fin
       assert.ok(radius >= previous && radius - previous < .5, `${id}: discontinuity at ${speed}`);
       assert.equal(radius, turningRadius(-speed, stats));
       assert.ok(turningRadius(speed, stats, 1) > radius, `${id}: loose surface still costs grip`);
-      assert.ok(turnRate(speed, .15, stats) < turnRate(speed, 1, stats) * .11, `${id}: fine analog corrections`);
+      assert.ok(turningRadius(speed, stats, 0, 1) <= radius, `${id}: weight over the nose never widens the line`);
       previous = radius;
     }
   }
+});
+
+// Fine corrections live in the request curve now rather than in the radius, so
+// a small stick movement is a small steering angle at every speed.
+test('a small analog movement stays a fine correction', () => {
+  assert.ok(steerCurve(.15) < .11 && steerCurve(.15) > .09);
+  assert.equal(steerCurve(1), 1);
+  assert.equal(steerCurve(0), 0);
+  assert.equal(steerCurve(-.5), -steerCurve(.5));
+  for (let input = 0; input < 1; input += .01) assert.ok(steerCurve(input + .01) > steerCurve(input));
 });
 
 test('Formula slicks hold significantly tighter city-speed lines than the rest of the fleet', () => {
@@ -57,7 +67,8 @@ test('every body fits 90-degree left and right turns on all city street widths',
     for (const axis of ['north', 'east']) for (const travelSign of [-1, 1]) for (const slow of [false, true]) {
     const profile = cityStreetProfile('north', index), center = index * CITY_BLOCK;
     const formula = id === 'formula' || id === 'taxiFormula';
-    const speed = slow ? 6 : formula ? (index === 1 ? 25 : 28) : id === 'rig' || id === 'monster' ? 10 : index === 1 ? 15 : 18;
+    const heavy = id === 'rig' || id === 'monster';
+    const speed = slow ? 6 : formula ? (index === 1 ? 25 : 30) : heavy ? (index === 1 ? 14 : 18) : index === 1 ? 15 : 20;
     const car = new DrivingController(citydriverRoute, {}, id);
     try {
       const radius = turningRadius(speed, car.stats);

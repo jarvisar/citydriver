@@ -4,6 +4,7 @@ import { publicSpacePlan, pool, bed, pergola, cafeTable, path, entrancePath, res
 import { rectanglePolygon } from './city-surfaces.js';
 import { curvedPath } from './city-public-space-geometry.js';
 import { grassArea } from './city-grass.js';
+import { discoverySignFor } from './city-signs.js';
 import { DESTINATION_BUILDERS } from './city-destinations.js';
 import { pitchedRoof } from './city-roofs.js';
 import { balancingBeam } from './city-sculptures.js';
@@ -276,16 +277,17 @@ export function buildLandmark(c) {
   }
   ({ clock: clockSquare, market, garden, depot, art, ...DESTINATION_BUILDERS })[type](c, design);
   buildDestinationSigns(c, type);
-  c.features.discoveries.push({ id: c.index, type, ...place, variant: design.variant, design: design.name, s: c.start + 56, u: c.east + 56 });
+  c.features.discoveries.push({ id: c.index, type, ...place, name: discoverySignFor(c.plan).name,
+    variant: design.variant, design: design.name, s: c.start + 56, u: c.east + 56 });
 }
 
 export function buildDestinationSigns(c, type) {
-  const place = CITY_PLACES[type];
-  // Low roadside totems make the destination identifiable from a driving view.
+  // Open supports leave each board's cutout silhouette visible. They share the
+  // ordinary solid batch and retain the existing roadside collision footprint.
   for (const [x, s, yaw] of [[71, 18, 0], [94, 70, Math.PI / 2]]) {
     c.rigid(x, s, () => {
-      c.box(x, G + 2.1, s, 6.4, 4.2, .65, '#314f55', 'solid', yaw);
-      c.box(x, G + 4.3, s, 6.6, .16, .8, place.color, 'lit', yaw);
+      for (const side of [-1, 1]) c.box(x + Math.cos(yaw) * side * 1.65, G + 1.6,
+        s + Math.sin(yaw) * side * 1.65, .18, 3.2, .18, '#52645a', 'solid', yaw);
       c.solid(x, s, yaw ? .8 : 6.6, yaw ? 6.6 : .8);
       c.sign(type, x, G + 2.5, s, yaw);
     });

@@ -2,10 +2,10 @@ import * as THREE from 'three';
 import { seededRandom } from './route.js';
 import { PAVEMENT_LEVEL as G } from './city-grid.js';
 import { pitchedRoof, butterflyRoof, mansardRoof, sawtoothRoof } from './city-roofs.js';
-import { placeCityBuildings, rectangleCorners, parcelsOverlap } from './city-parcels.js';
-import { cityRigidFrame } from './city-layout.js';
-import { rectanglePolygon } from './city-surfaces.js';
-import { grassArea } from './city-grass.js';
+import { placeCityBuildings } from './city-parcels.js';
+import { buildCourtyard } from './city-courtyards.js';
+import { SHOP_NAMES, shopSignFor } from './city-signs.js';
+export { SHOP_NAMES } from './city-signs.js';
 
 const pick = (items, random) => items[Math.floor(random() * items.length)];
 const integer = (random, min, max) => min + Math.floor(random() * (max - min + 1));
@@ -22,7 +22,6 @@ const STYLES = {
 };
 const HEIGHTS = { brick: [2, 6], apartment: [3, 8], shop: [1, 2], warehouse: [1, 3], office: [7, 16], deco: [5, 12], townhouse: [2, 4], loft: [3, 5], pavilion: [1, 2], atrium: [5, 11] };
 export const BUILDING_TYPES = Object.keys(HEIGHTS);
-export const SHOP_NAMES = ['CAFE', 'DELI', 'BOOKS', 'RECORDS', 'BAKERY', 'FLOWERS', 'NOODLES', 'CYCLES', 'GROCER', 'STUDIO'];
 
 // Plan lots before adding detail, so the skyline and collisions agree at both
 // render distances. Narrow frontages share a block with deeper, wider buildings.
@@ -213,7 +212,10 @@ function storefront(c, b, baseHeight) {
     }
     f.add(0, G + .24, .08, span + .16, .48, .2, '#939b98', 'solid', true);
     if (street && b.type !== 'warehouse') {
-      f.add(0, G + baseHeight - .55, .13, span - .6, .65, .28, b.accent, 'solid', true);
+      // Reserve a fascia above the 3.51m awning top and below every upper-floor
+      // sill, balcony and pilaster. All sign shapes fit inside this same band.
+      const signBottom = 3.65, signTop = baseHeight - .18, signY = (signBottom + signTop) / 2;
+      f.add(0, G + signY, .13, span - .6, signTop - signBottom, .28, b.accent, 'solid', true);
       const units = Math.max(1, Math.floor(span / 8)), spacing = (span - 2) / units;
       for (let i = 0; i < units; i++) {
         const offset = (i - (units - 1) / 2) * spacing;
@@ -234,8 +236,9 @@ function storefront(c, b, baseHeight) {
         }
       }
       if (!c.distant && b.variation !== 3) {
-        const h = Math.min(1.25, span * .5 / 4);
-        c.item(`shop-${b.shop}`, signGeometry, c.materials[`shop-${b.shop}`], f.position(0, G + baseHeight - .48, .32), [h * 4, h, 1], '#ffffff', f.yaw);
+        const sign = shopSignFor(b), w = Math.min(6.2, span * .65, (signTop - signBottom - .2) * sign.aspect), h = w / sign.aspect;
+        c.item('shop-signs', signGeometry, c.materials.signs, f.position(0, G + signY, .32),
+          [w, h, 1], '#ffffff', f.yaw).signTile = sign.tile;
       }
     } else {
       f.add(0, G + 1.6, .17, b.type === 'warehouse' ? Math.min(8, span * .5) : 1.5, 2.9, .1, '#455b61', 'glass');
@@ -320,7 +323,7 @@ function signatureRoof(c, b, x, s, w, d, roof) {
 }
 
 function buildBuilding(c, b) {
-  const baseHeight = b.type === 'warehouse' ? 4.8 : 4.4, height = baseHeight + b.floors * 3.6;
+  const baseHeight = b.type === 'warehouse' ? 4.8 : 5.4, height = baseHeight + b.floors * 3.6;
   const lowerFloors = b.setbackFloors, lowerHeight = baseHeight + lowerFloors * 3.6, lowerRoof = G + lowerHeight;
   const metadata = { x: c.east + b.x, s: c.start + b.s, width: b.width, depth: b.depth, height,
     facadeSides: 4, windows: 0, type: b.type, roofType: b.roofType, floors: b.floors, setbackFloors: lowerFloors, wall: b.wall, placement: b.frame };
@@ -383,23 +386,5 @@ export function* buildCityBuildingSteps(c) {
     c.structure(b.x, b.s, () => buildBuilding(c, b), b.frame);
     yield;
   }
-  // Service paving and pocket gardens fill the gaps between buildings.
-  c.surface(56, G + .008, 56, plan.rotation % 2 ? 5.5 : 80, .016, plan.rotation % 2 ? 80 : 5.5, '#7e8987');
-  for (const b of placement.open) {
-    c.surface(b.x, G + .02, b.s, b.width, .04, b.depth, '#7c956c');
-    grassArea(c, rectanglePolygon(b.x, b.s, b.width, b.depth), '#7c956c', G + .04);
-  }
-  const clear = (x, s, margin) => {
-    const corners = rectangleCorners(cityRigidFrame(c.start + s, c.east + x), margin * 2, margin * 2);
-    return placement.buildings.every(b => !parcelsOverlap(corners, b.corners, .6));
-  };
-  const random = seededRandom(c.plan.seed ^ 0x27d4eb2d);
-  for (const x of [23, 40, 59, 78, 91]) for (const s of [47, 65]) {
-    if (!clear(x, s, 4.5)) continue;
-    c.box(x, G + .3, s, 5.2, .6, 5.2, '#b9b5a2');
-    c.box(x, G + .64, s, 4.7, .1, 4.7, '#82996d');
-    c.tree(x, s, 7 + random() * 3);
-    c.solid(x, s, 5.2, 5.2);
-    if (clear(x + 4, s, 2)) c.prop('bench', x + 4, s);
-  }
+  buildCourtyard(c, plan, placement);
 }

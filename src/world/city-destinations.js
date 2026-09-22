@@ -1,12 +1,13 @@
 import * as THREE from 'three';
 import { PAVEMENT_LEVEL as G } from './city-grid.js';
-import { bed, cafeTable, disk, path, entrancePath, pergola, pool, reserve } from './city-public-space-kit.js';
+import { bed, cafeTable, disk, path, entrancePath, pergola, pool, reserve, publicSpacePlan } from './city-public-space-kit.js';
 import { rectanglePolygon } from './city-surfaces.js';
 import { planet, basinRim, curvedPath, ellipsePoints } from './city-public-space-geometry.js';
 import { barrelRoof, pitchedRoof, sawtoothRoof, mansardRoof } from './city-roofs.js';
 import { donutDough, donutGlaze, sprinklePosition } from './city-donut.js';
 import { round, clock, wheels, fireEngine, bell, hoop, produce } from './city-detail-assets.js';
 import { parkedCars } from './city-assets.js';
+import { venueBrand, SHOP_BRANDS } from './city-businesses.js';
 
 // Shared instances keep the new venues as inexpensive to stream as a city block.
 const lettering = new THREE.PlaneGeometry(1, 1);
@@ -19,6 +20,17 @@ export const VENUE_SIGNS = {
   'FIRE STATION': [23, 2], 'POST OFFICE': [21, 2.6], 'MOSAIC BATHS': [23, 1.8],
   'FARMERS MARKET': [14, 1.5], BAKERY: [17, 1.7], 'LUCKY DONUT': [27, 2], 'CITY HALL': [18, .9],
 };
+const VENUE_TYPES = {
+  RIVOLI: 'cinema', 'RIVOLI TOWER': 'cinema', 'GRAND HOTEL': 'hotel', MUSEUM: 'museum', UNION: 'station',
+  LIBRARY: 'library', HOSPITAL: 'hospital', PLANETARIUM: 'observatory', 'BLUE NOTE': 'music', 'ATHLETIC CLUB': 'sports',
+  'FIRE STATION': 'firehouse', 'POST OFFICE': 'postoffice', 'MOSAIC BATHS': 'bathhouse',
+  'FARMERS MARKET': 'farmersmarket', 'LUCKY DONUT': 'donut',
+};
+export function venueSignLabel(label, variant) {
+  if (label === 'BAKERY') return SHOP_BRANDS.BAKERY[variant + 4][0];
+  const brand = venueBrand(VENUE_TYPES[label], variant);
+  return brand ? `${brand.lettering}${label.endsWith(' TOWER') ? ' TOWER' : ''}` : label;
+}
 // Produce has just twenty faces and is shared with the covered market.
 const vaultEnd = new THREE.CircleGeometry(1, 12, 0, Math.PI);
 // Continuous profiles replace intersecting segments at the slot rails and crest.
@@ -41,8 +53,9 @@ const cream = '#ede0bf', dark = '#354e58', copper = '#62958b';
 
 function sign(c, label, x, s, y, yaw = 0) {
   if (c.distant) return;
-  const [width, height] = VENUE_SIGNS[label];
-  c.item(`venue-${label}`, lettering, c.materials[`venue-${label}`], [x, G + y, -s], [width, height, 1], '#ffffff', yaw);
+  const [width, height] = VENUE_SIGNS[label], { variant } = publicSpacePlan(c.plan);
+  const key = `venue-${label}-${variant}`;
+  c.item(key, lettering, c.materials[key], [x, G + y, -s], [width, height, 1], '#ffffff', yaw);
 }
 function roof(c, x, s, w, d, y, color = copper) {
   c.box(x, G + y, s, w + .6, .5, d + .6, color);

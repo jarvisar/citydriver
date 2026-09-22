@@ -211,7 +211,7 @@ async function boot() {
       vehicle.speed = 0; vehicle.knock.x = vehicle.knock.z = vehicle.knock.spin = 0; vehicle.update(0, {});
       if (penalty) { taxi.timeLeft = Math.max(0, taxi.timeLeft - 5); toast('Reset −5s'); }
       taxi.hold = 0;
-      world.update(vehicle.s, vehicle.u); vehicle.render(1, world.origin); rendering.snap(); needsRender = true;
+      world.update(vehicle.s, vehicle.u); vehicle.render(0, world.origin); rendering.snap(); needsRender = true;
     }
     function beginTaxi() {
       if (changingJourney) return;
@@ -318,7 +318,7 @@ async function boot() {
       paint = color;
       if (started) vehicle.setPaint(paint);
       paintCards(); updatePaintUi();
-      vehicle.render(1, world.origin); rendering.update(vehicle.car, 0, world.origin); needsRender = true;
+      vehicle.render(0, world.origin); rendering.update(vehicle.car, 0, world.origin); needsRender = true;
     }
     function updateCarUi() {
       for (const button of carDialog.querySelectorAll('[data-car]')) button.setAttribute('aria-current', String(button.dataset.car === carId));
@@ -333,7 +333,7 @@ async function boot() {
       if (id === carId || !CARS[id]) return;
       carId = id;
       try { localStorage.setItem(carStorageKey, id); } catch { /* Still drive it for this visit. */ }
-      if (started) { vehicle.setCar(id, { paint }); vehicle.render(1, world.origin); }
+      if (started) { vehicle.setCar(id, { paint }); vehicle.render(0, world.origin); }
       autodrive.reset();
       rendering.update(vehicle.car, 0, world.origin);
       updateCarUi(); updateHud(); needsRender = true;
@@ -383,7 +383,7 @@ async function boot() {
         traffic.reset(vehicle.route, vehicle.s, id); traffic.render(1, world.origin);
         primeMenuDrive();
         rendering.setJourney(id); audio.setJourney(id); updateJourneyUi(); paintCards(); updatePaintUi();
-        vehicle.render(1, world.origin);
+        vehicle.render(0, world.origin);
         rendering.snap(); rendering.update(vehicle.car, 1, world.origin); world.animate(time, traffic.time);
         weather.update(time, vehicle, world.origin); rendering.setWeather(weather.state, 0);
         world.setWetness(weather.state.wetness); vehicle.setLights(weather.state.lightLevel); traffic.models.setLights(weather.state.lightLevel);
@@ -628,7 +628,7 @@ async function boot() {
         for (const [anchor, classes] of [['#enter-vr', 'start-button menu-secondary'], ['#enter-vr-pause', 'panel-button']]) {
           const button = document.createElement('button');
           button.type = 'button'; button.className = `${classes} update-entry`;
-          button.innerHTML = '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3v12m-4-4 4 4 4-4M5 15v5h14v-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg><span></span>';
+          button.innerHTML = '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3v10m-4-4 4 4 4-4M5 16v4h14v-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg><span></span>';
           button.lastChild.textContent = `Get version ${update.version}`;
           button.title = 'Opens the download page';
           button.addEventListener('click', () => window.open(update.url)); // the wrapper hands it to the system browser
@@ -864,7 +864,7 @@ async function boot() {
     weather.update(time, vehicle, world.origin); rendering.setWeather(weather.state, 0);
     world.setWetness(weather.state.wetness); vehicle.setLights(weather.state.lightLevel); traffic.models.setLights(weather.state.lightLevel);
     buildCarCards(); buildPaintSwatches(); updateCarUi();
-    vehicle.render(1, world.origin); traffic.render(1, world.origin); rendering.update(vehicle.car, 1, world.origin); updateHud(); updateJourneyUi(); updateViewUi(); updateGraphicsUi();
+    vehicle.render(0, world.origin); traffic.render(1, world.origin); rendering.update(vehicle.car, 1, world.origin); updateHud(); updateJourneyUi(); updateViewUi(); updateGraphicsUi();
     nightLighting.update(world, vehicle, traffic, weather.state.lightLevel);
     if (renderer.extensions.has('KHR_parallel_shader_compile')) await renderer.compileAsync(scene, rendering.camera);
     else renderer.compile(scene, rendering.camera);

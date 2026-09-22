@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { GamepadInput } from '../src/gamepad.js';
 import { DrivingController } from '../src/vehicle.js';
+import { steerCurve } from '../src/handling.js';
 
 const pad = (index = 0, mapping = 'standard') => ({ index, mapping, connected: true, axes: [0, 0, 0, 0], buttons: Array.from({ length: 17 }, () => ({ pressed: false, value: 0 })) });
 const hold = (pad, index, value = 1) => { pad.buttons[index] = { pressed: value > .5, value }; };
@@ -199,7 +200,10 @@ test('vehicle honors partial throttle and steering while preserving digital inpu
     digital.update(1 / 60, { forward: true, right: true });
   }
   assert.ok(partial.speed > 0 && partial.speed < full.speed);
-  assert.ok(Math.abs(partial.steer - full.steer / 2) < 1e-10);
+  // `steer` is the angle the wheels take, so half a stick is the curve's
+  // half-stick angle rather than half of full lock.
+  assert.ok(Math.abs(partial.steer - steerCurve(.5)) < 1e-10);
+  assert.ok(partial.steer > full.steer * .3 && partial.steer < full.steer * .45);
   assert.equal(full.speed, digital.speed); assert.equal(full.u, digital.u);
   const reverse = new DrivingController();
   for (let frame = 0; frame < 60; frame++) reverse.update(1 / 60, { brake: .5 });

@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { CAR_IDS, DRAG } from '../src/cars.js';
 import { DrivingController } from '../src/vehicle.js';
+import { steerCurve } from '../src/handling.js';
 
 const road = {
   frame: () => ({ angle: 0, scale: 1 }),
@@ -78,12 +79,15 @@ test('steering responds within 40 ms and releases or reverses promptly in both m
             holdSpeed(car, 6, dt, input); elapsed += dt;
           }
         };
+        // `steer` is the angle the wheels take: the request run through the
+        // precision curve, which is where a stick's fine control now lives.
+        const lock = steerCurve(amount);
         advance(.04, turn);
         assert.ok(car.heading * direction > 0, `${label}: heading follows input`);
-        assert.ok(car.steer * direction >= amount * .9, `${label}: turn-in exceeds 40 ms`);
-        assert.ok(car.steer * direction <= amount, `${label}: steering overshoots`);
+        assert.ok(car.steer * direction >= lock * .97, `${label}: turn-in exceeds 40 ms`);
+        assert.ok(car.steer * direction <= lock, `${label}: steering overshoots`);
         advance(.03, {});
-        assert.ok(Math.abs(car.steer) < amount * .1, `${label}: release carries on turning`);
+        assert.ok(Math.abs(car.steer) < lock * .1, `${label}: release carries on turning`);
         advance(.3, turn);
         const heading = car.heading;
         advance(1 / 120, direction > 0 ? { left: amount } : { right: amount });

@@ -8,7 +8,7 @@ import { createShapeCar } from './car-models.js';
 import { createFormulaCar } from './formula-model.js';
 import { createSpecialCar } from './special-models.js';
 import { footprintMass } from './impact.js';
-import { steeringResponse, driftDirection, turnRate, travelHeading } from './handling.js';
+import { steerCurve, steeringResponse, driftDirection, turnRate, corneringLoad, travelHeading } from './handling.js';
 
 const mat = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: .74, flatShading: true, ...extra });
 function box(group, size, location, material) {
@@ -151,6 +151,18 @@ export const impassable = ground => ground.blocked;
 // How fast the tyres take back what a collision knocked into the car: the
 // slide within about half a second, the turn a little sooner.
 const SLIDE_GRIP = 5, SPIN_GRIP = 8;
+// How far the body leans, in radians, when the tyres are giving everything.
+const LEAN = .105;
+// A handbrake tap leaves the slide available for this long, so the button and
+// the steering can be pressed in either order.
+const DRIFT_ARM = .3;
+// A displayed frame lands between two simulation steps. Carrying the last step
+// forward by the leftover time shows the car where it is now rather than where
+// it was a whole step ago, which is latency the player can feel in their
+// hands. The projection is capped in metres so that a collision correction --
+// the one step that is not smooth motion -- cannot throw the body ahead of
+// itself.
+const LEAD_REACH = .5;
 
 export class DrivingController {
   constructor(route = citydriverRoute, state = {}, carId = DEFAULT_CAR, paint = null) {
@@ -161,7 +173,9 @@ export class DrivingController {
     this.setCar(carId, { rebuild: false, paint });
     this.s = state.s ?? 24; this.u = 2.4; this.speed = 0; this.steer = 0; this.heading = route.frame(this.s).angle;
     this.distance = state.distance ?? 0; this.pitch = 0; this.roll = 0; this.previousSpeed = 0; this.groundedPosition = new THREE.Vector3();
-    this.reverseDelay = 0; this.driftAmount = 0; this.driftDirection = 0; this.drifting = false; this.driftReady = true; this.slip = 0;
+    this.reverseDelay = 0; this.driftAmount = 0; this.driftDirection = 0; this.drifting = false; this.driftReady = true; this.driftArmed = 0; this.slip = 0;
+    // Where the car's weight is: -1 over the back under power, +1 over the nose on the brakes.
+    this.weight = 0; this.load = 0;
     this.bodyPitch = 0; this.bodyRoll = 0; this.wheelSpin = 0;
     // Motion a collision leaves the car with that its own drive did not make.
     this.knock = { x: 0, z: 0, spin: 0 };
@@ -208,7 +222,7 @@ export class DrivingController {
       this.paintCar(this.rainbowColor);
     } else this.paintCar(this.paintColor);
   }
-  reset() { this.u = 2.4; this.speed = 0; this.steer = 0; this.knock.x = this.knock.z = this.knock.spin = 0; this.heading = this.route.frame(this.s).angle; this.update(0, {}); }
+  reset() { this.u = 2.4; this.speed = 0; this.steer = 0; this.weight = 0; this.load = 0; this.driftArmed = 0; this.knock.x = this.knock.z = this.knock.spin = 0; this.heading = this.route.frame(this.s).angle; this.update(0, {}); }
   toggleRainbow() {
     this.rainbow = !this.rainbow;
     if (this.rainbow) this.rainbowHue = 0;
@@ -262,12 +276,12 @@ export class DrivingController {
     this.knock.spin = clamp(this.knock.spin + spin, -3, 3);
     this.shift(dx, dz);
     if (!this.freeDriving) this.u = clamp(this.u, ...this.route.bounds(this.s));
-    this.bodyPitch = clamp(this.bodyPitch - along * .003, -.09, .09); this.bodyRoll = clamp(this.bodyRoll - across * .006, -.09, .09);
+    this.bodyPitch = clamp(this.bodyPitch - along * .003, -LEAN, LEAN); this.bodyRoll = clamp(this.bodyRoll - across * .006, -LEAN, LEAN);
     this.speed = speed; this.audioTelemetry.speed = speed;
     const p = this.route.position(this.s, this.u);
     this.groundedPosition.set(p.x, p.y + .13, p.z);
     this.currentPose.position.copy(this.groundedPosition); this.currentPose.bodyPitch = this.bodyPitch; this.currentPose.bodyRoll = this.bodyRoll;
-    this.render(1);
+    this.render(0);
   }
   // Standing scenery gives nothing. The car is put back outside it along the
   // contact normal and keeps only the speed that runs along the face it hit,
@@ -280,7 +294,7 @@ export class DrivingController {
     if (closing > 0) {
       const impact = Math.abs(this.speed) * closing;
       if (impact > .4) { this.audioTelemetry.impact = impact; this.audioTelemetry.impactSerial++; }
-      this.bodyPitch = clamp(this.bodyPitch + direction * impact * .003, -.09, .09);
+      this.bodyPitch = clamp(this.bodyPitch + direction * impact * .003, -LEAN, LEAN);
       this.speed *= Math.sqrt(Math.max(0, 1 - closing * closing)); this.audioTelemetry.speed = this.speed;
       const turn = Math.atan2(fx + closing * nx, -fz - closing * nz) - Math.atan2(fx, -fz);
       this.heading += Math.atan2(Math.sin(turn), Math.cos(turn)) * Math.min(1, Math.abs(this.speed) * dt * .6);
@@ -299,7 +313,7 @@ export class DrivingController {
     const placed = this.route.position(this.s, this.u);
     this.groundedPosition.set(placed.x, placed.y + .13, placed.z);
     this.currentPose.position.copy(this.groundedPosition); this.currentPose.bodyPitch = this.bodyPitch;
-    this.render(1);
+    this.render(0);
   }
   // The ground under the car: its height, and its fall along and across the
   // road over about a wheelbase and a track. Free driving also asks whether
@@ -314,17 +328,22 @@ export class DrivingController {
       || Math.abs(u) + FOOTING > 7 && [[FOOTING, 0], [-FOOTING, 0], [0, FOOTING], [0, -FOOTING]].some(([ds, du]) => unsound(s + ds, u + du, terrainHeight(s + ds, u + du)));
     return ground;
   }
-  render(alpha, origin = 0) {
+  // `lead` is how far past the last completed simulation step this display
+  // frame falls, from 0 to a whole step. Carrying the last step forward by it
+  // puts the car where it is now; interpolating between the last two steps
+  // instead would show it a whole step in the past, every frame, for nothing.
+  render(lead = 0, origin = 0) {
     const a = this.previousPose, b = this.currentPose;
-    alpha = clamp(alpha, 0, 1);
-    // Interpolate in global coordinates, then rebase once for the entire display frame.
-    this.car.position.lerpVectors(a.position, b.position, alpha); this.car.position.z += origin;
-    this.car.quaternion.slerpQuaternions(a.quaternion, b.quaternion, alpha);
-    this.car.userData.slip = THREE.MathUtils.lerp(a.slip, b.slip, alpha);
-    this.body.rotation.x = THREE.MathUtils.lerp(a.bodyPitch, b.bodyPitch, alpha);
-    this.body.rotation.z = THREE.MathUtils.lerp(a.bodyRoll, b.bodyRoll, alpha);
-    const steer = THREE.MathUtils.lerp(a.steer, b.steer, alpha);
-    const spin = THREE.MathUtils.lerp(a.wheelSpin, b.wheelSpin, alpha);
+    const reach = a.position.distanceTo(b.position);
+    const t = 1 + clamp(lead, 0, 1) * (reach > LEAD_REACH ? LEAD_REACH / reach : 1);
+    // Project in global coordinates, then rebase once for the entire display frame.
+    this.car.position.lerpVectors(a.position, b.position, t); this.car.position.z += origin;
+    this.car.quaternion.slerpQuaternions(a.quaternion, b.quaternion, t);
+    this.car.userData.slip = THREE.MathUtils.lerp(a.slip, b.slip, t);
+    this.body.rotation.x = THREE.MathUtils.lerp(a.bodyPitch, b.bodyPitch, t);
+    this.body.rotation.z = THREE.MathUtils.lerp(a.bodyRoll, b.bodyRoll, t);
+    const steer = THREE.MathUtils.lerp(a.steer, b.steer, t);
+    const spin = THREE.MathUtils.lerp(a.wheelSpin, b.wheelSpin, t);
     for (const w of this.wheels) {
       if (w.front) w.pivot.rotation.y = -steer * .38;
       w.wheel.rotation.x = w.hub.rotation.x = spin * (w.spinRatio ?? 1);
@@ -340,8 +359,10 @@ export class DrivingController {
     const forward = clamp(Number(input.forward) || 0, 0, 1); const brake = clamp(Number(input.brake) || 0, 0, 1);
     const steering = touch ? 0 : clamp((Number(input.right) || 0) - (Number(input.left) || 0), -1, 1);
     // Quick response is independent of turning strength: do not hide sharp
-    // steering behind a slow input filter. Release/countersteer respond faster.
-    this.steer = steeringResponse(this.steer, steering, dt);
+    // steering behind a slow input filter. The precision curve is applied to
+    // what the player asked for, so a keypress reaches full lock in about
+    // 30 ms; release and countersteer are quicker still.
+    this.steer = steeringResponse(this.steer, steerCurve(steering), dt, stats, this.speed);
     this.reverseDelay = arcade && brake && !touch && dt > 0 ? Math.max(0, this.reverseDelay - dt) : 0;
     // How far off the tarmac the car is: 0 on the road, 1 out on open ground,
     // ramped across about half a car's width so putting two wheels on the verge
@@ -364,8 +385,11 @@ export class DrivingController {
     // here, so a straightened wheel still points the car back at the road.
     const grip = stats.grip * (1 - .25 * looseness);
     if (!input.handbrake || !dt) this.driftReady = true;
-    this.driftDirection = dt && !touch ? driftDirection(this.driftDirection, this.speed, steering, input, input.handbrake && this.driftReady) : 0;
-    if (this.driftDirection) this.driftReady = false;
+    // A tap leaves the slide available for a moment, so the handbrake and the
+    // steering can be pressed in either order without either being mistimed.
+    this.driftArmed = input.handbrake && this.driftReady ? DRIFT_ARM : Math.max(0, this.driftArmed - dt);
+    this.driftDirection = dt && !touch ? driftDirection(this.driftDirection, this.speed, steering, input, this.driftArmed > 0) : 0;
+    if (this.driftDirection) { this.driftReady = false; this.driftArmed = 0; }
     const drifting = this.driftDirection !== 0;
     this.drifting = drifting;
     this.driftAmount = dt && !touch ? THREE.MathUtils.damp(this.driftAmount, drifting ? 1 : 0, drifting ? 10 : 22, dt) : 0;
@@ -377,9 +401,15 @@ export class DrivingController {
     if (forward && !brake && !parkingBrake) acceleration += forward * (this.speed < -.3 ? stats.launch : stats.acceleration * launch);
     if (brake && !parkingBrake) acceleration -= brake * (this.speed > .3 ? stats.braking : stats.creep);
     if (parkingBrake) acceleration -= Math.sign(this.speed) * stats.handbrake;
-    // Sliding tires scrub a little speed whether the button is held or tapped.
-    // Full throttle can carry the slide; lifting lets the tires catch quickly.
-    acceleration -= Math.sign(this.speed) * stats.handbrake * .14 * this.driftAmount;
+    // What the driver is asking of the car, before the tires, the air and the
+    // grass take their share. Weight transfer reads this rather than the total:
+    // a verge is not a brake pedal and must not hand the front tires grip.
+    let pedals = acceleration;
+    // Sliding tires scrub a little speed whether the button is held or tapped:
+    // enough that a slide costs something, not so much that the tighter line it
+    // buys is never worth taking. Full throttle can carry the slide; lifting
+    // lets the tires catch quickly.
+    acceleration -= Math.sign(this.speed) * stats.handbrake * .1 * this.driftAmount;
     const drag = DRAG.rolling + DRAG.air * this.speed * this.speed + surface;
     if (Math.abs(this.speed) > .015) acceleration -= Math.sign(this.speed) * drag;
     if (touch) {
@@ -387,9 +417,10 @@ export class DrivingController {
       // Raise the stick's speed target too, or its braking cancels the boost.
       const targetSpeed = input.handbrake ? 0 : touch.amount * (stats.topSpeed + (boosting ? 10 : 0) + (stats.offRoad - stats.topSpeed) * looseness);
       acceleration = dt ? clamp((targetSpeed - this.speed) / dt, -stats.touchBraking, stats.acceleration) : 0;
+      pedals = acceleration;
       if (touch.amount) this.heading = touch.heading;
     }
-    if (boosting && !parkingBrake && !brake) acceleration += stats.acceleration * .9;
+    if (boosting && !parkingBrake && !brake) { acceleration += stats.acceleration * .9; pedals += stats.acceleration * .9; }
     const oldSpeed = this.speed;
     const boostCoast = arcade ? Math.max(0, this.speed - stats.topSpeed - stats.braking * .4 * dt) : 0;
     this.speed = clamp(this.speed + acceleration * dt, touch ? 0 : -stats.reverseSpeed, stats.topSpeed + (boosting ? 10 : boostCoast));
@@ -401,11 +432,21 @@ export class DrivingController {
     }
     if (!forward && !brake && oldSpeed * this.speed < 0) this.speed = 0;
     if (input.handbrake && oldSpeed * this.speed < 0) this.speed = 0;
+    // Weight transfer, and the whole of it: -1 with the car's weight over its
+    // back under power, +1 with it over the nose on the brakes, measured as a
+    // share of what this car can actually do in each direction. Taking it
+    // along the direction of travel means the brake pedal used as a reverse
+    // throttle lifts the nose, as it should, rather than pretending to brake.
+    // It eases in over about a tenth of a second, which is the car settling
+    // rather than a filter between the player and the road.
+    const effort = pedals * Math.sign(this.speed);
+    const transfer = clamp(-effort / (effort > 0 ? stats.acceleration : stats.braking), -1, 1);
+    this.weight = dt ? THREE.MathUtils.damp(this.weight, transfer, 9, dt) : transfer;
+    const yaw = turnRate(this.speed, this.steer, stats, looseness, this.driftAmount, this.weight);
+    this.load = corneringLoad(this.speed, yaw, stats, looseness, this.weight);
     const frame = roadFrame(this.s);
     const assist = this.route.laneAssist !== false && (!this.freeDriving || looseness === 0);
-    if (!touch) {
-      this.heading += turnRate(this.speed, this.steer, stats, looseness, this.driftAmount) * dt;
-    }
+    if (!touch) this.heading += yaw * dt;
     let difference = Math.atan2(Math.sin(this.heading - frame.angle), Math.cos(this.heading - frame.angle));
     // Free driving keeps the chosen heading off-road; normal driving assists bends.
     if (!touch && assist && Math.abs(this.steer) < .08 && Math.abs(this.speed) > .2 && Math.abs(difference) < 1.15) {
@@ -415,7 +456,7 @@ export class DrivingController {
     }
     const step = this.speed * dt, fromS = this.s, fromU = this.u;
     if (!dt || touch || oldSpeed * this.speed <= 0 || !Number.isFinite(this.slideHeading)) this.slideHeading = this.heading;
-    this.slideHeading = travelHeading(this.slideHeading, this.heading, dt, grip, this.driftAmount);
+    this.slideHeading = travelHeading(this.slideHeading, this.heading, dt, grip, this.driftAmount, this.load);
     const travelAngle = this.slideHeading - frame.angle;
     this.s += touch?.amount ? touch.along * step : Math.cos(travelAngle) * step / frame.scale;
     this.u += touch?.amount ? touch.across * step : Math.sin(travelAngle) * step;
@@ -448,10 +489,15 @@ export class DrivingController {
     this.pitch = THREE.MathUtils.damp(this.pitch, Math.atan(slope * Math.cos(difference) + lateralSlope * Math.sin(difference)), 10, dt || 1);
     this.roll = THREE.MathUtils.damp(this.roll, Math.atan(lateralSlope * Math.cos(difference) - slope * Math.sin(difference)), 9, dt || 1);
     this.car.rotation.set(0, -this.heading, 0, 'YXZ'); this.car.rotateX(this.pitch); this.car.rotateZ(this.roll);
-    const cornerForce = turnRate(this.speed, this.steer, stats, looseness, this.driftAmount) * this.speed;
-    this.bodyRoll = THREE.MathUtils.damp(this.bodyRoll, -clamp(cornerForce * .004, -.09, .09), 10, dt);
-    this.bodyPitch = THREE.MathUtils.damp(this.bodyPitch, -clamp(acceleration, -15, 12) * .002, 5, dt);
+    // Lean and dive read the same numbers the tyres do, so what the car looks
+    // like it is doing and what it is doing are the same thing.
+    this.bodyRoll = THREE.MathUtils.damp(this.bodyRoll, -clamp(yaw * this.speed * .0042, -LEAN, LEAN), 11, dt);
+    this.bodyPitch = THREE.MathUtils.damp(this.bodyPitch, -clamp(acceleration, -15, 12) * .0034, 7, dt);
     this.wheelSpin -= step / .48;
+    // The chase camera widens and drops back once the car is really moving.
+    // Nothing below two fifths of its top speed, everything by the time the
+    // needle is against the stop.
+    this.car.userData.speedRush = clamp((Math.abs(this.speed) / stats.topSpeed - .4) / .6, 0, 1);
     // Report actual driving effort for keyboard, analog triggers, and touch.
     // This is read-only telemetry: sound never feeds back into driving physics.
     this.audioTelemetry.speed = this.speed;
@@ -467,6 +513,6 @@ export class DrivingController {
     for (const key of ['bodyPitch', 'bodyRoll', 'wheelSpin', 'steer', 'slip']) this.currentPose[key] = this[key];
     // Resets and journey changes are teleports, so never blend from the old location.
     if (dt === 0) this.copyPose(this.previousPose, this.currentPose);
-    this.render(1);
+    this.render(0);
   }
 }

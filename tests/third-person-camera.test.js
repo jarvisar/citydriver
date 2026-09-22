@@ -15,7 +15,7 @@ test('third-person view stays behind the car, frames it on phones, and survives 
     assert.ok(rig.camera.position.clone().sub(car.car.position).dot(forward) < -13.9);
     const projected = car.car.position.clone().project(rig.camera);
     assert.ok(Math.abs(projected.x) < .01 && projected.y > -.8 && projected.y < 0);
-    car.render(1, 20000); rig.update(car.car, 1 / 60);
+    car.render(0, 20000); rig.update(car.car, 1 / 60);
     assert.ok(projected.distanceTo(car.car.position.clone().project(rig.camera)) < 1e-9);
   }
 });
@@ -27,14 +27,14 @@ test('perspective joystick follows all screen directions through the city and af
       for (const [x, y] of directions) {
         const car = new DrivingController(route, { s });
         const origin = Math.floor(s / 1024) * 1024;
-        car.render(1, origin);
+        car.render(0, origin);
         const rig = new ThirdPersonCamera(); rig.resize(aspect); rig.update(car.car, 0);
         // Also exercise an off-center car, where perspective depth matters.
         rig.camera.position.x += 1;
         rig.camera.updateMatrixWorld();
         const before = car.car.position.clone().project(rig.camera), length = Math.hypot(x, y);
         const input = touchDrivingInput({ x: x / length, y: y / length }, rig.camera, route, car.s, car.u, origin);
-        car.update(1 / 60, { touchDrive: input }); car.render(1, origin);
+        car.update(1 / 60, { touchDrive: input }); car.render(0, origin);
         const after = car.car.position.clone().project(rig.camera);
         const dx = (after.x - before.x) * aspect, dy = after.y - before.y;
         const alignment = (dx * x + dy * y) / (Math.hypot(dx, dy) * length);

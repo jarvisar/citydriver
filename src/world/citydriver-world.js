@@ -5,13 +5,13 @@ import { residentWindow } from './resident.js';
 import { applyWalkerHop, walkerTravelTime, holdWalkerTravel } from './pedestrian-reactions.js';
 import { DistantCity, packDistantSteps } from './distant-city.js';
 import { buildLandmark, buildDestinationSigns } from './city-landmarks.js';
-import { VENUE_SIGNS } from './city-destinations.js';
+import { VENUE_SIGNS, venueSignLabel } from './city-destinations.js';
 import { buildPublicSpace } from './city-public-spaces.js';
 import { buildGrassFringe } from './city-grass.js';
-import { buildCityBuildings, buildCityBuildingSteps, SHOP_NAMES, shopSignMaterial, fitSignText } from './city-buildings.js';
+import { buildCityBuildings, buildCityBuildingSteps, shopSignMaterial } from './city-buildings.js';
+import { createSignMaterial, discoverySignFor } from './city-signs.js';
 import { blockStreets, buildStreets } from './city-streets.js';
 import { cityGreen } from '../city-junctions.js';
-import { CITY_PLACES } from './city-places.js';
 import { cityWalker, cityBoat, walkerPose, walkerFloat, WALKER_COLORS, createWalkerMaterial, walkerAppearance, setWalkerAppearance, pairWalkers, offsetWalkerPose } from './city-life.js';
 import { cityLayout, cityLogical, cityLayoutFrame, cityRigidFrame } from './city-layout.js';
 import { cityItemMatrix, cityAffinePoint } from './city-layout-render.js';
@@ -42,10 +42,15 @@ function* renderBatchSteps(group, batches, east = 0, start = 0) {
       const item = items[i];
       const matrix = cityItemMatrix(item, east, start, transform.matrix);
       mesh.setMatrixAt(i, matrix); tint.set(item.color); mesh.setColorAt(i, tint);
+      if (item.signTile !== undefined) mesh.setColorAt(i, tint.setRGB(item.signTile, 0, 0));
       if (key === 'residents') setWalkerAppearance(mesh, i, item.appearance);
     }
     mesh.castShadow = !key.startsWith('surface-') && !key.startsWith('public-water') && !['road', 'water', 'lit', 'signal-lens', 'detail-clock', 'glass', 'grass-fringe'].includes(key);
     mesh.receiveShadow = !['lit', 'signal-lens', 'detail-clock'].includes(key);
+    if (material.userData.signAtlas) {
+      mesh.castShadow = mesh.receiveShadow = false;
+      mesh.userData.ambientOcclusion = false;
+    }
     if (key === 'water' || key === 'grass-fringe') mesh.userData.ambientOcclusion = false;
     mesh.updateMatrix();
     mesh.matrixAutoUpdate = false;
@@ -70,20 +75,11 @@ function resources() {
     bark: standard({ color: '#625548', vertexColors: true }),
     leaves: standard({ color: '#ffffff', vertexColors: true }),
   };
-  for (const name of SHOP_NAMES) result[`shop-${name}`] = shopSignMaterial(name);
-  for (const [name, [w, h]] of Object.entries(VENUE_SIGNS)) result[`venue-${name}`] = shopSignMaterial(name, w / h);
-  for (const [type, place] of Object.entries(CITY_PLACES)) {
-    let map = null;
-    if (globalThis.document) {
-      const canvas = document.createElement('canvas'); canvas.width = 512; canvas.height = 256;
-      const ctx = canvas.getContext('2d');
-      ctx.fillStyle = '#314f55'; ctx.fillRect(0, 0, 512, 256);
-      ctx.textAlign = 'center'; ctx.fillStyle = place.color; fitSignText(ctx, `CITY GUIDE  /  ${place.symbol}`, 256, 58, 475, 30, 'normal');
-      ctx.fillStyle = '#fff5df'; fitSignText(ctx, place.name, 256, 132, 475, 44);
-      ctx.fillStyle = '#b6cec9'; fitSignText(ctx, place.short.toUpperCase(), 256, 194, 475, 24, 'normal');
-      map = new THREE.CanvasTexture(canvas); map.colorSpace = THREE.SRGBColorSpace;
+  result.signs = createSignMaterial();
+  for (const [name, [w, h]] of Object.entries(VENUE_SIGNS)) {
+    for (let variant = 0; variant < (name === 'CITY HALL' ? 1 : 3); variant++) {
+      result[`venue-${name}-${variant}`] = shopSignMaterial(venueSignLabel(name, variant), w / h);
     }
-    result[`sign-${type}`] = new THREE.MeshBasicMaterial({ map, side: THREE.DoubleSide, toneMapped: false });
   }
   return result;
 }
@@ -134,7 +130,9 @@ export class CitydriverChunk {
     if (structure) key = `structure-${key}`;
     if (!this.batches.has(key)) this.batches.set(key, { geometry, material, items: [], structure });
     const anchor = this.layoutAnchor ?? { s: this.start - p[2], u: this.east + p[0] };
-    this.batches.get(key).items.push({ p, scale, color, yaw, roll, anchor, frame: this.layoutPlacement ?? this.layoutFrame(anchor.s, anchor.u, this.followLayout) });
+    const item = { p, scale, color, yaw, roll, anchor, frame: this.layoutPlacement ?? this.layoutFrame(anchor.s, anchor.u, this.followLayout) };
+    this.batches.get(key).items.push(item);
+    return item;
   }
   rigid(x, s, build, placement = null) {
     const previousAnchor = this.layoutAnchor, previousPlacement = this.layoutPlacement, previousFollow = this.followLayout;
@@ -183,7 +181,12 @@ export class CitydriverChunk {
   }
   sign(type, x, y, s, yaw) {
     if (this.distant) return;
-    this.item(`sign-${type}`, windowGeometry, this.materials[`sign-${type}`], [x + Math.sin(yaw) * .34, y, -s + Math.cos(yaw) * .34], [6.1, 3.05, 1], '#ffffff', yaw);
+    const sign = discoverySignFor(this.plan), width = 6.1;
+    for (const facing of [yaw, yaw + Math.PI]) {
+      this.item(`sign-${type}`, windowGeometry, this.materials.signs,
+        [x + Math.sin(facing) * .14, y, -s + Math.cos(facing) * .14],
+        [width, width / sign.aspect, 1], '#ffffff', facing).signTile = sign.tile;
+    }
   }
   solid(x, s, width, depth, flexible = false) {
     if (this.distant) return;

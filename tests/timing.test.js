@@ -23,7 +23,9 @@ for (const hz of [30, 60, 75, 120, 144, 165, 240]) {
     }
     assert.equal(steps, 360);
     assert.ok(Math.abs(car.s - 108) < 1e-9);
-    assert.ok(Math.abs(car.car.position.z + (108 - 28 * PHYSICS_STEP)) < 1e-9);
+    // Projected forward, not interpolated back: the display shows the car
+    // where the simulation has it now, with no step of latency added.
+    assert.ok(Math.abs(car.car.position.z + 108) < 1e-9);
   });
 }
 
@@ -36,11 +38,11 @@ test('irregular display intervals and refresh-rate changes preserve smooth trave
     timestamp += interval;
     clock.tick(timestamp, true, dt => car.update(dt, { forward: true }));
     car.render(clock.alpha);
-    if (timestamp > 17) assert.ok(Math.abs(car.car.position.z + 24 + 28 * (timestamp / 1000 - PHYSICS_STEP)) < 1e-9);
+    if (timestamp > 17) assert.ok(Math.abs(car.car.position.z + 24 + 28 * (timestamp / 1000)) < 1e-9);
   }
 });
 
-test('rendering never feeds interpolated body, steering or wheels back into physics', () => {
+test('rendering never feeds projected body, steering or wheels back into physics', () => {
   const a = new DrivingController(), b = new DrivingController();
   for (let i = 0; i < 500; i++) {
     const input = { forward: i < 250, brake: i >= 250, right: i % 80 < 20 };
@@ -51,7 +53,7 @@ test('rendering never feeds interpolated body, steering or wheels back into phys
   assert.equal(a.s, b.s); assert.equal(a.speed, b.speed);
 });
 
-test('reverse travel interpolates between ticks and rebasing only changes local coordinates', () => {
+test('reverse travel is projected between ticks and rebasing only changes local coordinates', () => {
   const car = new DrivingController(straightRoute);
   car.s = 1024; car.reset(); car.speed = -7;
   car.update(PHYSICS_STEP, { brake: true });

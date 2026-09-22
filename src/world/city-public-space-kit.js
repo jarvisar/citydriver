@@ -19,7 +19,7 @@ export const SPACE_NAMES = {
   library: ['Lantern library', 'Reading garden', 'Archive house'],
   hospital: ['Healing garden', 'Medical pavilion', 'Memorial court'],
   observatory: ['Celestial garden', 'Planetarium court', 'Star pavilion'],
-  music: ['Jazz courtyard', 'Garden sessions', 'Blue Note stage'],
+  music: ['Jazz courtyard', 'Garden sessions', 'Courtyard stage'],
   sports: ['Tennis club', 'Basketball club', 'Neighborhood courts'],
   firehouse: ['Heritage engine house', 'Station garden', 'Hose tower'],
   postoffice: ['Royal mail court', 'Letter garden', 'Parcel exchange'],

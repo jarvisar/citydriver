@@ -28,12 +28,18 @@ export class TaxiView {
     this.cone = new THREE.ConeGeometry(1, 2, 4); this.cone.rotateZ(Math.PI);
     this.people = createWalkerMaterial();
     this.partyBadges = new Map();
-    if (globalThis.document) for (const count of [2, 3, 4]) {
+    // Every waiting fare gets a badge: a green dollar sign, plus a white ×N when a group shares the ride.
+    if (globalThis.document) for (const count of [1, 2, 3, 4]) {
       const canvas = document.createElement('canvas'); canvas.width = 128; canvas.height = 64;
       const ctx = canvas.getContext('2d');
       ctx.fillStyle = '#17262f'; ctx.beginPath(); ctx.roundRect(2, 2, 124, 60, 18); ctx.fill();
       ctx.strokeStyle = '#c3f4bb'; ctx.lineWidth = 3; ctx.stroke();
-      ctx.fillStyle = '#fff8e7'; ctx.font = 'bold 42px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(`×${count}`, 64, 34);
+      const suffix = count > 1 ? `×${count}` : '';
+      ctx.font = 'bold 42px sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+      const dollar = ctx.measureText('$').width, tail = suffix ? ctx.measureText(suffix).width : 0;
+      const left = 64 - (dollar + tail) / 2;
+      ctx.fillStyle = '#7ce787'; ctx.fillText('$', left, 34);
+      if (suffix) { ctx.fillStyle = '#fff8e7'; ctx.fillText(suffix, left + dollar, 34); }
       const map = new THREE.CanvasTexture(canvas); map.colorSpace = THREE.SRGBColorSpace;
       this.partyBadges.set(count, new THREE.SpriteMaterial({ map, depthTest: false, depthWrite: false }));
     }
