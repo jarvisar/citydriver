@@ -72,7 +72,7 @@ async function boot() {
     // be in place before the first world is streamed.
     setResidentWindow(graphics.settings.chunks);
     graphics.onChange(settings => setResidentWindow(settings.chunks));
-    const rendering = createRendering($('#scene'), graphics);
+    const rendering = createRendering($('#scene'), graphics, { showCarSilhouette: () => started });
     const { renderer, scene } = rendering;
     let vr;
     const vrStatus = new VRStatus(rendering.vrCamera.camera);

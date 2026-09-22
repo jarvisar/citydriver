@@ -43,4 +43,14 @@ The smoke check launches Electron, verifies the local renderer, driving, city se
 
 ## Releases
 
-There is no Citydriver release destination configured yet. The shell has no updater and makes no requests to the original game's release feed. The builder uses `publish: null`; npm packaging commands also pass `--publish never`. The desktop GitHub workflow runs manually and uploads build artifacts only.
+The desktop GitHub workflow builds Windows, Linux, and macOS packages when a `v*` tag is pushed. After all builds succeed, it creates a GitHub release for the tag and attaches the packages. Follow progress under **Actions > Build Citydriver desktop** and download the finished packages under **Releases**.
+
+Commit your changes before creating the next version tag:
+
+```sh
+npm version patch && git push --follow-tags
+```
+
+The tag must include the release workflow changes. Existing tags do not build retroactively; after committing the workflow, create a new version with the command above.
+
+Manual workflow runs upload Actions artifacts without publishing a release. Local packaging also only builds files: the builder uses `publish: null` and npm packaging commands pass `--publish never`. GitHub Actions handles release uploads separately. The shell has no updater and makes no requests to the original game's release feed.

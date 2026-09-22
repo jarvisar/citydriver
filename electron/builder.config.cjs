@@ -73,7 +73,7 @@ module.exports = {
   asar: true,
   npmRebuild: false,
   nodeGypRebuild: false,
-  // Publishing is intentionally unconfigured for this new project.
+  // GitHub Actions attaches packages to releases; electron-builder only builds them.
   publish: null,
   artifactName: '${productName}-${version}-${os}-${arch}.${ext}',
 

@@ -14,7 +14,7 @@ import { CITY_BLOCK, DISTANT_CITY_RADIUS } from './world/city-grid.js';
 // height keeps the older, gentler rate so the view does not bob over terrain.
 const FOLLOW_GROUND = 8, FOLLOW_HEIGHT = 3;
 
-export function createRendering(canvas, graphics = new Graphics()) {
+export function createRendering(canvas, graphics = new Graphics(), { showCarSilhouette = () => true } = {}) {
   stabilizeShadowFiltering();
   // Multisampling belongs to the context and cannot be changed later, so the
   // level this page starts on decides it.
@@ -184,7 +184,7 @@ export function createRendering(canvas, graphics = new Graphics()) {
     updateFog();
   }
   function draw(viewCamera, stereo = false) {
-    carSilhouette.update(followedCar, !stereo && viewCamera.isOrthographicCamera);
+    carSilhouette.update(followedCar, showCarSilhouette() && !stereo && viewCamera.isOrthographicCamera);
     // Hide the player's exterior for the whole first-person draw, including
     // shadows and AO. Restore it for other views and after render failures.
     const car = views[view].firstPerson ? followedCar : null;
