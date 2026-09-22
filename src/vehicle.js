@@ -371,7 +371,8 @@ export class DrivingController {
     if (Math.abs(this.speed) > .015) acceleration -= Math.sign(this.speed) * drag;
     if (touch) {
       this.speed = Math.abs(this.speed);
-      const targetSpeed = input.handbrake ? 0 : touch.amount * (stats.topSpeed + (stats.offRoad - stats.topSpeed) * looseness);
+      // Raise the stick's speed target too, or its braking cancels the boost.
+      const targetSpeed = input.handbrake ? 0 : touch.amount * (stats.topSpeed + (boosting ? 10 : 0) + (stats.offRoad - stats.topSpeed) * looseness);
       acceleration = dt ? clamp((targetSpeed - this.speed) / dt, -stats.touchBraking, stats.acceleration) : 0;
       if (touch.amount) this.heading = touch.heading;
     }

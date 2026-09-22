@@ -49,3 +49,28 @@ reverse and reset; short drifts; prolonged crashes; and short/long fare payouts.
 Full unit suite and production build pass. Browser validation covers desktop
 and touch taxi flows. Automated measurements establish behavior, but final
 subjective handling and shift difficulty still benefit from human playtesting.
+
+## Follow-up review
+
+The existing steering, braking, drift tuning, boost economy, and fare timing
+remain appropriate for this conservative pass. The original 231 tests passed
+before changes. Only two reproducible inconsistencies warranted fixes:
+
+- Driving through an unselected pickup ring used to redirect the arrow and map
+  even at full speed. The chosen customer now stays selected until the cab is
+  slow enough to board another customer. Stopping at any ring still works and
+  still requires the same boarding hold.
+- Overhead touch steering capped its target speed at normal cruising speed,
+  fighting the boost acceleration. On flat road at 60 Hz, two seconds of boost
+  from 42 m/s previously reached only 42.33 m/s while consuming 88% of the meter.
+  It now reaches the same 52 m/s limit as keyboard and chase-view controls.
+  Releasing the stick still stops the cab, including while Boost is held.
+
+Regression coverage checks passing pickups forward and in reverse, boarding an
+alternative customer, and touch boost/stopping at 30, 60, and 120 Hz.
+
+The [Dangerous Driving developer interview](https://www.unrealengine.com/developer-interviews/three-fields-entertainment-explains-how-they-evolved-burnout-arcade-racing-formula-dangerous-driving)
+describes tuning handling through telemetry and repeated playable iterations.
+That supports the review approach here: use measurable inconsistencies to guide
+small changes, and leave subjective handling adjustments for comparative human
+playtesting.

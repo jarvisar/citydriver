@@ -152,6 +152,23 @@ test('any waiting customer can board but an active fare cannot be replaced or st
   run.stop(); assert.equal(run.customers.length, 0); assert.equal(run.servedCustomers.size, 0);
 });
 
+test('passing a pickup preserves the chosen customer until the cab slows to board', () => {
+  const car = player(), run = new TaxiRun(); run.start(car);
+  const chosen = run.customers[3], passing = run.customers[0];
+  run.select(chosen.id);
+  Object.assign(car, { s: passing.s, u: passing.u });
+  for (const speed of [25, -8, 2.5]) {
+    car.speed = speed; run.update(.1, car);
+    assert.equal(run.target, chosen, 'driving through another ring must not redirect the route');
+    assert.equal(run.hold, 0);
+  }
+  car.speed = 0; run.update(.2, car);
+  assert.equal(run.target, passing, 'stopping at any customer still starts boarding');
+  assert.equal(run.status, 'pickup', 'the normal boarding hold still applies');
+  run.update(.25, car);
+  assert.equal(run.status, 'driving'); assert.equal(run.fare, passing);
+});
+
 test('late fares fail, shift expiry ends the run, and restart clears state but retains best', () => {
   const saved = new Map(), storage = { getItem: k => saved.get(k), setItem: (k, v) => saved.set(k, v) };
   const car = player(), run = new TaxiRun(storage); run.start(car); pickup(run, car);
@@ -208,6 +225,25 @@ const handlingRoute = {
   position: (s, u, y = 0) => ({ x: u, y, z: -s }),
   height: () => 0, looseness: () => 0, bounds: () => [-Infinity, Infinity],
 };
+
+test('overhead touch boost adds useful speed and releasing the stick still stops the cab', () => {
+  for (const hz of [30, 60, 120]) {
+    const car = new DrivingController(handlingRoute, {}, 'taxi'), run = new TaxiRun(); car.arcade = true;
+    try {
+      run.start(car);
+      const touchDrive = { amount: 1, along: 1, across: 0, heading: 0 };
+      for (let i = 0; i < hz * 5; i++) car.update(1 / hz, run.controls(1 / hz, { touchDrive }));
+      assert.equal(car.speed, car.stats.topSpeed);
+      for (let i = 0; i < hz * 2; i++) car.update(1 / hz, run.controls(1 / hz, { touchDrive, boost: true }));
+      assert.ok(car.speed >= car.stats.topSpeed + 9, `${hz} Hz: boost should accelerate beyond cruise speed`);
+      assert.ok(car.speed <= car.stats.topSpeed + 10);
+      assert.ok(run.boost < .15, 'the speed increase uses the normal boost supply');
+      for (let i = 0; i < hz * 2; i++) car.update(1 / hz, run.controls(1 / hz, { touchDrive: { amount: 0 }, boost: true }));
+      assert.equal(run.boostActive, false);
+      assert.equal(car.speed, 0, 'releasing the stick stops even if Boost remains held');
+    } finally { car.disposeModel(); }
+  }
+});
 
 test('holding brake settles a moving cab for pickup and drop-off before reversing', () => {
   for (const hz of [30, 60, 120]) {

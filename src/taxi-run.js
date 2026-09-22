@@ -188,9 +188,11 @@ export class TaxiRun {
         this.nextCustomerRefresh = this.elapsed + 1;
         if (distance(player, this.customerCenter) > B / 2) this.makeCustomers(player, false);
       }
-      const passenger = this.customers.find(p => distance(p, player) < STOP_RADIUS);
+      // Passing another ring should not replace the driver's chosen route.
+      // Only switch customers when slow enough to begin boarding.
+      const passenger = Math.abs(player.speed) < 2.5 ? this.customers.find(p => distance(p, player) < STOP_RADIUS) : null;
       if (passenger && passenger.id !== this.target?.id) { this.selected = this.customers.indexOf(passenger); this.hold = 0; }
-      this.hold = passenger && Math.abs(player.speed) < 2.5 ? this.hold + dt : 0;
+      this.hold = passenger ? this.hold + dt : 0;
       if (this.hold >= STOP_SECONDS) {
         this.fare = passenger; this.fareLeft = passenger.limit; this.status = 'driving';
         this.customers = this.customers.filter(customer => customer !== passenger);
