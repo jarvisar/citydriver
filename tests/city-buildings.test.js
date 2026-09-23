@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { cityBlock, PAVEMENT_LEVEL } from '../src/world/city-grid.js';
 import { planBuildings, BUILDING_TYPES } from '../src/world/city-buildings.js';
-import { CitydriverChunk, CitydriverWorld } from '../src/world/citydriver-world.js';
+import { CitydriverChunk, CitydriverWorld, blockBatches } from '../src/world/citydriver-world.js';
 
 test('city lots vary their street widths, heights, roofs and layouts without overlapping or obstructing pavements', () => {
   const layouts = new Set(), types = new Set(), roofs = new Set(), counts = new Set(), heights = new Set(), widths = new Set();
@@ -40,10 +40,10 @@ test('each architecture keeps its silhouette, facade layout and materials when s
         assert.ok(near.features.colliders.some(c => c.x === b.x && c.z === -b.s && c.halfWidth === b.width / 2 && c.halfLength === b.depth / 2));
       }
       const matrix = new THREE.Matrix4(), p = new THREE.Vector3(), scale = new THREE.Vector3(), q = new THREE.Quaternion();
-      for (const mesh of near.group.children) for (let i = 0; i < mesh.count; i++) {
-        mesh.getMatrixAt(i, matrix); matrix.decompose(p, q, scale);
+      for (const batch of blockBatches(near.group)) for (let i = 0; i < batch.count; i++) {
+        batch.matrixAt(i, matrix); matrix.decompose(p, q, scale);
         assert.ok([...p, ...scale].every(Number.isFinite)); assert.ok(scale.x > 0 && scale.y > 0 && scale.z > 0);
-        if (mesh.name.startsWith('citydriver-shop-')) assert.ok(p.y > PAVEMENT_LEVEL + 3);
+        if (batch.name.startsWith('shop-')) assert.ok(p.y > PAVEMENT_LEVEL + 3);
       }
       near.dispose(); far.dispose();
     }

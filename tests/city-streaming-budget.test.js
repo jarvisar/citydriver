@@ -43,9 +43,17 @@ test('interleaved incremental construction preserves scenery, collision and pack
         actual.group.children.forEach((mesh, i) => {
           const reference = expected.group.children[i];
           assert.equal(mesh.name, reference.name);
-          assert.deepEqual(mesh.instanceMatrix.array, reference.instanceMatrix.array);
-          assert.deepEqual(mesh.instanceColor.array, reference.instanceColor.array);
-          assert.deepEqual(mesh.boundingSphere, reference.boundingSphere);
+          if (mesh.isInstancedMesh) {
+            assert.deepEqual(mesh.instanceMatrix.array, reference.instanceMatrix.array);
+            assert.deepEqual(mesh.instanceColor.array, reference.instanceColor.array);
+            assert.deepEqual(mesh.boundingSphere, reference.boundingSphere);
+          } else {
+            // Small furniture batches merge into one mesh with baked vertices.
+            for (const name of ['position', 'normal', 'color']) assert.deepEqual(mesh.geometry.attributes[name].array, reference.geometry.attributes[name].array);
+            assert.deepEqual(mesh.geometry.index.array, reference.geometry.index.array);
+            assert.deepEqual(mesh.geometry.boundingSphere, reference.geometry.boundingSphere);
+            assert.deepEqual(mesh.userData.batches, reference.userData.batches);
+          }
           assert.equal(mesh.material, reference.material);
         });
       }

@@ -24,6 +24,8 @@ export { DISTANT_CITY_RADIUS } from './city-grid.js';
 
 const boxGeometry = new THREE.BoxGeometry(1, 1, 1);
 const windowGeometry = new THREE.PlaneGeometry(1, 1);
+const warmupMergedGeometry = new THREE.BufferGeometry();
+for (const name of ['position', 'normal', 'color']) warmupMergedGeometry.setAttribute(name, new THREE.BufferAttribute(new Float32Array(9), 3));
 const transform = new THREE.Object3D();
 const residentItem = { p: [0, 0, 0], scale: [1, 1, 1], yaw: 0, roll: 0 };
 const residentFloat = {};
@@ -33,12 +35,151 @@ const dryRoad = new THREE.Color('#666c70'), wetRoad = new THREE.Color('#424e58')
 const GREENS = ['#63924d', '#80a85c', '#4f8054', '#93ab65'];
 const pick = (items, random) => items[Math.floor(random() * items.length)];
 
+function batchFlags(key, material) {
+  const flags = {
+    castShadow: !key.startsWith('surface-') && !key.startsWith('public-water') && !['road', 'water', 'lit', 'signal-lens', 'detail-clock', 'glass', 'grass-fringe'].includes(key),
+    receiveShadow: !['lit', 'signal-lens', 'detail-clock'].includes(key), ambientOcclusion: true,
+  };
+  if (material.userData.signAtlas) flags.castShadow = flags.receiveShadow = flags.ambientOcclusion = false;
+  if (key === 'water' || key === 'grass-fringe') flags.ambientOcclusion = false;
+  return flags;
+}
+function finishBatchMesh(mesh, { castShadow, receiveShadow, ambientOcclusion }, structure) {
+  mesh.renderOrder = structure ? -2 : 0;
+  mesh.castShadow = castShadow; mesh.receiveShadow = receiveShadow;
+  if (!ambientOcclusion) mesh.userData.ambientOcclusion = false;
+  stableShadowDepth(mesh);
+  mesh.updateMatrix();
+  mesh.matrixAutoUpdate = false;
+  if (mesh.isInstancedMesh) mesh.computeBoundingSphere();
+  else mesh.geometry.computeBoundingSphere();
+  return mesh;
+}
+
+// Lamps, benches, bins, signals, trees and roof details come in batches of a
+// handful each, and every batch costs a draw call, plus one more in the shadow
+// pass. Small batches that share a material and lighting therefore draw as one
+// merged mesh per block, with each instance's transform and colour written
+// into its vertices the way the instancing shader applies them. Batches of
+// many instances stay instanced: one draw already covers them, and sharing
+// one geometry keeps their memory small. Batches that change after building
+// never merge.
+const MERGE_INSTANCE_LIMIT = 32, MERGE_VERTEX_LIMIT = 6000;
+const LIVE_BATCHES = new Set(['residents', 'signal-lens', 'canal-boat', 'water']);
+const mergedMaterials = new WeakMap(), unitColors = new WeakMap();
+// Merged colours are stored as 16-bit fractions, so they must lie in 0..1.
+function inUnitRange(color) {
+  if (!unitColors.has(color)) unitColors.set(color, color.array.every(value => value >= 0 && value <= 1));
+  return unitColors.get(color);
+}
+function mergeable(key, { geometry, material, items }) {
+  const { position, normal, color } = geometry.attributes;
+  return mergedMaterials.has(material) && !LIVE_BATCHES.has(key) && Boolean(normal)
+    && (!color || (color.itemSize === 3 && inUnitRange(color))) && Object.keys(geometry.morphAttributes).length === 0
+    && items.length <= MERGE_INSTANCE_LIMIT && items.length * position.count <= MERGE_VERTEX_LIMIT
+    && items.every(item => item.signTile === undefined);
+}
+// Flat xyz values, read once per batch rather than once per instance.
+function vectors(attribute) {
+  if (!attribute) return null;
+  if (!attribute.isInterleavedBufferAttribute && !attribute.normalized && attribute.itemSize === 3) return attribute.array;
+  const values = new Float32Array(attribute.count * 3);
+  for (let i = 0; i < attribute.count; i++) {
+    values[i * 3] = attribute.getX(i); values[i * 3 + 1] = attribute.getY(i); values[i * 3 + 2] = attribute.getZ(i);
+  }
+  return values;
+}
+function* mergeBatchSteps(entries, east, start) {
+  const batches = entries.map(([, batch]) => batch);
+  let vertexCount = 0, indexCount = 0;
+  for (const { geometry, items } of batches) {
+    vertexCount += geometry.attributes.position.count * items.length;
+    indexCount += (geometry.index ?? geometry.attributes.position).count * items.length;
+  }
+  // Directions and colours need far less than single precision: 16-bit
+  // normals turn by a few thousandths of a degree, and 16-bit colours stay
+  // well inside one step of the 8-bit screen.
+  const position = new Float32Array(vertexCount * 3), normal = new Int16Array(vertexCount * 3), color = new Uint16Array(vertexCount * 3);
+  const index = vertexCount > 65535 ? new Uint32Array(indexCount) : new Uint16Array(indexCount);
+  const f = Math.fround;
+  let vertex = 0, next = 0;
+  // Which batches the mesh holds, with the transforms baked into it, for tools
+  // and tests; a few kilobytes a block.
+  const record = {};
+  for (const [batchKey, { geometry, items }] of entries) {
+    const matrices = record[batchKey] = new Float32Array(items.length * 16);
+    const count = geometry.attributes.position.count, source = geometry.index?.array;
+    const p = vectors(geometry.attributes.position), n = vectors(geometry.attributes.normal), c = vectors(geometry.attributes.color);
+    for (let k = 0; k < items.length; k++) {
+      const item = items[k], matrix = cityItemMatrix(item, east, start, transform.matrix);
+      matrix.toArray(matrices, k * 16);
+      // The instance buffers hold single precision; so does the bake.
+      const [e0, e1, e2, , e4, e5, e6, , e8, e9, e10, , e12, e13, e14] = matrix.elements.map(f);
+      const sx = e0 * e0 + e1 * e1 + e2 * e2, sy = e4 * e4 + e5 * e5 + e6 * e6, sz = e8 * e8 + e9 * e9 + e10 * e10;
+      tint.set(item.color);
+      const r = f(tint.r), g = f(tint.g), b = f(tint.b);
+      for (let i = 0, j = 0; i < count; i++, j += 3) {
+        const o = (vertex + i) * 3, x = p[j], y = p[j + 1], z = p[j + 2];
+        position[o] = e0 * x + e4 * y + e8 * z + e12;
+        position[o + 1] = e1 * x + e5 * y + e9 * z + e13;
+        position[o + 2] = e2 * x + e6 * y + e10 * z + e14;
+        // Three's instancing normal: divide by each axis's squared scale,
+        // then apply the instance's 3x3. The shader normalizes it anyway.
+        const nx = n[j] / sx, ny = n[j + 1] / sy, nz = n[j + 2] / sz;
+        const wx = e0 * nx + e4 * ny + e8 * nz, wy = e1 * nx + e5 * ny + e9 * nz, wz = e2 * nx + e6 * ny + e10 * nz;
+        const unit = 32767 / (Math.hypot(wx, wy, wz) || 1);
+        normal[o] = Math.round(wx * unit); normal[o + 1] = Math.round(wy * unit); normal[o + 2] = Math.round(wz * unit);
+        color[o] = Math.round((c ? c[j] : 1) * r * 65535);
+        color[o + 1] = Math.round((c ? c[j + 1] : 1) * g * 65535);
+        color[o + 2] = Math.round((c ? c[j + 2] : 1) * b * 65535);
+      }
+      if (source) for (let i = 0; i < source.length; i++) index[next++] = vertex + source[i];
+      else for (let i = 0; i < count; i++) index[next++] = vertex + i;
+      vertex += count;
+    }
+    yield;
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.BufferAttribute(position, 3));
+  geometry.setAttribute('normal', new THREE.BufferAttribute(normal, 3, true));
+  geometry.setAttribute('color', new THREE.BufferAttribute(color, 3, true));
+  geometry.setIndex(new THREE.BufferAttribute(index, 1));
+  const mesh = new THREE.Mesh(geometry, mergedMaterials.get(batches[0].material));
+  mesh.name = 'citydriver-merged'; mesh.userData.batches = record;
+  // Merged geometry belongs to its block alone. Blocks dispose every batch the
+  // way an InstancedMesh disposes, event included.
+  mesh.dispose = () => { geometry.dispose(); mesh.dispatchEvent({ type: 'dispose' }); };
+  return mesh;
+}
+
+// Every batch a block renders, instanced or merged, with its instance
+// transforms. For tools and tests; the game itself never needs to look.
+export function* blockBatches(group) {
+  for (const mesh of group.children) {
+    if (mesh.isInstancedMesh) yield { name: mesh.name.slice('citydriver-'.length), mesh, count: mesh.count, matrixAt: (i, target) => mesh.getMatrixAt(i, target) };
+    else for (const [name, matrices] of Object.entries(mesh.userData.batches ?? {})) {
+      yield { name, mesh, count: matrices.length / 16, matrixAt: (i, target) => target.fromArray(matrices, i * 16) };
+    }
+  }
+}
+
 function* renderBatchSteps(group, batches, east = 0, start = 0) {
+  const merges = new Map();
+  for (const [batchKey, batch] of batches) {
+    const key = batch.structure ? batchKey.slice('structure-'.length) : batchKey;
+    if (!batch.items.length || !mergeable(key, batch)) continue;
+    const flags = batchFlags(key, batch.material);
+    const id = [batch.material.uuid, batch.structure, flags.castShadow, flags.receiveShadow, flags.ambientOcclusion].join();
+    if (!merges.has(id)) merges.set(id, { flags, structure: batch.structure, keys: [] });
+    merges.get(id).keys.push(batchKey);
+  }
+  // A merge of one batch saves no draw call.
+  for (const [id, merge] of merges) if (merge.keys.length < 2) merges.delete(id);
+  const merged = new Set([...merges.values()].flatMap(merge => merge.keys));
   for (const [batchKey, { geometry, material, items, structure }] of batches) {
     const key = structure ? batchKey.slice('structure-'.length) : batchKey;
-    if (!items.length) continue;
+    if (!items.length || merged.has(batchKey)) continue;
     const mesh = new THREE.InstancedMesh(geometry, material, items.length); mesh.name = `citydriver-${batchKey}`;
-    mesh.renderOrder = structure ? -2 : 0;
     if (key === 'water') attachRiverFlow(mesh, new Float32Array(items.flatMap(item => item.riverAddress)));
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
@@ -47,19 +188,14 @@ function* renderBatchSteps(group, batches, east = 0, start = 0) {
       if (item.signTile !== undefined) mesh.setColorAt(i, tint.setRGB(item.signTile, 0, 0));
       if (key === 'residents') setWalkerAppearance(mesh, i, item.appearance);
     }
-    mesh.castShadow = !key.startsWith('surface-') && !key.startsWith('public-water') && !['road', 'water', 'lit', 'signal-lens', 'detail-clock', 'glass', 'grass-fringe'].includes(key);
-    mesh.receiveShadow = !['lit', 'signal-lens', 'detail-clock'].includes(key);
-    if (material.userData.signAtlas) {
-      mesh.castShadow = mesh.receiveShadow = false;
-      mesh.userData.ambientOcclusion = false;
-    }
-    if (key === 'water' || key === 'grass-fringe') mesh.userData.ambientOcclusion = false;
-    stableShadowDepth(mesh);
-    mesh.updateMatrix();
-    mesh.matrixAutoUpdate = false;
-    mesh.computeBoundingSphere();
+    finishBatchMesh(mesh, batchFlags(key, material), structure);
     if (key === 'water') mesh.boundingSphere.radius += .12;
     group.add(mesh);
+    yield;
+  }
+  for (const { keys, flags, structure } of merges.values()) {
+    const mesh = yield* mergeBatchSteps(keys.map(key => [key, batches.get(key)]), east, start);
+    group.add(finishBatchMesh(mesh, flags, structure));
     yield;
   }
 }
@@ -84,6 +220,15 @@ function resources() {
     bark: standard({ color: '#625548', vertexColors: true, roughness: .97 }),
     leaves: standard({ color: '#ffffff', vertexColors: true, roughness: .8 }),
   };
+  // Merged furniture carries its instance colours in its vertices. A separate
+  // material per lighting variant also keeps the renderer from switching one
+  // material's program between instanced and merged meshes.
+  for (const name of ['solid', 'props', 'bark', 'leaves']) {
+    const merged = result[name].clone();
+    merged.vertexColors = true;
+    mergedMaterials.set(result[name], merged);
+    result[`merged-${name}`] = merged;
+  }
   result.signs = createSignMaterial();
   for (const [name, [w, h]] of Object.entries(VENUE_SIGNS)) {
     for (let variant = 0; variant < (name === 'CITY HALL' ? 1 : 3); variant++) {
@@ -598,7 +743,9 @@ export class CitydriverWorld {
   // stall the drive on shader compilation. They are compiled, never drawn.
   // Residents need morph targets and already walk every block.
   warmupObjects() {
-    return Object.entries(this.materials).filter(([key]) => key !== 'residents').map(([, material]) => {
+    return Object.entries(this.materials).filter(([key]) => key !== 'residents').map(([key, material]) => {
+      // Merged furniture is a plain mesh with vertex colours.
+      if (key.startsWith('merged-')) return new THREE.Mesh(warmupMergedGeometry, material);
       const mesh = new THREE.InstancedMesh(boxGeometry, material, 1);
       mesh.setColorAt(0, tint.setRGB(1, 1, 1));
       return mesh;

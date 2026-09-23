@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { NightLighting } from '../src/night-lighting.js';
-import { CitydriverChunk, CitydriverWorld } from '../src/world/citydriver-world.js';
+import { CitydriverChunk, CitydriverWorld, blockBatches } from '../src/world/citydriver-world.js';
 import { DrivingController } from '../src/vehicle.js';
 import { CityTraffic } from '../src/city-traffic.js';
 
@@ -43,10 +43,10 @@ test('lamp light sources match rendered lenses on curved streets and bridges', (
   try {
     for (const [ix, iz] of [[0, 0], [3, 0], [-2, -3]]) {
       const chunk = new CitydriverChunk(ix, iz, world.materials);
-      const lamps = chunk.group.getObjectByName('citydriver-lamp');
+      const lamps = [...blockBatches(chunk.group)].find(batch => batch.name === 'lamp');
       assert.equal(chunk.features.lamps.length, lamps.count);
       for (let i = 0; i < lamps.count; i++) {
-        const matrix = new THREE.Matrix4(); lamps.getMatrixAt(i, matrix);
+        const matrix = new THREE.Matrix4(); lamps.matrixAt(i, matrix);
         const point = new THREE.Vector3(-1.75, 7.36, 0).applyMatrix4(matrix);
         const source = chunk.features.lamps[i];
         assert.ok(Math.abs(point.x + chunk.east - source.x) < .0001);

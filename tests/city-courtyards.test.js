@@ -7,7 +7,7 @@ import { planBuildings } from '../src/world/city-buildings.js';
 import { placeCityBuildings, parcelsOverlap, footprintFitsBlock } from '../src/world/city-parcels.js';
 import { planCourtyard } from '../src/world/city-courtyards.js';
 import { pathPanels, signedArea, subtractPolygon } from '../src/world/city-surfaces.js';
-import { CitydriverChunk, CitydriverWorld } from '../src/world/citydriver-world.js';
+import { CitydriverChunk, CitydriverWorld, blockBatches } from '../src/world/citydriver-world.js';
 
 test('courtyards keep walks, full planting groups and rejected-lot lawns clear of fitted buildings', () => {
   const layouts = new Set(), turns = new Set();
@@ -55,7 +55,7 @@ test('courtyard layout survives detail transitions and seating has collision', (
       const near = new CitydriverChunk(ix, iz, world.materials), far = new CitydriverChunk(ix, iz, world.materials, true);
       assert.deepEqual(near.features.courtyard, far.features.courtyard);
       const islands = near.features.courtyard.islands;
-      assert.equal(near.group.children.find(mesh => mesh.name === 'citydriver-bench')?.count ?? 0, islands.length);
+      assert.equal([...blockBatches(near.group)].find(batch => batch.name === 'bench')?.count ?? 0, islands.length);
       const seats = near.features.colliders.filter(c => (c.halfWidth === 1.05 && c.halfLength === .375) || (c.halfWidth === .375 && c.halfLength === 1.05));
       assert.equal(seats.length, islands.length);
       near.dispose(); far.dispose(); count++;

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { CITY_BLOCK as B, ROAD_LEVEL, cityStreetProfile, cityStreetAt, cityMedianAt, cityJunctionControl, citydriverRoute } from '../src/world/city-grid.js';
-import { CitydriverWorld } from '../src/world/citydriver-world.js';
+import { CitydriverWorld, blockBatches } from '../src/world/citydriver-world.js';
 import { CityTraffic } from '../src/city-traffic.js';
 import { CityAutodrive } from '../src/city-autodrive.js';
 import { junctionSpeed } from '../src/city-junctions.js';
@@ -111,7 +111,7 @@ test('visible traffic lamps follow the same phase as drivers, while minor juncti
   try {
     world.update(24, 3);
     const chunks = [...world.chunks.values()], color = new THREE.Color();
-    assert.ok(chunks.some(c => c.group.getObjectByName('citydriver-stop')));
+    assert.ok(chunks.some(c => [...blockBatches(c.group)].some(batch => batch.name === 'stop')));
     for (const time of [0, 10, 11, 12, 22, 23]) {
       world.animate(15, time);
       for (const c of chunks) for (const signal of c.features.signals) {

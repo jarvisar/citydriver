@@ -104,3 +104,19 @@ Seed `4817`, phone Basic at 390×844/DPR 3, hardware GPU, 4× CPU throttling:
 | Draw calls, High third person | 630 | 577 |
 
 Draw calls include the shadow pass. Deterministic frames at 54 poses (two levels, three cameras, sunset, night and rain) match the previous build pixel for pixel. The one exception is a single pixel that varies by one level between sessions of the same build.
+
+## Merged furniture batches
+
+Each block drew 15–22 instanced batches. Most held a handful of trees, lamps, benches, signals or bins, and each cost one draw in the colour pass and one in the shadow pass. `BatchedMesh` was measured first and rejected. In three r186 it issues one multi-draw entry per instance, so a 1,200-box batch becomes 1,200 sub-draws. Without `WEBGL_multi_draw` it issues one JavaScript draw call per instance. It also reads instance matrices from a texture in the vertex shader. In a city-shaped benchmark it cut calls from 360 to 157, but CPU submit time rose from 2.6 to 3.1 ms. Merging small same-material batches into one mesh per block cut calls to 144 and submit time to 2.3 ms.
+
+Merged batches keep their instance transforms and colours in vertices, using 16-bit normals and colours. Large batches stay instanced. Merged geometry adds about 190 KB per detailed block. Build work rises about 12%, with per-step p99 and maximum unchanged.
+
+Seed `4817`, hardware GPU, 4× CPU throttling, six fixed poses per level:
+
+| Level | Draw calls, before → after | Render CPU, sum of poses |
+| --- | ---: | ---: |
+| Basic | 244–344 → 199–272 | 15.0 → 13.8 ms |
+| Balanced | 385–483 → 282–349 | 20.1 → 17.1 ms |
+| High | 496–553 → 374–401 | 24.8 → 21.2 ms |
+
+Across 54 deterministic frames, 3,642 pixels changed by one level and about 70 edge pixels changed by more, from rasterization rounding. `tests/city-merged-batches.test.js` checks each baked vertex against the instancing shader's transform, normal and colour. It also checks that every batch draws once and that live batches stay instanced.
