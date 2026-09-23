@@ -3,6 +3,7 @@ import { CityMapCache } from './city-map.js';
 import { CITY_PLACES, PLACE_TYPES } from './world/city-places.js';
 import { CityExploration } from './city-exploration.js';
 import { taxiRoute } from './taxi-run.js';
+import { goalProgress } from './taxi-goals.js';
 
 const $ = id => document.getElementById(id);
 // Updates run ten times a second; rewriting an unchanged attribute still
@@ -33,7 +34,7 @@ export class CityGuide {
     $('city-guide').dataset.expanded = String(expanded);
     $('city-map-toggle').setAttribute('aria-expanded', String(expanded));
     $('city-map-toggle').textContent = expanded ? 'Close map' : 'Map';
-    $('taxi-offer').hidden = !expanded || !this.taxi?.running;
+    $('taxi-offer').hidden = !expanded || !this.taxi?.running || !$('taxi-offer').textContent;
     // Draw immediately so opening the map never exposes an empty canvas.
     if (expanded) {
       if (this.taxi?.running) this.updateTaxi();
@@ -68,11 +69,12 @@ export class CityGuide {
   }
   updateTaxi() {
     const run = this.taxi, vehicle = this.position(), target = run.target;
-    hide($('taxi-offer'), !this.expanded);
-    const offer = run.status === 'pickup'
-      ? 'Red rings are close by, green rings go far. Numbers show group size.'
-      : `${run.onboard} aboard · ${run.fare.stops.length - run.stopIndex} stop${run.fare.stops.length - run.stopIndex === 1 ? '' : 's'} left · Follow the gold route`;
+    // The map card keeps the next shift goal in view; the task card already
+    // says everything else about the fare.
+    const goal = run.goals?.find(goal => !goal.done);
+    const offer = goal ? `Goal · ${goal.text} · ${goalProgress(goal, run.stats)} / ${goal.target}` : '';
     if ($('taxi-offer').textContent !== offer) $('taxi-offer').textContent = offer;
+    hide($('taxi-offer'), !this.expanded || !offer);
     attribute(this.canvas, 'title', run.status === 'pickup' ? 'Nearby passengers' : 'Route to the drop-off');
     attribute(this.canvas, 'aria-label', run.status === 'pickup'
       ? 'Local street map. North is up; the white arrow is your car. Dots mark waiting passengers, red for short trips through orange and yellow to green for long ones; numbers show group size.'

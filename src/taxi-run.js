@@ -3,6 +3,8 @@ import { nearbyPlaces, routeDistance } from './city-exploration.js';
 import { cityLayout, cityLogical, cityLanePose, cityRoutePoints } from './world/city-layout.js';
 import { randomAt } from './world/route.js';
 import { TaxiFleet } from './taxi-fleet.js';
+import { TaxiCareer } from './taxi-career.js';
+import { shiftGoals, goalProgress } from './taxi-goals.js';
 
 export const SHIFT_SECONDS = 90;
 export const STOP_RADIUS = 8;
@@ -51,14 +53,16 @@ export const legLimit = length => Math.ceil(18 + length / 14);
 export const PICKUP_SECONDS = 6;
 export const PICKUP_EXTRA_SECONDS = 2;
 export const pickupSeconds = passengers => PICKUP_SECONDS + PICKUP_EXTRA_SECONDS * (passengers - 1);
-// A fare pays back its distance at a strong pace, about 30 m/s along the
-// route with a Speedy streak going. Slower driving drains the shift, faster
-// driving keeps it alive, whether the cab carries one rider or four.
-export const METERS_PER_SECOND_EARNED = 33;
+// A fare pays back its distance at a Speedy pace: about 20 m/s along the
+// route, counting the stop at each end and the drive to the next ring, holds
+// the shift clock steady once a streak is going. Normal arrivals drain it
+// slowly, Slow ones quickly, whether the cab carries one rider or four.
+export const METERS_PER_SECOND_EARNED = 24;
 export const deliverySeconds = (length, rating = RATINGS.at(-1)) =>
   Math.round(length / METERS_PER_SECOND_EARNED) + rating.seconds;
-// Speedy arrivals in a row add a second each to a fare's time bonus.
-export const STREAK_MAX_SECONDS = 3;
+// Speedy arrivals in a row add a second each to a fare's time bonus, so a
+// clean run of fares is worth protecting.
+export const STREAK_MAX_SECONDS = 5;
 export const streakSeconds = streak => Math.min(STREAK_MAX_SECONDS, Math.max(0, streak - 1));
 // Stunts tip only on the way: a rider pays to get somewhere, so circling a
 // block to drift for tips earns nothing once the cab stops closing in.
@@ -68,6 +72,7 @@ export const TIP_PROGRESS = 6;
 export const COMBO_MAX = 10;
 export const COMBO_SECONDS = 4;
 export const TIPS = { drift: 2, nearMiss: 5, crazyStop: 5 };
+const STUNT_STATS = { Drift: 'drifts', 'Near miss': 'nearMisses', 'Crazy stop': 'crazyStops' };
 // Every tip also tops up the boost, so stunts feed speed.
 export const STUNT_BOOST = .08;
 // A handbrake stop from this speed or more, inside the ring, is a Crazy stop.
@@ -108,12 +113,27 @@ const FIRST_LEG_MAX = [0, 1100, 800, 650, 500];
 // with the $25 bonus per extra rider and tips multiplied by everyone aboard,
 // without making a single rider not worth stopping for.
 export const GROUP_FARE_SHARE = .2;
+// A party's stops should read as a route through the city, not a line down
+// one street. Each hop ranks the nearby places by distance plus these
+// penalties, in metres: a stop around a corner beats one straight ahead on
+// the street the cab is already on, and a new kind of place beats a second
+// museum or a second market. Nearest-first chose the straight run about one
+// group in five.
+export const SAME_STREET_PENALTY = 320;
+export const STRAIGHT_PENALTY = 140;
+export const SAME_TYPE_PENALTY = 200;
+export const STRAIGHT_COSINE = .85;
+export function hopPenalty(previous, from, next, types) {
+  return (next.index === from.index ? SAME_STREET_PENALTY : 0)
+    + (turnCosine(previous, from, next) > STRAIGHT_COSINE ? STRAIGHT_PENALTY : 0)
+    + (types.has(next.type) ? SAME_TYPE_PENALTY : 0);
+}
 
 function partyOffer(stop, destination, length, wanted) {
   const stops = [{ destination, passengers: 1, length }];
   let previous = stop, from = destination, totalLength = length;
   while (stops.length < wanted) {
-    const taken = new Set(stops.map(leg => leg.destination.id));
+    const taken = new Set(stops.map(leg => leg.destination.id)), types = new Set(stops.map(leg => leg.destination.type));
     // Look around the rider who just got out, not around the pickup: a long
     // chain would otherwise run off the edge of the pickup's own window.
     const candidates = nearbyPlaces(from.s, from.u, 6).map(place => ({ ...placeStop(place), id: place.id }))
@@ -121,8 +141,9 @@ function partyOffer(stop, destination, length, wanted) {
       && distance(from, next) >= 45 && distance(from, next) <= GROUP_MAX_LEG
       // Keep roughly heading the way the cab is already pointed.
       && turnCosine(previous, from, next) >= GROUP_MIN_TURN)
-      .sort((a, b) => distance(from, a) - distance(from, b) || a.id.localeCompare(b.id))
-      .slice(0, GROUP_CANDIDATES);
+      .map(next => ({ next, score: distance(from, next) + hopPenalty(previous, from, next, types) }))
+      .sort((a, b) => a.score - b.score || a.next.id.localeCompare(b.next.id))
+      .slice(0, GROUP_CANDIDATES).map(({ next }) => next);
     let chosen = null;
     for (const next of candidates) {
       const leg = routeDistance(taxiRoute(from, next));
@@ -211,7 +232,7 @@ function nearbyCustomerStops(player) {
 
 export class TaxiRun {
   constructor(storage = null) {
-    this.fleet = new TaxiFleet(storage);
+    this.fleet = new TaxiFleet(storage); this.career = new TaxiCareer(storage); this.goals = []; this.summary = null;
     this.storage = storage; this.best = 0; this.status = 'idle'; this.events = []; this.revision = 0;
     try { const best = Number(storage?.getItem('citydriver-taxi-best')); if (Number.isFinite(best) && best > 0) this.best = Math.floor(best); } catch { /* Optional storage. */ }
   }
@@ -234,6 +255,11 @@ export class TaxiRun {
     this.stopIndex = 0; this.onboard = 0; this.deliveredPassengers = 0; this.held = 0; this.lastDropOff = null;
     this.streak = 0; this.ring = null;
     this.ratings = Object.fromEntries(RATINGS.map(rating => [rating.id, 0])); this.previousBest = this.best;
+    // What this shift can be measured by: the goals watch these, and the
+    // career keeps the best of them.
+    this.bestStreak = 0; this.bestCombo = 1; this.tipsBanked = 0; this.nearMisses = 0; this.crazyStops = 0; this.drifts = 0;
+    this.groups = 0; this.fullCabs = 0; this.longRides = 0; this.goalCash = 0; this.summary = null;
+    this.goals = shiftGoals(this.career.shifts, this.career.rank.index);
     this.lastImpact = player.audioTelemetry?.impactSerial ?? 0; this.makeCustomers(player);
     // Starting inside a ring must not choose the first fare for the driver.
     this.blockedPickup = this.customers.find(p => distance(p, player) < STOP_RADIUS) ?? null;
@@ -313,12 +339,35 @@ export class TaxiRun {
     this.boost = Math.min(1, this.boost + STUNT_BOOST);
     if (announce) this.events.push({ kind: 'tip', text: `${kind} +$${tip}`, combo: this.combo, riders: this.onboard });
     this.combo = Math.min(COMBO_MAX, this.combo + 1); this.comboTime = COMBO_SECONDS;
+    this.bestCombo = Math.max(this.bestCombo, this.combo);
+    const stat = STUNT_STATS[kind]; if (stat) this[stat]++;
+    this.checkGoals();
     return tip;
+  }
+  // The shift so far, in the terms the goals and career records use.
+  get stats() {
+    return { delivered: this.delivered, riders: this.deliveredPassengers, groups: this.groups, speedy: this.ratings?.speedy ?? 0,
+      streak: this.bestStreak, combo: this.bestCombo, tips: this.tipsBanked, nearMisses: this.nearMisses, crazyStops: this.crazyStops,
+      longRides: this.longRides, fullCabs: this.fullCabs };
+  }
+  // A finished goal banks its bonus with the fleet at once, so the money is
+  // kept even if the shift ends with riders still aboard.
+  checkGoals() {
+    if (!this.running) return;
+    const stats = this.stats;
+    for (const goal of this.goals) {
+      if (goal.done) continue;
+      goal.progress = goalProgress(goal, stats);
+      if (goal.progress < goal.target) continue;
+      goal.done = true; this.goalCash += goal.bonus; this.fleet.credit(goal.bonus);
+      this.events.push({ kind: 'goal', text: `Goal · ${goal.text} · +$${goal.bonus}`, goal, bonus: goal.bonus });
+    }
   }
   finish() {
     this.status = 'over'; this.boostActive = false; this.boarding = null; this.hold = 0; this.onboard = 0; this.revision++;
     this.previousBest = this.best; this.best = Math.max(this.best, this.cash);
     try { this.storage?.setItem('citydriver-taxi-best', String(this.best)); } catch { /* Optional storage. */ }
+    this.summary = this.career.record(this);
     this.events.push({ kind: 'over' });
   }
   update(dt, player, traffic = []) {
@@ -403,7 +452,7 @@ export class TaxiRun {
       const remaining = this.legRemaining, rating = arrivalRating(remaining);
       // Tipped while this rider is still aboard, so it counts every rider.
       const stunt = this.crazyStop ? this.reward('Crazy stop', TIPS.crazyStop, false) : 0; this.ring = null;
-      this.streak = rating.id === 'speedy' ? this.streak + 1 : 0;
+      this.streak = rating.id === 'speedy' ? this.streak + 1 : 0; this.bestStreak = Math.max(this.bestStreak, this.streak);
       // Crazy Taxi's three kinds of money: the base fare for the distance, a
       // time bonus fare for the clock left, and tips. A group's fare is held
       // until the last rider is out, then paid in full, as in Crazy Taxi 2.
@@ -419,6 +468,12 @@ export class TaxiRun {
       if (paid) { this.cash += paid; this.fleet.credit(paid); }
       this.recentDestinations = [...this.recentDestinations, stop.destination.type].slice(-3);
       const group = this.fare.passengers > 1;
+      if (last) {
+        this.delivered++; this.tipsBanked += this.tips;
+        if (group) this.groups++;
+        if (this.fare.passengers === 4) this.fullCabs++;
+        if (this.fare.band === 'long') this.longRides++;
+      }
       const lead = !group ? '' : last ? 'Group complete · ' : `Rider ${this.stopIndex + 1} of ${this.fare.passengers} · `;
       const verdict = rating.id === 'speedy' ? `${rating.label}!` : rating.label;
       const text = [`${lead}${verdict}`, streak && `Streak ×${this.streak}`, stunt && `Crazy stop +$${stunt}`, paid && `+$${paid}`, `+${seconds}s`];
@@ -435,9 +490,9 @@ export class TaxiRun {
         this.comboTime = Math.max(this.comboTime, COMBO_SECONDS);
         return;
       }
-      this.delivered++; this.stopIndex = 0; this.held = 0; this.lastDropOff = { s: stop.destination.s, u: stop.destination.u };
+      this.stopIndex = 0; this.held = 0; this.lastDropOff = { s: stop.destination.s, u: stop.destination.u };
       this.status = 'pickup'; this.fare = null; this.tips = 0; this.combo = 1; this.hold = 0;
-      this.revision++; this.makeCustomers(player);
+      this.revision++; this.makeCustomers(player); this.checkGoals();
       // Overlapping pickups wait until the driver leaves the ring.
       this.blockedPickup = this.customers.find(p => distance(p, player) < STOP_RADIUS) ?? null;
     }

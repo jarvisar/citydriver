@@ -30,7 +30,7 @@ test('the arrival rating follows the rider clock: over half green, over a quarte
     assert.equal(deliverySeconds(length, RATINGS[0]), slow + 5);
     assert.equal(deliverySeconds(length), slow, 'an unrated delivery earns the base time');
   }
-  assert.deepEqual([0, 1, 2, 3, 4, 5, 9].map(streakSeconds), [0, 0, 1, 2, 3, 3, 3], 'a Speedy streak adds up to 3 s');
+  assert.deepEqual([0, 1, 2, 3, 4, 5, 6, 9].map(streakSeconds), [0, 0, 1, 2, 3, 4, 5, 5], 'a Speedy streak adds up to 5 s');
 });
 
 test('ring colours run red to green with trip length and every offer wears its band', () => {
@@ -112,7 +112,7 @@ test('Speedy arrivals in a row add time; a slower arrival or a lost rider ends t
     assert.equal(event.seconds, deliverySeconds(length, RATINGS.find(r => r.id === event.rating)) + event.streak);
     return event.streak;
   });
-  assert.deepEqual(streaks, [0, 1, 2, 3, 3, 0, 0]);
+  assert.deepEqual(streaks, [0, 1, 2, 3, 4, 0, 0]);
   const streak = deliver(.9);
   assert.equal(streak.streak, 1); assert.match(streak.text, /^Speedy! · Streak ×2 · \+\$\d+ · \+\d+s$/);
   board(run, car, run.customers.find(c => c.id !== run.blockedPickup?.id));

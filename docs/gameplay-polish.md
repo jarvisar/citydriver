@@ -1,6 +1,6 @@
 # Taxi handling and scoring
 
-Taxi runs start at 90 seconds and cap at 120 seconds.
+Taxi runs start at 90 seconds and cap at 180 seconds. Fare timing, shift goals and the career are described in [progression and balance](taxi-progression.md).
 
 - Steering returns to center and countersteers faster than it turns in.
 - Brake takes priority over throttle. At zero speed, it waits 0.5 seconds before reversing; boarding and drop-off need 0.45 seconds. Release and press brake again to skip the wait.

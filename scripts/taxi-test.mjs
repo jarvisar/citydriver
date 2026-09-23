@@ -52,13 +52,13 @@ async function checkGroupFare(page, size, label) {
       v.render(1, a.world.origin); a.rendering.snap(); a.rendering.update(v.car, 1, a.world.origin);
       run.update(.1, v); a.taxiView.render(run, v, a.world.origin, 0); a.taxiView.hud(run, v);
       return { id: group.id, passengers: group.passengers, fare: group.fare, groupBonus: group.groupBonus, stops: group.stops.length,
-        names: group.stops.map(s => s.destination.name), bank: run.fleet.balance,
+        names: group.stops.map(s => s.destination.name), bank: run.fleet.balance, goalCash: run.goalCash,
         rendered: a.taxiView.markers.find(m => m.stop.id === group.id).person.count };
     }
     throw new Error('No suitable group offer found');
   }, size);
   assert.equal(offer.rendered, offer.passengers); assert.equal(offer.stops, offer.passengers);
-  assert.match(await page.locator('#taxi-next-stop').textContent(), new RegExp(`^${offer.passengers} riders · ${offer.passengers} stops · then `));
+  assert.equal(await page.locator('#taxi-next-stop').textContent(), `${offer.passengers} riders · ${offer.passengers} stops`);
   assert.match(await page.locator('#taxi-party').textContent(), /^(Quick hop|Short ride|Medium ride|Long ride) · [\d.]+ k?m$/);
   assert.equal(await page.evaluate(() => window.__citydriver.taxi.target), null);
   await page.click('#resume');
@@ -96,10 +96,11 @@ async function checkGroupFare(page, size, label) {
   await page.waitForFunction(() => window.__citydriver.taxi.delivered === 1);
   const result = await page.evaluate(() => {
     const run = window.__citydriver.taxi;
-    return { cash: run.cash, riders: run.deliveredPassengers, bank: run.fleet.balance, target: run.target, onboard: run.onboard };
+    return { cash: run.cash, riders: run.deliveredPassengers, bank: run.fleet.balance, goalCash: run.goalCash, target: run.target, onboard: run.onboard };
   });
   assert.equal(result.riders, offer.passengers); assert.equal(result.onboard, 0); assert.equal(result.target, null);
-  assert.ok(result.cash >= offer.fare + offer.groupBonus); assert.equal(result.bank - offer.bank, result.cash);
+  assert.ok(result.cash >= offer.fare + offer.groupBonus);
+  assert.equal(result.bank - offer.bank, result.cash + result.goalCash - offer.goalCash, 'the fare banks, plus any shift goal it completed');
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
 }
 try {
@@ -193,7 +194,8 @@ try {
   assert.equal(await page.locator('#taxi-license-badge').textContent(), license.badge);
   assert.equal(await page.locator('#taxi-license-name').textContent(), license.id === 'none' ? 'No license' : `${license.name} license`);
   assert.match(await page.locator('#taxi-license-next').textContent(), new RegExp(`more for ${license.next.name}$`));
-  assert.equal(await page.locator('#taxi-result-ratings').textContent(), 'Speedy 1');
+  assert.equal(await page.locator('#taxi-result-stats [data-stat=speedy] strong').textContent(), '1/1', 'an instant arrival is the shift\'s one Speedy rating');
+  assert.equal(await page.locator('#taxi-result-stats [data-stat=fares] strong').textContent(), '1');
   assert.match(await page.locator('#taxi-result-best').textContent(), new RegExp(` · ${license.name}$`));
   await page.screenshot({ path: '.artifacts/taxi/results.png' });
   await page.click('#taxi-retry'); assert.equal(await page.evaluate(() => window.__citydriver.taxi.cash), 0);
