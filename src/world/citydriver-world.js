@@ -18,6 +18,7 @@ import { cityItemMatrix, cityAffinePoint } from './city-layout-render.js';
 import { addSurfacePolygon, rectanglePolygon } from './city-surfaces.js';
 import { buildRiverGround, buildRivers, riverResidentPose, riverBoatPosition } from './city-rivers.js';
 import { createRiverWaterMaterial, attachRiverFlow } from './river-water.js';
+import { stableShadowDepth } from './shadow-depth.js';
 import { CITY_BLOCK, DISTANT_CITY_RADIUS, PAVEMENT_LEVEL, WATER_LEVEL, cityCell, cityBlock } from './city-grid.js';
 export { DISTANT_CITY_RADIUS } from './city-grid.js';
 
@@ -27,6 +28,7 @@ const transform = new THREE.Object3D();
 const residentItem = { p: [0, 0, 0], scale: [1, 1, 1], yaw: 0, roll: 0 };
 const residentFloat = {};
 const tint = new THREE.Color();
+const SIGNAL_GREEN = new THREE.Color('#62d996'), SIGNAL_AMBER = new THREE.Color('#ffd571'), SIGNAL_RED = new THREE.Color('#ed654b'), SIGNAL_OFF = new THREE.Color('#293538');
 const dryRoad = new THREE.Color('#666c70'), wetRoad = new THREE.Color('#424e58');
 const GREENS = ['#63924d', '#80a85c', '#4f8054', '#93ab65'];
 const pick = (items, random) => items[Math.floor(random() * items.length)];
@@ -52,6 +54,7 @@ function* renderBatchSteps(group, batches, east = 0, start = 0) {
       mesh.userData.ambientOcclusion = false;
     }
     if (key === 'water' || key === 'grass-fringe') mesh.userData.ambientOcclusion = false;
+    stableShadowDepth(mesh);
     mesh.updateMatrix();
     mesh.matrixAutoUpdate = false;
     mesh.computeBoundingSphere();
@@ -297,13 +300,15 @@ export class CitydriverChunk {
   }
   animate(time, signalTime = time, animatePeople = true, contacts = null) {
     const phase = Math.floor(signalTime % 24);
-    if (phase !== this.signalPhase && this.signalMesh) {
-      this.signalPhase = phase;
+    // The lamps change at six moments in each cycle; recolour only then.
+    const northGreen = cityGreen('north', signalTime), eastGreen = cityGreen('east', signalTime);
+    const lights = (northGreen ? 1 : phase === 10 ? 2 : 0) + (eastGreen ? 3 : phase === 22 ? 6 : 0);
+    if (lights !== this.signalLights && this.signalMesh) {
+      this.signalLights = lights;
       for (const signal of this.features.signals) {
-        const green = cityGreen(signal.axis, signalTime), amber = signal.axis === 'north' ? phase === 10 : phase === 22;
+        const north = signal.axis === 'north', green = north ? northGreen : eastGreen, amber = north ? phase === 10 : phase === 22;
         for (let i = 0; i < 3; i++) {
-          tint.set((i === 2 && green) ? '#62d996' : (i === 1 && amber) ? '#ffd571' : (i === 0 && !green && !amber) ? '#ed654b' : '#293538');
-          this.signalMesh.setColorAt(signal.indices[i], tint);
+          this.signalMesh.setColorAt(signal.indices[i], (i === 2 && green) ? SIGNAL_GREEN : (i === 1 && amber) ? SIGNAL_AMBER : (i === 0 && !green && !amber) ? SIGNAL_RED : SIGNAL_OFF);
         }
       }
       this.signalMesh.instanceColor.needsUpdate = true;
@@ -587,6 +592,17 @@ export class CitydriverWorld {
       }
       chunk.animate(time, signalTime, visible, contacts);
     }
+  }
+  // Stand-ins for every shared material, shaped like the colored instanced
+  // batches that use them, so a river or landmark streaming in later does not
+  // stall the drive on shader compilation. They are compiled, never drawn.
+  // Residents need morph targets and already walk every block.
+  warmupObjects() {
+    return Object.entries(this.materials).filter(([key]) => key !== 'residents').map(([, material]) => {
+      const mesh = new THREE.InstancedMesh(boxGeometry, material, 1);
+      mesh.setColorAt(0, tint.setRGB(1, 1, 1));
+      return mesh;
+    });
   }
   dispose() {
     for (const chunk of this.chunks.values()) chunk.dispose(); this.chunks.clear(); this.pending = [];

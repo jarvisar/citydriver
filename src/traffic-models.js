@@ -150,16 +150,32 @@ export function createTrafficModels() {
   const taillights = material('#a5382e', { emissive: '#e12e18', emissiveIntensity: .25 });
   const templates = TRAFFIC_MODELS.map(spec => {
     const { paint, details: trim, headlights: front, taillights: rear } = vehicleGeometry(spec);
-    return { paint, details: trim, headlights: front, taillights: rear };
+    // Each car casts its whole shadow in one draw instead of four. The trim
+    // and lamp triangles follow the paint's in one buffer: the colour pass
+    // draws only the paint's range, and the shadow pass all of it. The same
+    // triangles reach the shadow map either way.
+    const paintCount = paint.index.count, outline = trim.clone();
+    outline.deleteAttribute('color');
+    const body = mergeGeometries([paint, outline, front, rear]);
+    outline.dispose(); paint.dispose();
+    body.setDrawRange(0, paintCount);
+    return { parts: { paint: body, details: trim, headlights: front, taillights: rear }, paintCount };
   });
   const paints = [];
   return {
     create(index, color) {
       const spec = TRAFFIC_MODELS[index], car = new THREE.Group(), paint = material(color);
       paints.push(paint); car.name = `traffic-${spec.name}`;
-      for (const [key, geometry] of Object.entries(templates[index])) {
+      const { parts, paintCount } = templates[index];
+      for (const [key, geometry] of Object.entries(parts)) {
         const mesh = new THREE.Mesh(geometry, { paint, details, headlights, taillights }[key]);
-        mesh.castShadow = true; mesh.receiveShadow = true; stableShadowDepth(mesh); car.add(mesh);
+        mesh.receiveShadow = true;
+        if (key === 'paint') {
+          mesh.castShadow = true; stableShadowDepth(mesh);
+          mesh.onBeforeShadow = () => { geometry.drawRange.count = Infinity; };
+          mesh.onAfterShadow = () => { geometry.drawRange.count = paintCount; };
+        }
+        car.add(mesh);
       }
       return { car, paint, spec };
     },
@@ -167,7 +183,7 @@ export function createTrafficModels() {
     setLights(level) { headlights.emissiveIntensity = .3 + 2 * level; taillights.emissiveIntensity = .25 + 1.55 * level; },
     setNight(night) { this.setLights(night ? 1 : 0); },
     dispose() {
-      for (const template of templates) for (const geometry of Object.values(template)) geometry.dispose();
+      for (const template of templates) for (const geometry of Object.values(template.parts)) geometry.dispose();
       for (const mat of [...paints, details, headlights, taillights]) mat.dispose();
     },
   };

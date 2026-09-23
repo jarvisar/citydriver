@@ -82,7 +82,9 @@ async function boot() {
     // How much of the route stays built is a quality setting too, so it has to
     // be in place before the first world is streamed.
     setResidentWindow(graphics.settings.chunks);
-    graphics.onChange(settings => setResidentWindow(settings.chunks));
+    // The stylesheet leaves costly HUD effects out of the lighter levels.
+    document.documentElement.dataset.graphics = graphics.levelId;
+    graphics.onChange(settings => { setResidentWindow(settings.chunks); document.documentElement.dataset.graphics = settings.id; });
     const rendering = createRendering($('#scene'), graphics, { showCarSilhouette: () => started,
       beforeDraw: camera => taxiView.navigation.update(taxi, vehicle, camera) });
     const { renderer, scene } = rendering;
@@ -372,8 +374,7 @@ async function boot() {
         nextWorld = new JOURNEYS[id].World(scene);
         nextWorld.update(nextState.s, 2.4);
         while (nextWorld.pending.length) nextWorld.update(nextState.s, 2.4);
-        if (renderer.extensions.has('KHR_parallel_shader_compile')) await renderer.compileAsync(scene, rendering.camera);
-        else renderer.compile(scene, rendering.camera);
+        await rendering.precompile([...nextWorld.warmupObjects(), ...taxiView.warmupObjects()]);
         world.dispose(); world = nextWorld; journey = id;
         savedJourneys[id] = nextState;
         if (regenerate) { time = 0; hudTime = 0; vehicle.wheelSpin = 0; }
@@ -710,10 +711,11 @@ async function boot() {
       // Replacing unchanged text still invalidates layout, including while paused.
       if (hud.distance.textContent !== distance) hud.distance.textContent = distance;
       const degrees = ((vehicle.heading * 180 / Math.PI) % 360 + 360) % 360;
-      $('#city-heading').textContent = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'][Math.round(degrees / 45) % 8];
+      const text = (selector, value) => { const element = $(selector); if (element.textContent !== value) element.textContent = value; };
+      text('#city-heading', ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'][Math.round(degrees / 45) % 8]);
       const cell = cityCell(vehicle.s, vehicle.u);
-      $('#city-location').textContent = `${cityDistrict(vehicle.s, vehicle.u)} · ${cell.ix}, ${cell.iz}`;
-      $('#weather-label').textContent = weather.state.label;
+      text('#city-location', `${cityDistrict(vehicle.s, vehicle.u)} · ${cell.ix}, ${cell.iz}`);
+      text('#weather-label', weather.state.label);
       cityGuide.update(started && !paused && !changingJourney);
       taxiView.hud(taxi, vehicle);
     }
@@ -840,8 +842,8 @@ async function boot() {
     buildCarCards(); buildPaintSwatches(); updateCarUi();
     vehicle.render(0, world.origin); traffic.render(1, world.origin); rendering.update(vehicle.car, 1, world.origin); updateHud(); updateJourneyUi(); updateViewUi(); updateGraphicsUi();
     nightLighting.update(world, vehicle, traffic, weather.state.lightLevel);
-    if (renderer.extensions.has('KHR_parallel_shader_compile')) await renderer.compileAsync(scene, rendering.camera);
-    else renderer.compile(scene, rendering.camera);
+    await rendering.precompile([...world.warmupObjects(), ...taxiView.warmupObjects()]);
+    try { taxiView.navigation.prepare(); } catch { /* The first fare tries again. */ }
     changingJourney = false;
     renderer.setAnimationLoop(frame);
     void vr.detect();

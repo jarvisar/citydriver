@@ -36,16 +36,23 @@ export class DestinationArrow {
     const cameraHeading = Math.atan2(this.forward.x, -this.forward.z);
     const bearing = Math.atan2(run.target.u - vehicle.u, run.target.s - vehicle.s);
     this.mesh.rotation.y = cameraHeading - bearing;
-    if (!this.canvas || Math.abs(this.mesh.rotation.y - this.lastAngle) < .0001) return;
-    if (!this.renderer) {
-      this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, alpha: true, antialias: true });
-      this.renderer.setClearColor(0, 0);
-      // At most 104 x 104 pixels, independent of the city's render resolution.
-      this.renderer.setPixelRatio(Math.min(globalThis.devicePixelRatio || 1, 2));
-      this.renderer.setSize(52, 52, false);
-    }
+    // The chase camera sways a little every frame. A turn this small moves the
+    // arrow's tip by less than a tenth of a pixel, so keep the last frame.
+    if (!this.canvas || Math.abs(this.mesh.rotation.y - this.lastAngle) < .004) return;
+    this.prepare();
     this.renderer.render(this.scene, this.camera);
     this.lastAngle = this.mesh.rotation.y;
+  }
+  // Create the context and compile its program while the city loads, rather
+  // than stalling the first fare.
+  prepare() {
+    if (!this.canvas || this.renderer) return;
+    this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, alpha: true, antialias: true });
+    this.renderer.setClearColor(0, 0);
+    // At most 104 x 104 pixels, independent of the city's render resolution.
+    this.renderer.setPixelRatio(Math.min(globalThis.devicePixelRatio || 1, 2));
+    this.renderer.setSize(52, 52, false);
+    this.renderer.compile(this.scene, this.camera);
   }
   dispose() { this.geometry.dispose(); this.material.dispose(); this.group.removeFromParent(); this.renderer?.dispose(); }
 }

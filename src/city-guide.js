@@ -5,6 +5,10 @@ import { CityExploration } from './city-exploration.js';
 import { taxiRoute } from './taxi-run.js';
 
 const $ = id => document.getElementById(id);
+// Updates run ten times a second; rewriting an unchanged attribute still
+// invalidates style, so compare first.
+const attribute = (element, name, value) => { if (element.getAttribute(name) !== value) element.setAttribute(name, value); };
+const hide = (element, hidden) => { if (element.hidden !== hidden) element.hidden = hidden; };
 const MAP_SCALE = .36;
 export class CityGuide {
   constructor(notify, position) {
@@ -57,20 +61,20 @@ export class CityGuide {
       this.refreshNotebook();
     }
     if (this.taxi?.running) { this.updateTaxi(); return; }
-    this.canvas.title = 'Local street map';
-    $('taxi-offer').hidden = true;
-    this.canvas.setAttribute('aria-label', 'Local street map. North is up; the white arrow is your car.');
+    attribute(this.canvas, 'title', 'Local street map');
+    hide($('taxi-offer'), true);
+    attribute(this.canvas, 'aria-label', 'Local street map. North is up; the white arrow is your car.');
     if (this.expanded) this.draw(vehicle);
   }
   updateTaxi() {
     const run = this.taxi, vehicle = this.position(), target = run.target;
-    $('taxi-offer').hidden = !this.expanded;
+    hide($('taxi-offer'), !this.expanded);
     const offer = run.status === 'pickup'
       ? 'Red rings are close by, green rings go far. Numbers show group size.'
       : `${run.onboard} aboard · ${run.fare.stops.length - run.stopIndex} stop${run.fare.stops.length - run.stopIndex === 1 ? '' : 's'} left · Follow the gold route`;
     if ($('taxi-offer').textContent !== offer) $('taxi-offer').textContent = offer;
-    this.canvas.title = run.status === 'pickup' ? 'Nearby passengers' : 'Route to the drop-off';
-    this.canvas.setAttribute('aria-label', run.status === 'pickup'
+    attribute(this.canvas, 'title', run.status === 'pickup' ? 'Nearby passengers' : 'Route to the drop-off');
+    attribute(this.canvas, 'aria-label', run.status === 'pickup'
       ? 'Local street map. North is up; the white arrow is your car. Dots mark waiting passengers, red for short trips through orange and yellow to green for long ones; numbers show group size.'
       : 'Local street map. North is up; the white arrow is your car. Gold marks the current drop-off; a dashed line leads to the next group stop.');
     if (this.expanded) this.draw(vehicle);

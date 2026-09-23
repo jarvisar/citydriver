@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { PAVEMENT_LEVEL } from './world/city-grid.js';
 
 const STREET_LIMIT = 96, HEADLIGHT_LIMIT = 25, RANGE = 145;
-const up = new THREE.Vector3(0, 1, 0);
+const up = new THREE.Vector3(0, 1, 0), lensColor = new THREE.Color('#fff1c8');
 
 // Small CPU-generated masks, shared by every instance. No lights, render
 // targets, bloom, shadow maps, or extra work in the city's surface shaders.
@@ -73,7 +73,7 @@ export class NightLighting {
     }
     this.pools.material.opacity = .48 * strength;
     this.beams.material.opacity = .56 * strength;
-    this.lenses.material.color.set('#fff1c8').multiplyScalar(strength);
+    this.lenses.material.color.copy(lensColor).multiplyScalar(strength);
     const t = this.transform;
     const uploadStreet = refresh || this.lastOrigin !== origin;
     this.lastOrigin = origin;

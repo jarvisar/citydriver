@@ -83,3 +83,24 @@ Third-person browser counts, including shadows:
 One High run still had a 25.4 ms streaming outlier. Reports are under `.artifacts/performance/` in `smooth-before`, `smooth-after`, and `smoothing/streaming.json`.
 
 With a dev server, run `node scripts/smoothing-test.mjs` for 36 image comparisons across two qualities, three cameras, day/night, a boundary crossing, and a negative-coordinate rebase. Its reference uses the original far plane, recomputed bounds, and full uploads. Unit tests cover buffer resizing, pending uploads, disposal, water bounds, and fog projection updates.
+
+## Shader warm-up and draw calls
+
+Mid-drive stutter came mostly from shader compilation. Loading compiled only the overhead view's fogless programs, so the first chase-camera frame compiled a fog variant of every material. Rivers and fare markers compiled when first seen, and fare markers compiled again after each fare disposed their materials. Loading now compiles every variant, and marker materials persist.
+
+Walker batches carry a morph texture, so three's shared depth material switched programs at every block's walkers. It now takes the dedicated depth materials already used by vehicles. Traffic casts one shadow draw per car instead of four. `cityLayout` hashes its river and district indices directly instead of building string cache keys, which is 2.2× faster with identical output over 208,656 sampled points.
+
+Seed `4817`, phone Basic at 390×844/DPR 3, hardware GPU, 4× CPU throttling:
+
+| Metric | Before | After |
+| --- | ---: | ---: |
+| Worst frame when a taxi run starts | 350 ms | 116 ms |
+| Programs compiled after loading (start plus 25 s of driving) | 8–9 | 0 |
+| Frames over 40 ms in 20 s of autodrive | 3–17 | 1 |
+| Worst autodrive frame | 200–400 ms | 50–67 ms |
+| Idle main thread while driving | 46% | 52–58% |
+| Style recalculation, 15 s of taxi pickup | 373 ms, 145 recalcs | 38 ms, 15 recalcs |
+| Draw calls, Basic third person | 355 | 302 |
+| Draw calls, High third person | 630 | 577 |
+
+Draw calls include the shadow pass. Deterministic frames at 54 poses (two levels, three cameras, sunset, night and rain) match the previous build pixel for pixel. The one exception is a single pixel that varies by one level between sessions of the same build.

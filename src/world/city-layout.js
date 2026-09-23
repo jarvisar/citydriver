@@ -9,34 +9,25 @@ const B = 112;
 const TAU = Math.PI * 2;
 const fade = t => { t = Math.max(0, Math.min(1, t)); return t * t * t * (t * (t * 6 - 15) + 10); };
 const bell = (distance, inner, outer) => 1 - fade((Math.abs(distance) - inner) / (outer - inner));
-const riverPhases = new Map(), neighborhoods = new Map();
-function cached(cache, key, make) {
-  if (!cache.has(key)) {
-    if (cache.size >= 256) cache.clear();
-    cache.set(key, make());
-  }
-  return cache.get(key);
-}
-
+// Physics, traffic and walkers call this tens of thousands of times a second.
+// Hashing an index is cheaper than building a string key to cache the result,
+// and allocates nothing.
 export function cityLayout(s, u) {
   const river = Math.round((u / B - RIVER_COLUMN - .5) / RIVER_PERIOD), center = (river * RIVER_PERIOD + RIVER_COLUMN + .5) * B;
-  const phase = cached(riverPhases, `n${river}`, () => randomAt(river, 9351) * TAU);
+  const phase = randomAt(river, 9351) * TAU;
   const waterfront = bell(u - center, B * .5, B * 2.1);
   let du = waterfront * (22 * Math.sin(s / (B * 1.7) + phase) + 8 * Math.sin(s / (B * 3.7) + phase * 2));
   const crossRiver = Math.round((s / B - CROSS_RIVER_ROW - .5) / CROSS_RIVER_PERIOD);
   const crossCenter = (crossRiver * CROSS_RIVER_PERIOD + CROSS_RIVER_ROW + .5) * B;
-  const crossPhase = cached(riverPhases, `e${crossRiver}`, () => randomAt(crossRiver, 9354) * TAU);
+  const crossPhase = randomAt(crossRiver, 9354) * TAU;
   let ds = bell(s - crossCenter, B * .5, B * 2.1) * (22 * Math.sin(u / (B * 1.9) + crossPhase) + 8 * Math.sin(u / (B * 4.1) + crossPhase * 2));
   const rx = Math.floor(u / (B * 8)), rz = Math.floor(s / (B * 8));
-  const district = cached(neighborhoods, `${rx},${rz}`, () => ({
-    active: randomAt(rx, rz + 9352) < .55,
-    phase: randomAt(rx, rz + 9353) * TAU,
-  }));
-  if (district.active) {
+  if (randomAt(rx, rz + 9352) < .55) {
+    const districtPhase = randomAt(rx, rz + 9353) * TAU;
     const x = u - (rx * 8 + 4) * B, z = s - (rz * 8 + 4) * B;
     const amount = bell(x, B * .6, B * 3.1) * bell(z, B * .6, B * 3.1);
-    du += amount * 14 * Math.sin(z / (B * 1.5) + district.phase);
-    ds += amount * 22 * Math.sin(x / (B * 1.8) - district.phase);
+    du += amount * 14 * Math.sin(z / (B * 1.5) + districtPhase);
+    ds += amount * 22 * Math.sin(x / (B * 1.8) - districtPhase);
   }
   return { s: s + ds, u: u + du };
 }

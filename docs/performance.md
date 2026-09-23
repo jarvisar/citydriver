@@ -21,6 +21,12 @@ Optional ambient occlusion loads on demand and releases its GPU resources when d
 
 Perspective cameras clip one metre beyond fully opaque fog. Overhead and XR keep their existing projection ranges.
 
+Loading compiles every program before the first frame: the scene with and without fog, since only perspective views use it, plus stand-ins for shared city materials and fare markers that are not on screen yet. The destination arrow's context is created during loading too. Fare markers reuse one material pair per colour, so their programs survive between fares.
+
+Every shadow caster has its own depth material per variant, so the shadow pass never re-derives a program, and none writes colour, since PCF reads only depth. Each traffic car casts its shadow in one draw: its trim and lamp triangles follow the paint in one buffer, and only the shadow pass draws past the paint.
+
+Smooth and Basic leave the backdrop blur off the 95%-opaque driving HUD. The HUD and minimap compare before writing to the DOM.
+
 ## Streaming
 
 Nearby 3×3 collision blocks must be ready immediately. Background construction works toward a soft 3 ms deadline and keeps unfinished blocks outside the scene. Distant models cover deferred detail.

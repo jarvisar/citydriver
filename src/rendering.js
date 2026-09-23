@@ -194,9 +194,29 @@ export function createRendering(canvas, graphics = new Graphics(), { showCarSilh
       draw(vrCamera.camera, true);
     } else draw(activeCamera());
   }
+  // Fog is part of every material's program, and only the perspective views
+  // draw with it, so compile the scene both ways. Warm-up objects stand in for
+  // materials that are not on screen yet; they are compiled, never drawn.
+  // Otherwise the first chase-camera frame, river or fare stalls the drive
+  // while the browser compiles shaders, which phones feel the most.
+  function precompile(warmupObjects = []) {
+    const warmup = new THREE.Group(), fog = scene.fog, lens = activeCamera(), pending = [];
+    for (const object of warmupObjects) warmup.add(object);
+    const parallel = renderer.extensions.has('KHR_parallel_shader_compile');
+    try {
+      for (const variant of [null, drivingFog]) {
+        scene.fog = variant;
+        for (const target of [scene, warmup]) {
+          if (parallel) pending.push(renderer.compileAsync(target, lens, scene));
+          else renderer.compile(target, lens, scene);
+        }
+      }
+    } finally { scene.fog = fog; }
+    return Promise.all(pending);
+  }
   function setView(index) { view = index; updateFog(); thirdPerson.snap(); firstPerson.snap(); return views[view].label; }
   let desktopView;
   function enterVR() { desktopView = view; setView(views.findIndex(view => view.thirdPerson)); }
   function exitVR() { if (desktopView !== undefined) setView(desktopView); desktopView = undefined; }
-  return { renderer, scene, graphics, ambientOcclusion, vrCamera, render, enterVR, exitVR, setView, toggleAO() { return graphics.toggleAmbientOcclusion(); }, get camera() { return activeCamera(); }, update, resize, recordFrame, setJourney, setWeather, get viewLabel() { return views[view].label; }, toggleView() { return setView((view + 1) % views.length); }, snap() { initialized = false; thirdPerson.snap(); firstPerson.snap(); } };
+  return { renderer, scene, graphics, ambientOcclusion, vrCamera, render, precompile, enterVR, exitVR, setView, toggleAO() { return graphics.toggleAmbientOcclusion(); }, get camera() { return activeCamera(); }, update, resize, recordFrame, setJourney, setWeather, get viewLabel() { return views[view].label; }, toggleView() { return setView((view + 1) % views.length); }, snap() { initialized = false; thirdPerson.snap(); firstPerson.snap(); } };
 }

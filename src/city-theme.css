@@ -42,6 +42,12 @@ body[data-controller=true] #app :is(button, input, select):focus {
   color: var(--city-text); background: var(--city-glass); border-color: var(--city-line);
   box-shadow: var(--city-shadow); backdrop-filter: blur(12px);
 }
+/* The city behind the panels moves every frame, so each blur is redrawn every
+   frame, a whole extra pass per panel on a phone. The glass is 95% opaque and
+   hides nearly all of it, so the lighter levels leave the blur out. */
+:root:is([data-graphics='smooth'], [data-graphics='basic']) #app :is(.city-hud, .drive-actions, .city-guide, .taxi-task, .taxi-dash, .controls, #stick-help, .location) {
+  backdrop-filter: none;
+}
 #app :is(.city-hud, .drive-actions, .city-guide, .taxi-task, .controls) { border-radius: var(--city-radius); }
 #app .drive-actions { padding: 3px; }
 #app :is(.city-hud, .drive-actions) { min-height: 58px; }

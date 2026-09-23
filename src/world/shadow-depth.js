@@ -6,17 +6,22 @@ import * as THREE from 'three';
 // each signature its own material lets the renderer keep a cached program.
 // The renderer still overwrites side, alphaTest and the maps from the caster's
 // own material before drawing, so each variant only has to agree on those.
+// Instanced walkers also carry a per-instance morph texture, which is part of
+// the program too.
+//
+// PCF shadows sample the map's depth attachment and never read its colour, so
+// the depth pass skips colour writes entirely.
 const shadowSide = { [THREE.FrontSide]: THREE.BackSide, [THREE.BackSide]: THREE.FrontSide, [THREE.DoubleSide]: THREE.DoubleSide };
 const depthMaterials = new Map();
 
 function depthMaterial(object, material) {
   const side = material.shadowSide ?? shadowSide[material.side] ?? THREE.BackSide;
-  const kind = object.isInstancedMesh ? (object.instanceColor ? 'instanced-colored' : 'instanced') : 'mesh';
+  const kind = object.isInstancedMesh ? (object.instanceColor ? 'instanced-colored' : 'instanced') + (object.morphTexture ? '-morphed' : '') : 'mesh';
   const morphs = object.geometry.morphAttributes.position?.length ?? 0;
   const key = `${kind}/${side}/${morphs}`;
   let depth = depthMaterials.get(key);
   if (!depth) {
-    depth = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, side });
+    depth = new THREE.MeshDepthMaterial({ side, colorWrite: false });
     depth.name = `shadow-depth-${key}`;
     depthMaterials.set(key, depth);
   }
