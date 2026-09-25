@@ -1,10 +1,14 @@
 # Taxi Fleet
 
-Completed fares and tips go into your fleet balance, which is saved locally. Restarting a run keeps the money from completed fares. Buying a taxi doesn't affect your score or best score.
+Completed fares, tips, and shift goal bonuses go into your fleet balance, which is saved locally. Restarting a run keeps money from completed fares; unfinished fares pay nothing. Buying a taxi doesn't affect your score or best score.
 
 Open **Pause → Taxi fleet** during a run or **Taxi fleet** on the results screen. Buying a taxi selects it for the next run. You can also switch back to a taxi you already own.
 
 All three taxis are free to drive in the free drive garage, but that doesn't unlock them for taxi runs.
+
+## Liveries
+
+Each driver rank unlocks a livery, picked in the taxi fleet: Checker Cream, Signal Red, Sea Glass, Forest Green, Midnight Blue, and Graphite at City Legend. Locked liveries show which rank unlocks them. A livery applies to every taxi, repaints the cab right away (even mid-run), and is saved with the fleet. Free drive keeps its own garage paint. See [progression](taxi-progression.md) for the ranks.
 
 ## Stats
 

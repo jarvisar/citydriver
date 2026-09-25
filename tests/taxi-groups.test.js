@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { TaxiRun, STOP_SECONDS, GROUP_MAX_LEG, GROUP_MAX_DETOUR, GROUP_MAX_ROUTE, GROUP_MIN_TURN, MAX_SHIFT_SECONDS,
-  RATINGS, GROUP_FARE_SHARE, taxiRoute, turnCosine, deliverySeconds, partySize } from '../src/taxi-run.js';
+  RATINGS, GROUP_FARE_SHARE, taxiRoute, turnCosine, deliverySeconds, partySize, hopPenalty,
+  SAME_STREET_PENALTY, STRAIGHT_PENALTY, SAME_TYPE_PENALTY, STRAIGHT_COSINE } from '../src/taxi-run.js';
 import { TaxiView } from '../src/taxi-view.js';
 import { routeDistance } from '../src/city-exploration.js';
 import { cityLayout } from '../src/world/city-layout.js';
@@ -131,7 +132,7 @@ test('a group shares one clock, is rated at every stop and is paid in full at th
   assert.deepEqual(run.ratings, { speedy: 2, normal: 1, slow: 1 });
   assert.equal(run.boost, 1, 'each group drop-off refills a quarter of the boost');
   assert.equal(run.delivered, 1); assert.equal(run.deliveredPassengers, group.passengers); assert.equal(run.held, 0);
-  assert.equal(run.fleet.balance, run.cash); assert.equal(run.target, null); assert.equal(run.onboard, 0);
+  assert.equal(run.fleet.balance, run.cash + run.goalCash, 'the fare banks, plus any shift goal it completed'); assert.equal(run.target, null); assert.equal(run.onboard, 0);
   assert.deepEqual(group, offer, 'progress never mutates the seeded offer');
 });
 
@@ -185,4 +186,38 @@ test('waiting groups render the right number of riders in one draw and release i
     dropOff(run, car); view.render(run, car, 1024, 3);
     assert.equal(view.markers.length, 1); assert.equal(view.markers[0].stop.id, run.target.id);
   } finally { view.dispose(); }
+});
+
+test('a party route turns corners and visits different kinds of places instead of lining up along one street', () => {
+  const run = new TaxiRun(), car = player(), offers = new Map();
+  for (const center of [0, -500, 500, -20000, 400000, 7000, -3000, 12000, 90000, -45000]) {
+    for (const offset of [-250, 0, 250]) for (const side of [-300, 0, 300]) {
+      Object.assign(car, cityLayout(center + offset, center + side)); run.start(car);
+      for (const offer of run.customers) offers.set(offer.id, offer);
+    }
+  }
+  const groups = [...offers.values()].filter(offer => offer.passengers > 1);
+  assert.ok(groups.length > 100);
+  let oneStreet = 0, straight = 0, repeated = 0, hops = 0, straightHops = 0;
+  for (const group of groups) {
+    if (new Set(group.stops.map(stop => stop.destination.index)).size === 1) oneStreet++;
+    if (new Set(group.stops.map(stop => stop.destination.type)).size < group.stops.length) repeated++;
+    let from = group, previous = null, allStraight = true;
+    for (const stop of group.stops) {
+      if (previous) { hops++; if (turnCosine(previous, from, stop.destination) > STRAIGHT_COSINE) straightHops++; else allStraight = false; }
+      previous = from; from = stop.destination;
+    }
+    if (allStraight) straight++;
+  }
+  // Nearest-first chose one street for 15% of parties and a dead-straight chain for 21%.
+  assert.ok(oneStreet / groups.length < .08, `parties with every stop on one street: ${oneStreet} of ${groups.length}`);
+  assert.ok(straight / groups.length < .15, `parties that never turn: ${straight} of ${groups.length}`);
+  assert.ok(straightHops / hops < .25, `hops that carry straight on: ${straightHops} of ${hops}`);
+  assert.ok(repeated / groups.length < .1, `parties repeating a kind of place: ${repeated} of ${groups.length}`);
+  const types = new Set([...offers.values()].map(offer => offer.destination.type));
+  assert.ok(types.size >= 8, 'penalising repeats does not narrow the destinations on offer');
+  // A straight hop is still legal when it is the only one within reach.
+  const previous = { s: 0, u: 0 }, from = { s: 100, u: 0, index: 3, type: 'park' };
+  assert.equal(hopPenalty(previous, from, { s: 200, u: 0, index: 3, type: 'park' }, new Set(['park'])), SAME_STREET_PENALTY + STRAIGHT_PENALTY + SAME_TYPE_PENALTY);
+  assert.equal(hopPenalty(previous, from, { s: 100, u: 300, index: 5, type: 'museum' }, new Set(['park'])), 0);
 });

@@ -60,7 +60,8 @@ try {
     await inspect(page, `${name}-map`);
     await page.click('#city-map-toggle');
     await page.evaluate(() => {
-      const a = window.__citydriver, t = a.taxi.target ?? a.taxi.customers[0];
+      // A solo rider: the checks below read the single drop-off copy, and the nearest ring may hold a group.
+      const a = window.__citydriver, t = a.taxi.customers.find(p => p.passengers === 1 && p.id !== a.taxi.blockedPickup?.id) ?? a.taxi.customers[0];
       Object.assign(a.vehicle, { s: t.s, u: t.u, speed: 0 });
       a.vehicle.knock.x = a.vehicle.knock.z = a.vehicle.knock.spin = 0;
     });

@@ -3,6 +3,7 @@ import { cityWalker, walkerFloat, createWalkerMaterial, walkerAppearance, setWal
 import { ROAD_LEVEL, PAVEMENT_LEVEL, cityStreetProfile, nearestCityStreet } from './world/city-grid.js';
 import { STOP_RADIUS, STOP_SECONDS, RATINGS, taxiRoute, fareBand, arrivalRating } from './taxi-run.js';
 import { taxiLicense } from './taxi-license.js';
+import { goalProgress } from './taxi-goals.js';
 import { routeDistance } from './city-exploration.js';
 import { DestinationArrow } from './destination-arrow.js';
 import { applyWalkerHop } from './world/pedestrian-reactions.js';
@@ -202,16 +203,14 @@ export class TaxiView {
       data('taxi-task', 'arriving', String(Boolean(run.boarding)));
       text('taxi-task-title', nearby ? nearby.destination.name : 'Find a passenger');
       const band = nearby && fareBand(nearby.length);
-      text('taxi-party', band ? `${band.label} · ${distanceLabel(nearby.length)}` : 'Red rings are close by · green rings go far');
+      text('taxi-party', band ? `${band.label} · ${distanceLabel(nearby.length)}` : '');
       data('taxi-party', 'band', band?.id ?? '');
-      text('taxi-next-stop', !nearby ? 'Groups ride together · one stop each'
-        : nearby.passengers > 1 ? `${nearby.passengers} riders · ${nearby.stops.length} stops · paid when all arrive` : '');
+      text('taxi-next-stop', nearby?.passengers > 1 ? `${nearby.passengers} riders · ${nearby.stops.length} stops` : '');
       hide($('taxi-timer'), true); hide($('taxi-timer-fill').parentElement, true);
       const risky = Boolean(nearby) && !run.boarding && run.shiftAfter(nearby) < 0;
       data('taxi-task', 'risky', String(risky));
-      this.instruction(run.boarding ? `Hold still · boarding${run.boarding.passengers > 1 ? ` ${run.boarding.passengers} riders` : ''}…`
-        : risky ? `Risky · your shift may end before ${nearby.passengers > 1 ? 'everyone arrives' : 'the drop-off'}` : nearby ? 'Stop in the ring to pick up' : '');
-      text('taxi-fare-status', nearby ? `${money(nearby.fare + nearby.groupBonus)} + tips` : '');
+      this.instruction(run.boarding ? 'Boarding…' : risky ? 'Risky · the shift may end first' : '');
+      text('taxi-fare-status', nearby ? money(nearby.fare + nearby.groupBonus) : '');
       width('taxi-stop-progress', `${Math.min(1, run.hold / STOP_SECONDS) * 100}%`);
       return;
     }
@@ -231,13 +230,10 @@ export class TaxiView {
     width('taxi-timer-fill', `${remaining * 100}%`);
     text('taxi-fare-status', money(run.remainingFare + run.tips));
     data('taxi-party', 'band', '');
-    text('taxi-party', run.fare.passengers > 1 ? `${run.onboard} aboard · ${run.onboard === 1 ? 'last rider off here' : '1 off here'}` : '');
+    text('taxi-party', run.fare.passengers > 1 ? `${run.onboard} aboard` : '');
     const next = run.fare.stops[run.stopIndex + 1];
-    text('taxi-next-stop', next ? `Then ${next.destination.name} · ${Math.round(next.length / 10) * 10} m further`
-      : run.fare.passengers > 1 ? `Last stop · the group pays ${money(run.remainingFare + run.tips)}` : '');
-    const instruction = nearStop
-      ? Math.abs(vehicle.speed) >= 2.5 ? 'Brake to drop off' : 'Hold still · dropping off…'
-      : '';
+    text('taxi-next-stop', next ? `Next · ${next.destination.name} · ${Math.round(next.length / 10) * 10} m` : run.fare.passengers > 1 ? 'Last stop' : '');
+    const instruction = nearStop ? Math.abs(vehicle.speed) >= 2.5 ? 'Stop to drop off' : 'Dropping off…' : '';
     this.instruction(instruction);
     data('taxi-task', 'arriving', String(nearStop));
     width('taxi-stop-progress', `${Math.min(1, run.hold / STOP_SECONDS) * 100}%`);
@@ -248,6 +244,9 @@ export class TaxiView {
   }
   results(run) {
     const license = taxiLicense(run.cash), best = taxiLicense(run.best);
+    const summary = run.summary, career = run.career, beaten = id => Boolean(summary?.beaten.includes(id));
+    const clock = seconds => `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+    $('taxi-result-shift').textContent = clock(Math.round(run.elapsed)); $('taxi-result-shift').dataset.new = String(beaten('shift'));
     $('taxi-result-cash').textContent = money(run.cash);
     $('taxi-result-license').dataset.license = license.id;
     $('taxi-license-badge').textContent = license.badge;
@@ -255,9 +254,28 @@ export class TaxiView {
     const improved = run.cash > 0 && license.rank > taxiLicense(run.previousBest).rank;
     $('taxi-license-next').textContent = [improved && 'New best license!',
       license.next ? `${money(license.next.min - run.cash)} more for ${license.next.name}` : 'The top license'].filter(Boolean).join(' · ');
-    $('taxi-result-fares').textContent = `${run.delivered} fare${run.delivered === 1 ? '' : 's'} · ${run.deliveredPassengers} riders delivered · ${run.failed} missed`;
-    const rated = RATINGS.filter(rating => run.ratings?.[rating.id]);
-    $('taxi-result-ratings').textContent = rated.map(rating => `${rating.label} ${run.ratings[rating.id]}`).join(' · ');
+    // The shift in six numbers. A tile turns gold where it beat a career record.
+    const rated = RATINGS.reduce((sum, rating) => sum + (run.ratings?.[rating.id] ?? 0), 0);
+    const tiles = [['fares', 'Fares', String(run.delivered), beaten('fares')], ['riders', 'Riders', String(run.deliveredPassengers), false],
+      ['speedy', 'Speedy', rated ? `${run.ratings.speedy}/${rated}` : '–', false],
+      ['combo', 'Combo', run.bestCombo > 1 ? `×${run.bestCombo}` : '–', beaten('combo')], ['streak', 'Streak', String(run.bestStreak), beaten('streak')],
+      ['tips', 'Tips', money(run.tipsBanked), beaten('tips')]];
+    $('taxi-result-stats').innerHTML = tiles.map(([id, label, value, record]) =>
+      `<li data-stat="${id}" data-new="${record}"><strong>${value}</strong><span>${label}</span></li>`).join('');
+    const goals = run.goals ?? [], done = goals.filter(goal => goal.done), stats = run.stats;
+    $('taxi-result-goals').innerHTML = !goals.length ? '' : `<div class="taxi-result-heading"><span>Goals</span><span>${done.length} / ${goals.length}${run.goalCash ? ` · +${money(run.goalCash)}` : ''}</span></div>`
+      + `<ul>${goals.map(goal => `<li data-done="${goal.done}"><span aria-hidden="true">${goal.done ? '✓' : '○'}</span><span>${goal.text}</span>${goal.done ? '' : `<span>${goalProgress(goal, stats)} / ${goal.target}</span>`}</li>`).join('')}</ul>`;
+    const rank = career?.rank;
+    const career$ = $('taxi-result-career'); hide(career$, !rank);
+    if (rank) {
+      const span = rank.next ? rank.next.earnings - rank.earnings : 1, into = rank.next ? career.earnings - rank.earnings : 1;
+      career$.dataset.promoted = String(Boolean(summary?.promoted));
+      $('taxi-career-rank').textContent = summary?.promoted ? `Promoted · ${rank.name}` : rank.name;
+      $('taxi-career-next').textContent = rank.next ? `${money(rank.next.earnings - career.earnings)} to ${rank.next.name}` : 'Top rank';
+      const bar = $('taxi-career-progress'); bar.max = span; bar.value = Math.min(span, into);
+      bar.setAttribute('aria-label', `${rank.name} rank, ${money(career.earnings)} career earnings`);
+      $('taxi-career-livery').textContent = summary?.liveries.length ? `Livery unlocked · ${summary.liveries.map(livery => livery.name).join(', ')}` : '';
+    }
     $('taxi-result-best').textContent = `Best ${money(run.best)} · ${best.name}`;
     $('taxi-results').hidden = false;
   }

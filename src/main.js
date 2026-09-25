@@ -26,6 +26,7 @@ import { cityLanePose } from './world/city-layout.js';
 import { CityGuide } from './city-guide.js';
 import { TaxiRun } from './taxi-run.js';
 import { taxiLicense } from './taxi-license.js';
+import { goalProgress } from './taxi-goals.js';
 import { TaxiView } from './taxi-view.js';
 import { setResidentWindow } from './world/resident.js';
 import { DrivingController } from './vehicle.js';
@@ -141,7 +142,18 @@ async function boot() {
     const cityGuide = new CityGuide(toast, () => vehicle);
     let taxiStorage; try { taxiStorage = localStorage; } catch { /* Optional storage. */ }
     const taxi = new TaxiRun(taxiStorage), taxiView = new TaxiView(scene); cityGuide.taxi = taxi;
-    const fleetView = setupTaxiFleet(taxi.fleet, { running: () => taxi.running, onChange: () => { needsRender = true; } });
+    const fleetView = setupTaxiFleet(taxi.fleet, { running: () => taxi.running, career: taxi.career, onChange: () => { needsRender = true; },
+      // A livery is only paint, so unlike a cab it can change mid-run.
+      onLivery: color => { if (started && gameMode === 'taxi') { vehicle.setPaint(color); vehicle.render(0, world.origin); rendering.update(vehicle.car, 0, world.origin); } } });
+    // The pause screen lists the shift's goals with live progress.
+    function renderGoals() {
+      const goals = gameMode === 'taxi' && taxi.status !== 'idle' ? taxi.goals : [], stats = taxi.stats;
+      $('#shift-goals').innerHTML = goals.map(goal => {
+        const progress = goal.done ? goal.target : goalProgress(goal, stats);
+        return `<li data-done="${goal.done}"><span class="goal-check" aria-hidden="true">${goal.done ? '✓' : '○'}</span><span class="goal-copy"><strong>${goal.text}</strong><small>${goal.done ? `+$${goal.bonus} banked` : `${progress} / ${goal.target} · $${goal.bonus}`}</small></span></li>`;
+      }).join('');
+      $('#goals-summary').textContent = goals.length ? `${goals.filter(goal => goal.done).length} of ${goals.length} · Bonuses bank to your fleet` : '';
+    }
     let fleetReturnFocus;
     function openFleet() {
       if (changingJourney || openChooser()) return;
@@ -196,6 +208,7 @@ async function boot() {
       $('#change-car').hidden = gameMode === 'taxi';
       $('#pause-fleet').hidden = gameMode !== 'taxi';
       $('#restart-run').hidden = gameMode !== 'taxi';
+      $('#goals-panel').hidden = gameMode !== 'taxi';
       $('#switch-mode span').textContent = gameMode === 'taxi' ? 'Free drive' : 'Taxi run';
       $('#reset').title = gameMode === 'taxi' ? 'Reset car: −5 seconds (R)' : 'Reset city (R)';
       $('#reset').setAttribute('aria-label', $('#reset').title);
@@ -216,9 +229,9 @@ async function boot() {
       if (changingJourney) return;
       if (freeTraffic === undefined || gameMode === 'free') freeTraffic = traffic.enabled;
       started = true; gameMode = 'taxi'; autodrive.reset(); vehicle.arcade = true;
-      vehicle.setCar(taxi.fleet.selected); recoverTaxi(); traffic.setEnabled(true, vehicle);
+      vehicle.setCar(taxi.fleet.selected, { paint: taxi.fleet.liveryColor }); recoverTaxi(); traffic.setEnabled(true, vehicle);
       $('#traffic').setAttribute('aria-pressed', 'true'); $('#autodrive').setAttribute('aria-pressed', 'false');
-      taxi.start(vehicle); taxiView.reset(); $('#taxi-results').hidden = true; $('#welcome').classList.add('hidden');
+      taxi.start(vehicle); taxiView.reset(); renderGoals(); $('#taxi-results').hidden = true; $('#welcome').classList.add('hidden');
       rendering.setView(4); updateViewUi(); setPaused(false); modeUi(); updateHud();
       taxiView.render(taxi, vehicle, world.origin, time); rendering.update(vehicle.car, 1, world.origin);
     }
@@ -245,7 +258,7 @@ async function boot() {
       audio.setPaused(paused);
       pauseOverlay.hidden = !paused; $('#pause').setAttribute('aria-pressed', String(paused)); $('#pause').setAttribute('aria-label', paused ? 'Resume' : 'Pause');
       $('#pause .control-label').textContent = paused ? 'resume' : 'pause';
-      if (paused) $('#resume').focus(); else $('#pause').blur();
+      if (paused) { renderGoals(); $('#resume').focus(); } else $('#pause').blur();
     }
     function updateJourneyUi() {
       const data = JOURNEYS[journey];
@@ -719,11 +732,11 @@ async function boot() {
       if (chooser) {
         const cars = chooser === carDialog;
         const fleet = chooser === fleetDialog;
-        const buttons = [...chooser.querySelectorAll(fleet ? '[data-fleet-car]:not(:disabled)' : cars ? '[data-car], [data-paint]' : '[data-journey]')];
+        const buttons = [...chooser.querySelectorAll(fleet ? '[data-fleet-car]:not(:disabled), [data-livery]:not(:disabled)' : cars ? '[data-car], [data-paint]' : '[data-journey]')];
         return { id: chooser.id, title: fleet ? 'Taxi fleet' : cars ? 'Garage & paint' : 'Choose a route', items: [
           { label: 'Back', activate: () => chooser.close() },
           ...buttons.map(button => ({
-            label: (button.hasAttribute('data-paint') ? 'Paint: ' : '') + (button.getAttribute('aria-label') ?? button.querySelector('.chooser-card-title')?.textContent ?? button.textContent).trim() + (button.getAttribute('aria-current') === 'true' || button.getAttribute('aria-checked') === 'true' ? ' ✓' : ''),
+            label: (button.hasAttribute('data-paint') ? 'Paint: ' : button.hasAttribute('data-livery') ? 'Livery: ' : '') + (button.getAttribute('aria-label') ?? button.querySelector('.chooser-card-title')?.textContent ?? button.textContent).trim() + (button.getAttribute('aria-current') === 'true' || button.getAttribute('aria-checked') === 'true' ? ' ✓' : ''),
             activate: () => button.click(),
           })),
         ] };
@@ -771,6 +784,9 @@ async function boot() {
           if (event.kind === 'over') {
             vehicle.speed = 0; vehicle.knock.x = vehicle.knock.z = vehicle.knock.spin = 0; vehicle.update(0, {});
             setPaused(true); pauseOverlay.hidden = true; taxiView.hud(taxi, vehicle); taxiView.results(taxi); fleetView.render(); $('#taxi-retry').focus();
+          } else if (event.kind === 'goal') {
+            // A goal usually completes on a payout, whose toast lands first.
+            renderGoals(); setTimeout(() => { if (taxi.running && !paused) toast(event.text, 'goal'); }, 1500);
           } else toast(event.text, event.rating ?? (event.kind === 'missed' ? 'slow' : ''));
         }
       }

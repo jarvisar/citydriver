@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { TaxiRun, taxiRoute, leadStop, SHIFT_SECONDS, MAX_SHIFT_SECONDS, GROUP_MAX_ROUTE, DROP_OFF_CLEARANCE,
-  TIPS, COMBO_MAX, STUNT_BOOST, CRAZY_STOP_SPEED } from '../src/taxi-run.js';
+  TIPS, COMBO_MAX, STUNT_BOOST, CRAZY_STOP_SPEED, METERS_PER_SECOND_EARNED } from '../src/taxi-run.js';
 import { citydriverRoute, cityStreetAt, cityRiverAt } from '../src/world/city-grid.js';
 import { DrivingController, createCar } from '../src/vehicle.js';
 import { steerCurve } from '../src/handling.js';
@@ -457,8 +457,9 @@ test('long fares return more time than short fares and the shift still has a cei
     return run;
   };
   const short = complete(300), long = complete(1000);
-  assert.equal(short.timeLeft, 43.5, 'a short fare delivered at once is Speedy: 9 s for the distance plus 5 s');
-  assert.equal(long.timeLeft, short.timeLeft + 21, 'every 33 m of route earns a second');
-  assert.match(long.drainEvents().find(e => e.kind === 'paid').text, /^Speedy! · \+\$\d+ · \+35s$/);
+  const shortSeconds = Math.round(300 / METERS_PER_SECOND_EARNED) + 5, longSeconds = Math.round(1000 / METERS_PER_SECOND_EARNED) + 5;
+  assert.equal(short.timeLeft, 30 - .5 + shortSeconds, 'a short fare delivered at once is Speedy: the distance plus 5 s');
+  assert.equal(long.timeLeft, short.timeLeft + longSeconds - shortSeconds, `every ${METERS_PER_SECOND_EARNED} m of route earns a second`);
+  assert.match(long.drainEvents().find(e => e.kind === 'paid').text, new RegExp(`^Speedy! · \\+\\$\\d+ · \\+${longSeconds}s$`));
   assert.equal(complete(1100, MAX_SHIFT_SECONDS - 1).timeLeft, MAX_SHIFT_SECONDS);
 });

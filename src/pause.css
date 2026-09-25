@@ -46,3 +46,16 @@ body[data-controller=true] .pause-settings input:focus { outline: 2px solid var(
   .pause-settings { gap: 18px; }
 }
 @media (prefers-reduced-motion: reduce) { .graphics-toggle .settings-chevron { transition: none; } }
+
+/* Shift goals sit with the driving settings while a taxi run is paused. */
+#goals-panel[hidden] { display: none; }
+.shift-goals { margin: 0; padding: 0; list-style: none; display: grid; }
+.shift-goals li { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--ui-line); font-size: 12px; }
+.shift-goals .goal-check { display: grid; place-items: center; flex: none; width: 24px; height: 24px; border-radius: 50%; border: 1px dashed var(--ui-line); font-size: 13px; }
+.shift-goals li[data-done=true] .goal-check { background: #7ce787; border-style: solid; color: #172229; }
+.shift-goals .goal-copy { display: grid; gap: 2px; min-width: 0; }
+.shift-goals strong { font-weight: 600; }
+.shift-goals li[data-done=true] strong { text-decoration: line-through; opacity: .8; }
+.shift-goals small { font-size: 10px; opacity: .72; }
+#goals-summary { margin: 10px 0 0; }
+#goals-summary:empty { display: none; }
