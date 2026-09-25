@@ -9,7 +9,7 @@ import { round, clock, wheels, fireEngine, bell, hoop, produce } from './city-de
 import { parkedCars } from './city-assets.js';
 import { venueBrand, SHOP_BRANDS } from './city-businesses.js';
 
-// Shared instances keep the new venues as inexpensive to stream as a city block.
+// Shared geometry keeps venues as cheap to stream as an ordinary block.
 const lettering = new THREE.PlaneGeometry(1, 1);
 const dome = new THREE.SphereGeometry(1, 24, 10, Math.PI / 2 + .16, Math.PI * 2 - .32, 0, Math.PI / 2);
 // One source for mesh and texture proportions prevents flattened lettering.
@@ -31,9 +31,8 @@ export function venueSignLabel(label, variant) {
   const brand = venueBrand(VENUE_TYPES[label], variant);
   return brand ? `${brand.lettering}${label.endsWith(' TOWER') ? ' TOWER' : ''}` : label;
 }
-// Produce has just twenty faces and is shared with the covered market.
 const vaultEnd = new THREE.CircleGeometry(1, 12, 0, Math.PI);
-// Continuous profiles replace intersecting segments at the slot rails and crest.
+// One continuous profile, so the slot rail has no overlapping segments at the crest.
 const railProfile = new THREE.Shape();
 for (let i = 0; i <= 10; i++) {
   const a = i / 10 * Math.PI / 2;
@@ -110,7 +109,7 @@ function cinema(c, { variant: v, palette: p }) {
   // Doorways fit between the vertical Deco piers and poster cases.
   hall(c, 56, 68, 52, 44, 17, ['#bb6c57', '#c98b76', '#729996'][v], 2, [-11.5, 11.5], 3.6);
   c.structure(56, 68, () => {
-    // Fluted Art Deco blade and a wraparound illuminated marquee.
+    // Deco blade sign and marquee.
     for (const dx of [-9, -6, 6, 9]) c.box(56 + dx, G + 13, 45.6, 1.1, 24, .9, cream);
     c.box(56, G + 18, 44.8, 8, 26, 2.3, '#386976');
     sign(c, 'RIVOLI TOWER', 56, 43.57, 20);
@@ -239,7 +238,7 @@ function hospital(c, { variant: v, palette: p }) {
     c.box(56, G + 24, 57.25, 2, 7, .25, '#c65d52');
     for (const dx of [-2.25, 2.25]) c.box(56 + dx, G + 24, 57.25, 2.5, 2, .25, '#c65d52');
     sign(c, 'HOSPITAL', 56, 57.2, 16);
-    // Recognizable rooftop landing pad, entirely within the building footprint.
+    // Helipad, kept within the building footprint.
     disk(c, 56, 72, 21, 21, G + 27.4, .2, '#688c89');
     for (const dx of [-2.2, 2.2]) c.box(56 + dx, G + 27.53, 72, .6, .035, 7, cream);
     c.box(56, G + 27.53, 72, 3.8, .035, .6, cream);
@@ -255,7 +254,6 @@ function observatory(c, { variant: v, palette: p }) {
     disk(c, 56, 66, 36, 36, G + 8, 14, '#d8ccb0');
     disk(c, 56, 66, 38, 38, G + 15.2, 1, cream);
     c.item('public-dome', dome, c.materials.solid, [56, G + 15.7, -66], [19, 16, 19], [copper, '#7a91a7', '#a7775e'][v]);
-    // Raised rails finish both edges of the telescope slot, including its crown.
     for (const side of [-1, 1]) {
       const phi = Math.PI / 2 + side * .16;
       c.item('observatory-slot-rail', slotRail, c.materials.solid, [56, G + 15.8, -66], [1, 1, 1], '#d6c8a6', phi - Math.PI);
@@ -273,7 +271,6 @@ function observatory(c, { variant: v, palette: p }) {
     for (let i = 0; i < 5; i++) c.box(56, G + (i + 1) * .2, 40.9 + i, 7, (i + 1) * .4, 1, p.stone);
   });
   entrancePath(c, [[56, 16], [56, 40.375]], 6, p.path, [56, 66], [56, 40.375]);
-  // Orbit garden, with small gold planets on stone plinths.
   for (const [x, s, size] of [[29, 32, 3], [80, 31, 4.2], [26, 62, 2.5], [84, 84, 3.3]]) c.rigid(x, s, () => {
     disk(c, x, s, 7, 7, G + .4, .8, p.stone);
     c.item('public-planet', planet, c.materials.solid, [x, G + .8 + size / 2, -s], [size / 2, size / 2, size / 2], '#d4b477', .4, .35);
@@ -348,7 +345,6 @@ function firehouse(c, { variant: v, palette: p }) {
     sign(c, 'FIRE STATION', 52, 47.02, 9);
     for (let i = 0; i < 4; i++) c.box(83, G + 31 + v * 3 + i, 77, 14 - i * 2.5, 1.2, 24 - i * 4, '#5c7f7a');
   });
-  // One shared engine mesh, with the same faceted tires and glazing as traffic.
   c.rigid(38, 33, () => {
     c.item('detail-fire-engine', fireEngine, c.materials.props, [38, G, -33], [1, 1, 1], '#ffffff', Math.PI);
     c.solid(38, 33, 5.7, 12);
@@ -375,7 +371,7 @@ function postoffice(c, { variant: v, palette: p }) {
     for (const x of [28, 43, 69, 84]) c.box(x, G + 8, 50.65, .9, 16, .65, cream);
     c.box(56, G + 12.8, 50.3, 24, 4.5, .8, postal);
     sign(c, 'POST OFFICE', 56, 49.86, 12.8);
-    // The envelope crest is readable even when lettering disappears at distance.
+    // The envelope crest reads at distances where the lettering is hidden.
     c.box(56, G + 19, 53, 15, 7, 6, brick);
     c.box(56, G + 22.7, 53, 16, .7, 7, cream);
     c.box(56, G + 19, 49.9, 8.4, 4.4, .3, cream);
@@ -401,7 +397,7 @@ function postoffice(c, { variant: v, palette: p }) {
 }
 function bathhouse(c, { variant: v, palette: p }) {
   const tile = ['#5a9997', '#65918a', '#618ca6'][v], terracotta = ['#be8066', '#cfab87', '#b57b69'][v];
-  // Three closed vaults, with inset glazed end panels and cream ribs.
+  // Three vaults with glazed ends.
   hall(c, 56, 79, 62, 22, 10, '#dcccb0', 1);
   c.structure(56, 79, () => {
     for (const x of [35, 56, 77]) {
@@ -411,7 +407,6 @@ function bathhouse(c, { variant: v, palette: p }) {
         c.item('venue-vault-end', vaultEnd, c.materials.glass, [x, G + 11.45, -(79 + side * 11.08)], [7.8, 4, 1], tile, side === 1 ? Math.PI : 0);
         for (const dx of [-4, 0, 4]) c.box(x + dx, G + 12.9, 79 + side * 11.15, .17, 3, .15, cream);
       }
-      // High, opaque skylight caps use the existing shared glass material.
       c.box(x, G + 16.9, 79, 3.5, .5, 10, '#9bc5bf', 'glass');
     }
     for (const x of [26, 42, 70, 86]) {
@@ -440,7 +435,7 @@ function bathhouse(c, { variant: v, palette: p }) {
       for (const y of [.3, .65, 1]) c.box(x, G + y, edge + 1.8, 2.2, .13, .35, '#b7c9be');
       c.solid(x, edge + .35, 2.5, 3.1);
     });
-    // A narrow tiled surround is punctuated by diamond inlays, away from walks.
+    // Diamond inlays, clear of the walks.
     if (!c.distant) for (const dx of [-7, 0, 7]) c.box(x + dx, G + .07, 21, .85, .05, .85, tile, 'solid', Math.PI / 4);
     for (const s of [30, 45]) c.prop('bench', x === 34 ? 19.5 : 92.5, s, x === 34 ? Math.PI / 2 : -Math.PI / 2);
   }
@@ -450,8 +445,7 @@ function bathhouse(c, { variant: v, palette: p }) {
 function farmStall(c, x, s, accent, flowers = false) {
   reserve(c, rectanglePolygon(x, s, 14, 11));
   c.structure(x, s, () => {
-    // A taut striped gable, open on all sides, over a timber display counter.
-    // Roof strips run front-to-back so the stripes stay readable from above.
+    // Roof strips run front-to-back so the stripes read from above.
     const pitch = .28, run = 6.5;
     for (const side of [-1, 1]) for (let stripe = 0; stripe < 4; stripe++) {
       const r = (stripe + .5) * run / 4;
@@ -490,7 +484,6 @@ function farmStall(c, x, s, accent, flowers = false) {
   });
 }
 function farmersmarket(c, { variant: v, palette: p }) {
-  // A small bakery anchors one edge; the rest is an open-air neighborhood fair.
   hall(c, 36, 74, 26, 27, 9, ['#c89974', '#c4a282', '#b88368'][v], 1);
   c.structure(36, 74, () => {
     pitchedRoof(c, 36, 74, 29, 30, G + 9.8, '#739184', '#c89974', .43, { wallWidth: 26, wallDepth: 27 });
@@ -510,7 +503,6 @@ function farmersmarket(c, { variant: v, palette: p }) {
     pergola(c, 78, 85, 25, 12, '#bda27e');
     for (const x of [72, 84]) c.prop('bench', x, 85);
   } else if (v === 2) c.rigid(87, 84, () => {
-    // A flower cart finishes the smaller harvest layout.
     c.box(87, G + 1.1, 84, 4, 1.3, 6, '#b89a70'); c.solid(87, 84, 4.6, 6);
     wheels(c, 87, G + .6, 84, 4.2, 4, 1.2, .4);
     for (const s of [82.5, 85.5]) {
@@ -544,7 +536,7 @@ function donut(c, { variant: v, palette: p }) {
       for (const y of [1, 5.6]) c.box(x, G + y, 52.7, 12, .2, .3, cream);
       c.box(x, G + 1.4, 52.52, 11.5, .22, .55, '#d5bd93');
       if (!c.distant) for (let i = 0; i < 5; i++) {
-        // Warm pastry-box displays sit against the glass, below eye level.
+        // Pastry displays behind the glass.
         c.box(x - 4.4 + i * 2.2, G + 1.75, 52.53, 1.5, .45, .45, i % 2 ? '#d6a873' : '#e8c7b1');
       }
     }
@@ -558,11 +550,11 @@ function donut(c, { variant: v, palette: p }) {
     c.box(56, G + 7.25, 52.65, 38, 2.5, .6, trim);
     sign(c, 'LUCKY DONUT', 56, 52.29, 7.25);
     for (const y of [5.95, 8.55]) c.box(56, G + y, 52.25, 38.5, .13, .18, '#f1c1b8', 'lit');
-    // A broad cantilever with a lit underside shelters the whole shopfront.
+    // Canopy with a lit underside.
     c.box(56, G + 5.65, 49.5, 43, .42, 7, cream);
     c.box(56, G + 5.54, 45.925, 43, .35, .15, icing);
     for (const x of [42, 56, 70]) c.box(x, G + 5.42, 49.3, 3, .06, 1, '#f4dda9', 'lit');
-    // The 24.6 m donut faces the street, with a real hole and visible supports.
+    // The 24.6 m rooftop donut and its supports.
     c.box(56, G + 10.45, 70, 16, .6, 5, '#b9b29c');
     for (const x of [51, 61]) {
       c.box(x, G + 12.7, 70, .7, 4.5, .8, '#71857e');
@@ -577,8 +569,7 @@ function donut(c, { variant: v, palette: p }) {
     c.box(71, G + 10.6, 77, 5, 1.7, 4, '#a4b3a6');
     if (!c.distant) for (const x of [69.5, 71, 72.5]) c.box(x, G + 11.5, 77, .25, .15, 3.5, '#6e827c');
   });
-  // A looping coffee terrace replaces the usual axial cross. Its two round
-  // seating pads join the curved walks, while the last leg meets the real sill.
+  // Curved walks rather than the usual axial cross; the last leg meets the door sill.
   const arrival = curvedPath([[56, 16], [51, 23], [50, 32], [56, 43], [56, 48]], 4);
   entrancePath(c, [...arrival, [56, 52.25]], 7, p.path, [56, 68], [56, 52.25]);
   path(c, curvedPath([[16, 32], [24, 37], [38, 39], [50, 32]], 4), 3.5, p.path);
@@ -595,7 +586,7 @@ function donut(c, { variant: v, palette: p }) {
   }
   gardenEdge(c, p, [23, 89], [49, 88]);
   for (const x of [40, 72]) bed(c, x, 92, 15, 5, v === 0 ? p.flower : p.green, p.stone);
-  // A freestanding menu sits beside the entrance without blocking it.
+  // Menu board, clear of the entrance.
   c.rigid(65, 48, () => {
     c.box(65, G + 1.3, 48, 2.2, 2.6, .3, '#b89a72');
     c.box(65, G + 1.5, 47.8, 1.8, 1.9, .12, dark);
@@ -609,7 +600,7 @@ function cityhall(c, { palette: p }) {
   reserve(c, rectanglePolygon(56, 71, 65, 37));
   reserve(c, rectanglePolygon(56, 49.75, 53, 14.5));
   c.structure(56, 71, () => {
-    // A raised limestone hall, with finished facades on all four sides.
+    // Finished facades on all four sides.
     c.box(56, G + .75, 71, 64, 1.5, 36, '#b9ab90');
     c.box(56, G + 10.25, 71, 62, 17.5, 34, limestone);
     c.solid(56, 71, 64, 36);
@@ -628,7 +619,7 @@ function cityhall(c, { palette: p }) {
     }
     mansardRoof(c, 56, 71, 65, 37, G + 19.1, 5.5, bronze);
     c.box(56, G + 24.7, 71, 45.5, .35, 25.9, bronze);
-    // Six low risers lead continuously onto the portico landing.
+    // Steps up to the portico landing.
     for (let i = 0; i < 6; i++) {
       const front = 42.5 + i * .6, back = 56;
       c.box(56, G + (i + 1) * .125, (front + back) / 2, 52 - i * .7, (i + 1) * .25, back - front, cream);
@@ -643,9 +634,9 @@ function cityhall(c, { palette: p }) {
     c.box(56, G + 14.1, 51.5, 49, 1, 12, cream);
     sign(c, 'CITY HALL', 56, 45.44, 14.1);
     pitchedRoof(c, 56, 51.5, 51, 13.5, G + 14.65, bronze, cream, .22, { wallWidth: 49, wallDepth: 12 });
-    // A small civic medallion in the triangular pediment.
+    // Pediment medallion.
     c.box(56, G + 17.3, 45.35, 2, 2, .3, '#b69a64', 'solid', 0, Math.PI / 4);
-    // Copper clocktower, open belfry and a compact hipped crown.
+    // Clock tower and belfry.
     c.box(56, G + 26, 72, 15, 13, 14, limestone);
     for (const y of [25, 32.5]) c.box(56, G + y, 72, 16.5, .6, 15.5, cream);
     for (let side = 0; side < 4; side++) {

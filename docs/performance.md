@@ -1,64 +1,57 @@
-# Rendering and streaming
+# Performance
 
-The city keeps an 11×11 block footprint. High has 49 detailed blocks, Balanced and Smooth have 25, and Basic has 9. Distant models fill the rest.
+The city is 11×11 blocks around the player. Blocks close to the player are fully detailed and the rest use simpler distant models.
+
+| Preset | Detailed blocks | Max pixel ratio | Max framebuffer pixels |
+| --- | ---: | ---: | ---: |
+| High | 49 | 2 | 3,840,000 |
+| Balanced | 25 | 1.5 | 2,073,600 |
+| Smooth | 25 | 1.25 | 1,280,000 |
+| Basic | 9 | 1 | 640,000 |
+
+Moving the density slider overrides the preset and is saved locally. VR uses its own framebuffer.
 
 ## Rendering
 
-Distant scenery uses fixed 2×2 tiles, instanced by geometry and material. Tiles outside the camera view are culled. Changed tiles reuse buffers where capacity allows; retired buffers are disposed.
+- Distant scenery is grouped into 2×2 tiles and culled when off screen. Tiles reuse their buffers when they change.
+- In detailed blocks, small batches (32 or fewer) of trees, lamps, benches, bins, signals, and roof parts are merged into one mesh per block. Walkers, signal lights, boats, and water stay instanced since they change after building. `blockBatches()` lists a block's batches.
+- Residents that are off screen skip updates until they're visible again.
+- Perspective cameras stop drawing just past where the fog is fully opaque.
+- Ambient occlusion only loads when turned on.
+- Smooth and Basic turn off the HUD's backdrop blur.
 
-Detailed blocks instance each batch of scenery. Batches of up to 32 instances that share a material, draw order and shadow settings merge into one mesh per block, with instance transforms and colours baked into 16-bit normals and colours. These are trees, lamps, benches, bins, signals, stops and small roof parts. Walkers, signal lenses, boats and water change after building and stay instanced. `blockBatches()` lists a block's batches either way.
+`BatchedMesh` was tried for the furniture batches but was slower. In three r186 it issues one sub-draw per instance, so the draw call count went down but CPU time went up. Merging into a regular mesh was faster.
 
-Static matrices are cached. Offscreen residents skip uploads and catch up when visible again; traffic signals keep updating. XR updates all residents. Collision bounds skip irrelevant blocks before checking individual colliders.
+### Shader Warm-up
 
-| Preset | Maximum pixel ratio | Maximum framebuffer pixels |
-| --- | ---: | ---: |
-| High | 2 | 3,840,000 |
-| Balanced | 1.5 | 2,073,600 |
-| Smooth | 1.25 | 1,280,000 |
-| Basic | 1 | 640,000 |
+Most mid-drive stutter came from shaders compiling the first time something was seen. Loading now compiles every shader before the first frame, including fog and no-fog versions and stand-ins for fare markers that aren't on screen yet. Fare marker materials are kept between fares so they don't recompile.
 
-An explicit density-slider setting overrides preset caps and saves locally. XR uses its own framebuffer.
+### Night Lighting
 
-Optional ambient occlusion loads on demand and releases its GPU resources when disabled. The offline cache includes its separate bundle.
-
-Perspective cameras clip one metre beyond fully opaque fog. Overhead and XR keep their existing projection ranges.
-
-Loading compiles every program before the first frame: the scene with and without fog, since only perspective views use it, plus stand-ins for shared city materials and fare markers that are not on screen yet. The destination arrow's context is created during loading too. Fare markers reuse one material pair per colour, so their programs survive between fares.
-
-Every shadow caster has its own depth material per variant, so the shadow pass never re-derives a program, and none writes colour, since PCF reads only depth. Each traffic car casts its shadow in one draw: its trim and lamp triangles follow the paint in one buffer, and only the shadow pass draws past the paint.
-
-Smooth and Basic leave the backdrop blur off the 95%-opaque driving HUD. The HUD and minimap compare before writing to the DOM.
+Street lamps and headlights use glowing lenses and light patches on the ground. They're capped at 96 lamps and 25 headlights within 145 m and hidden during the day. They only light the ground, not walls, and don't cast shadows.
 
 ## Streaming
 
-Nearby 3×3 collision blocks must be ready immediately. Background construction works toward a soft 3 ms deadline and keeps unfinished blocks outside the scene. Distant models cover deferred detail.
+The 3×3 blocks around the car are needed for collision and are always built right away. Everything else is built in the background with a 3 ms budget per frame and only added to the scene when finished. Distant models cover blocks that aren't done yet.
 
-Prefetch caches hold up to five detailed blocks and 21 outer skyline blocks. A separate cache prepares outgoing detailed blocks for distant rendering. Turning away releases unused work. Startup, resets, and teleports can still require synchronous generation.
+Detailed blocks that are about to come into view are prefetched, and blocks you drive away from are turned into distant models ahead of time. Startup, resets, and teleports can still stall while blocks build.
 
-See [profiling and measurements](performance-overhaul.md) for cache details, buffer reuse, and recorded comparisons.
+## Benchmarks
 
-## Night lighting
-
-Lamps and headlights use glowing lenses and ground patches. Three instanced draws share two 64×64 masks, capped at 96 lamps and 25 headlight patches within 145 m. Patches fade with weather lighting and are hidden in daylight.
-
-They brighten horizontal ground only: no wall lighting, obstacle occlusion, or extra shadows. They stay out of the AO prepass.
-
-Run `node scripts/night-lighting-test.mjs` with a dev server to check cameras, day/night switching, shader errors, and draw counts.
-
-## Benchmarks and tests
-
-With a dev server running:
+With the dev server running:
 
 ```sh
 npm run benchmark
 npm run benchmark:cpu
 npm run test:performance
+node scripts/night-lighting-test.mjs
+node scripts/smoothing-test.mjs
 ```
 
 Set `TEST_URL`, `CHROME_PATH`, or `PERF_LABEL` to change the server, browser, or report folder. Reports go to `.artifacts/performance/<PERF_LABEL>/`.
 
-The rendering benchmark uses seed `4817`, fixed weather and camera poses, 30 frames after warmup, desktop High at 1280×800, and phone Basic at 390×844/DPR 3. It also measures strip loads and a continuous 776 m drive. CPU profiling covers minimap updates, residents, and traffic.
+The benchmark uses seed `4817`, fixed weather and camera positions, desktop High at 1280×800, and phone Basic at 390×844. It also measures a 776 m drive. `benchmark:cpu` profiles the minimap, residents, and traffic.
 
-Browser checks cover AO loading/disposal, all cameras, streaming coverage, rebasing, screen sizes, and density overrides. Unit tests run with `npm test`.
+## Known Issues
 
-Recorded timings use Chromium SwiftShader. They compare builds on the same machine and don't predict phone FPS. Sustained Android/iOS performance, heat, and memory use still need physical-device testing. Individual construction steps and teleports can exceed the streaming budget.
+Benchmarks use Chrome's software renderer, so they're only useful for comparing builds on the same machine. They don't reflect real phone performance, and the game hasn't been tested much on actual phones.

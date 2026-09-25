@@ -58,8 +58,7 @@ test('streamed blocks are bounded, move in both axes, and retain collision coord
       assert.equal(scene.children.length, 10);
       assert.equal(world.chunks.size + world.distantChunks.size, (2 * DISTANT_CITY_RADIUS + 1) ** 2);
       assert.ok(world.distantGroup.children.length <= 36, 'the distant city is bounded to local two-by-two tiles');
-      // Separate shared basin rims, canopies and planet sculptures preserve
-      // their silhouettes without per-site meshes; keep the tile budget tight.
+      // Basin rims, canopies and planet sculptures are shared, not per-site meshes.
       for (const tile of world.distantGroup.children) {
         const kinds = new Set(tile.children.map(mesh => mesh.name.replace('citydriver-structure-', 'citydriver-')));
         assert.ok(kinds.size <= 17, 'each tile batches by geometry and material');

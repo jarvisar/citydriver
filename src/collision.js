@@ -1,11 +1,11 @@
 import { CHUNK_LENGTH, clamp } from './world/route.js';
 import { trafficContact } from './traffic.js';
 
-// A round footprint against the car's rectangle, answering as trafficContact
-// does: the way out for the car, and how far.
+// Circle-vs-car contact, returning the car's push-out normal and depth in the
+// same shape as trafficContact.
 export function postContact(car, post) {
   const cos = Math.cos(car.heading), sin = Math.sin(car.heading), dx = post.x - car.x, dz = post.z - car.z;
-  // The post in the car's own frame, across it and then along it.
+  // Post position in the car's frame.
   const across = dx * cos + dz * sin, along = dx * sin - dz * cos;
   let x = across - clamp(across, -car.halfWidth, car.halfWidth), z = along - clamp(along, -car.halfLength, car.halfLength);
   const distance = Math.hypot(x, z);
@@ -21,8 +21,8 @@ export function postContact(car, post) {
   return { x: -(x * cos + z * sin), z: -(x * sin - z * cos), depth };
 }
 
-// Buildings can have oblique footprints where a neighborhood bends. Test the
-// actual convex footprint rather than its larger axis-aligned bounding box.
+// Separating-axis test against a building's convex footprint, which can be
+// oblique where a neighborhood bends, rather than its larger bounding box.
 export function footprintContact(car, solid) {
   const cos = Math.cos(car.heading), sin = Math.sin(car.heading);
   const corners = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([x, z]) => ({
@@ -44,9 +44,8 @@ export function footprintContact(car, solid) {
   return contact;
 }
 
-// The car against whatever stands in the chunks around it. Nearly every
-// footprint is turned away by two subtractions, so a chunk's few hundred cost
-// less than posing one traffic car.
+// The cheap distance rejects discard nearly every collider, so checking a
+// chunk's few hundred costs less than posing one traffic car.
 export function collideScenery(player, chunks, dt) {
   const p = player.groundedPosition, halfWidth = player.spec.width / 2, halfLength = player.spec.length / 2;
   const reach = Math.hypot(halfWidth, halfLength), center = Math.floor(player.s / CHUNK_LENGTH);

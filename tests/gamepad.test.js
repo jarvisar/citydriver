@@ -184,7 +184,6 @@ test('the pause screen takes the pad as a menu while its shortcuts stay live', (
     assert.equal(actions.at(-1), action);
     hold(device, index, 0); input.update(pauseMenu);
   }
-  // Both stick axes steer the focus ring here too.
   device.axes[0] = 1; input.update(pauseMenu); input.update(pauseMenu);
   assert.equal(actions.at(-1), 'menuNext');
   device.axes[0] = 0; device.axes[1] = -1; input.update(pauseMenu); input.update(pauseMenu);

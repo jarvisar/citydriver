@@ -12,9 +12,8 @@ const money = value => `$${Math.round(value ?? 0).toLocaleString('en-US')}`;
 const distanceLabel = meters => meters >= 1000 ? `${(meters / 1000).toFixed(1)} km` : `${Math.round(meters / 10) * 10} m`;
 const compactCash = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', notation: 'compact', maximumFractionDigits: 1 });
 const text = (id, value) => { const element = $(id), next = String(value); if (element.textContent !== next) element.textContent = next; };
-// The HUD refreshes ten times a second, mostly with values it already shows.
-// Rewriting an unchanged attribute or style still costs a style recalculation
-// under the HUD's :has() rules, so compare first, as text() does.
+// The HUD refreshes ten times a second. Rewriting an unchanged attribute or
+// style still triggers a style recalculation under the :has() rules, so compare first.
 const hide = (element, hidden) => { if (element.hidden !== hidden) element.hidden = hidden; };
 const data = (id, key, value) => { const element = $(id), next = String(value); if (element.dataset[key] !== next) element.dataset[key] = next; };
 const attribute = (element, name, value) => { const next = String(value); if (element.getAttribute(name) !== next) element.setAttribute(name, next); };
@@ -45,8 +44,7 @@ export class TaxiView {
     this.skids.frustumCulled = false; this.skids.userData.ambientOcclusion = false;
     this.group.add(this.skids); this.trails = []; this.trailIndex = 0; this.lastTrail = 0; this.transform = new THREE.Object3D();
   }
-  // Every waiting fare gets a badge: a dollar sign in the ring's distance
-  // colour, as in Crazy Taxi, plus a white ×N when a group shares the ride.
+  // A $ in the ring's distance colour, plus a white ×N for groups.
   badge(count, color) {
     const key = `${count}${color}`;
     if (!this.partyBadges.has(key) && globalThis.document) {
@@ -65,9 +63,8 @@ export class TaxiView {
     }
     return this.partyBadges.get(key);
   }
-  // Fares come in a handful of colours. Keeping their materials keeps their
-  // shader programs: disposing a program's last material deletes it, and the
-  // next fare would stall the drive while it compiled again.
+  // Materials are cached per colour and never disposed mid-run: disposing a
+  // program's last material deletes it, and the next fare stalls recompiling.
   markerMaterials(color) {
     if (!this.palette.has(color)) this.palette.set(color, {
       solid: new THREE.MeshBasicMaterial({ color, side: THREE.DoubleSide }),
@@ -75,8 +72,7 @@ export class TaxiView {
     });
     return this.palette.get(color);
   }
-  // Stand-ins for the marker programs, compiled with the city before the first
-  // fare appears. They are never drawn.
+  // Never drawn; compiled with the city so marker programs exist before the first fare.
   warmupObjects() {
     const { solid, glow } = this.markerMaterials('#ffd240'), badge = this.badge(1, '#ffd240');
     return [new THREE.Mesh(this.ring, solid), new THREE.Mesh(this.beam, glow), ...(badge ? [new THREE.Sprite(badge)] : [])];
@@ -108,7 +104,7 @@ export class TaxiView {
           setWalkerAppearance(person, i, stop.passengers > 1 ? taxiGroupAppearance(seed, i) : walkerAppearance(seed));
         }
         person.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-        // All riders share a draw call and stay in a compact line on the curb.
+        // One draw call for the party; the bounding sphere covers the curb-side line.
         const curb = street.halfWidth - street.lane + 2;
         person.boundingSphere = new THREE.Sphere(new THREE.Vector3(stop.axis === 'north' ? stop.side * curb : 0,
           PAVEMENT_LEVEL + 1.5, stop.axis === 'north' ? 0 : stop.side * curb), 5);
@@ -172,8 +168,7 @@ export class TaxiView {
     this.skids.count = this.trails.length;
   }
   hud(run, vehicle) {
-    // Settle each panel once per refresh: showing and then hiding one again
-    // restyles the whole HUD twice, ten times a second.
+    // Settle each panel once per refresh; toggling one twice restyles the whole HUD twice.
     hide($('taxi-hud'), !run.running); hide($('taxi-nav'), !run.running || !run.target); hide($('taxi-task'), !run.running);
     hide($('taxi-buttons'), !run.running);
     hide($('taxi-dash'), !run.running);
@@ -193,10 +188,7 @@ export class TaxiView {
     const pickup = run.status === 'pickup';
     text('taxi-stage', pickup ? 'Pick up' : run.fare.stops.length > 1 ? `Stop ${run.stopIndex + 1} of ${run.fare.stops.length}` : 'Drop off');
     data('taxi-task', 'stage', run.status);
-    // Pulse only in the red, just before the riders give up.
-    // Pulse in the last seconds before the riders give up.
     data('taxi-task', 'urgent', String(!pickup && run.fareLeft <= 10));
-    // Tips multiply by the combo and by every rider aboard.
     text('taxi-combo', !pickup && run.tipMultiplier > 1 ? `Tips ×${run.tipMultiplier}` : '');
     const track = $('taxi-stop-progress').parentElement;
     hide(track, run.hold <= 0);
@@ -229,8 +221,8 @@ export class TaxiView {
     text('taxi-nav-distance', nearStop ? 'Here' : `${Math.max(10, Math.round(length / 10) * 10)} m`);
     attribute($('taxi-nav'), 'aria-label', `Drop-off ${Math.round(length)} meters by road; the green arrow points directly to the destination`);
     text('taxi-task-title', stop.name);
-    // The pill counts down to the riders giving up; its colour and the bar
-    // show this rider's own window, so they always say what stopping now earns.
+    // The pill counts down the shared clock, but its colour and bar use this
+    // rider's own window, so they show the rating stopping now would earn.
     const remaining = run.legRemaining, rating = arrivalRating(remaining);
     hide($('taxi-timer'), false); hide($('taxi-timer-fill').parentElement, false);
     text('taxi-timer', `${Math.ceil(run.fareLeft)}s ${rating.label}`);

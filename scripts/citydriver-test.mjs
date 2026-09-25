@@ -82,8 +82,7 @@ try {
   assert.equal(await page.evaluate(() => window.__citydriver.journey), 'city');
 
   // Complete the field guide by driving the real controller past each kind of
-  // landmark. A reload must retain stamps, while destination selection stays
-  // usable from the pause menu and from the driving HUD.
+  // landmark. A reload must retain stamps.
   await page.evaluate(() => window.__citydriver.action('pause'));
   const discoveries = await page.evaluate(async () => {
     const a = window.__citydriver, v = a.vehicle, guide = a.cityGuide;

@@ -39,8 +39,7 @@ body[data-mode=taxi] .taxi-task[data-arriving=true] #toast { display: none; }
 .taxi-stop-track { position: absolute; left: 12px; right: 12px; bottom: 0; height: 4px; border-radius: 2px; overflow: hidden; background: #ffffff30; }
 #taxi-stop-progress { display: block; height: 100%; background: #b9edb1; width: 0; }
 
-/* Arrival ratings and fare distance share one traffic-light palette: green
-   is the good end (Speedy, a long paying fare) and red the other. */
+/* Arrival ratings and fare distance share one traffic-light palette. */
 [data-rating=speedy], [data-band=long] { --rating-color: #7ce787; }
 [data-rating=normal], [data-band=medium] { --rating-color: #ffd238; }
 [data-band=short] { --rating-color: #ffa44a; }

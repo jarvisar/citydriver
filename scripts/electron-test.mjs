@@ -115,7 +115,6 @@ try {
   report.environment = { ...environment, bounds: initial.bounds };
   await page.screenshot({ path: path.join(out, 'welcome.png') });
 
-  // Keyboard driving through the shell.
   await page.keyboard.down('KeyW');
   await page.waitForFunction(() => document.querySelector('#distance').textContent !== '0.0', null, { timeout: 25_000 });
   await page.keyboard.up('KeyW');

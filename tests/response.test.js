@@ -97,7 +97,6 @@ test('the chase lens opens with speed and settles back down again', () => {
     car.speed = 0; car.update(0, {});
     for (let tick = 0; tick < 480; tick++) rig.update(car.car, 1 / 60);
     assert.ok(Math.abs(rig.camera.fov - parked.fov) < .05, 'and return to normal when stopped');
-    // A junction crawl must look like a junction crawl.
     car.speed = car.stats.topSpeed * .35; car.update(0, {});
     for (let tick = 0; tick < 240; tick++) rig.update(car.car, 1 / 60);
     assert.ok(Math.abs(rig.camera.fov - parked.fov) < .02, 'a junction crawl must still look like a junction crawl');

@@ -1,8 +1,6 @@
-// Desktop shell for Citydriver.
-//
 // The renderer is the unmodified Vite build (dist-electron/), served through a
 // privileged app:// scheme so absolute asset URLs, the module Web Worker,
-// storage, and secure-context APIs behave exactly as on the HTTPS deployment.
+// storage, and secure-context APIs behave as they do over HTTPS.
 // A sandboxed preload exposes only native fullscreen controls, Escape input, and
 // the update notice.
 import { app, BrowserWindow, Menu, dialog, ipcMain, net, protocol, shell } from 'electron';
@@ -201,9 +199,6 @@ function installMenu() {
   ]));
 }
 
-// Desktop updates stay disabled until a Citydriver release destination is configured.
-// This fork never checks or downloads releases from the original game.
-
 // --- Lifecycle --------------------------------------------------------------
 app.whenReady().then(() => {
   if (!options.devUrl && !existsSync(path.join(rendererDir, 'index.html'))) {
@@ -220,7 +215,8 @@ app.whenReady().then(() => {
       return mainWindow.isFullScreen();
     });
   }
-  // There is no update feed for this project.
+  // Updates stay disabled until a Citydriver release destination exists; this
+  // fork must never check or download the original game's releases.
   ipcMain.handle('citydriver:update-get', () => undefined);
   createWindow();
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });

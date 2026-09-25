@@ -35,8 +35,8 @@ const PALETTES = [
 ];
 export function publicSpacePlan(block) {
   const type = block.landmark || block.kind;
-  // A four-colour address pattern prevents adjacent ordinary parks/plazas
-  // from sharing a layout. Seeded palettes and planting soften the repetition.
+  // A four-colour address pattern keeps adjacent ordinary parks/plazas from
+  // sharing a layout.
   const variant = type === 'park' || type === 'plaza'
     ? (((block.ix % 2 + 2) % 2) * 2 + ((block.iz % 2 + 2) % 2) + Math.floor(randomAt(391, 812) * 4)) % 4
     : Math.floor(randomAt(block.seed, 813) * SPACE_NAMES[type].length);
@@ -60,7 +60,7 @@ export function pool(c, x, s, w, d, stone, jets = false, organic = false) {
     c.item(organic ? 'public-water-pond' : 'public-water', organic ? pondWater : basinWater, c.materials.glass,
       [x, G + .34, -s], [w * .47, 1, d * .47], '#6faaa7');
     if (organic && !c.distant) {
-      // Three quiet lily pads reuse the water batch; no animation or textures.
+      // Lily pads reuse the water batch.
       for (const [dx, ds, size] of [[-.25, -.16, .8], [-.20, -.21, .65], [-.29, -.22, .55]]) {
         c.item('public-water-pond', pondWater, c.materials.glass,
           [x + dx * w, G + .36, -(s + ds * d)], [size, 1, size * .8], '#8da96d');
@@ -90,9 +90,8 @@ export function reserve(c, polygon) {
 function plantedPolygons(c, outer, inner, color, stone) {
   const clear = plantingPieces(c, outer, .9);
   const area = polygons => polygons.reduce((sum, p) => sum + Math.abs(signedArea(p)), 0);
-  // A clipped remnant can be technically clear yet look like a spike or scrap.
-  // Accept complete designed beds only; callers can try a slightly narrower
-  // coherent bed, or leave the space open instead of exposing the clipping.
+  // Accept complete beds only: a clipped remnant can be clear yet look like a
+  // scrap. Callers can retry narrower or leave the space open.
   if (Math.abs(area(clear) - area(outer)) > 1e-5) return false;
   const beds = outer, soil = inner;
   c.plantedAreas ??= []; c.plantedAreas.push(...beds);

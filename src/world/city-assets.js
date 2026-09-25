@@ -26,7 +26,7 @@ export class Parts {
     g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.normalize()));
     this.add(g, from.add(to).multiplyScalar(.5).toArray(), color);
   }
-  // A pitched roof over a footprint: two slabs and the two gable triangles.
+  // Two roof slabs and the two gable triangles.
   gable(p, width, length, wallHeight, ridgeHeight, wall, roof, overhang = .35) {
     const [x, y, z] = p, rise = ridgeHeight - wallHeight, half = width / 2;
     const slope = Math.atan2(rise, half), run = Math.hypot(half, rise) + overhang;
@@ -49,8 +49,7 @@ export class Parts {
 
 const iron = '#3d4246', darkIron = '#2f3336', galvanised = '#9da3a6', timber = '#6b5a48';
 
-// A street lamp: a tapered column with an arm reaching over the road, unlit
-// in the daytime storm. Local -x is toward the road.
+// Local -x is toward the road.
 function lampPost() {
   const p = new Parts();
   p.cylinder([0, 3.6, 0], .09, .15, 7.2, iron, 6);
@@ -60,7 +59,6 @@ function lampPost() {
   p.box([-1.75, 7.36, 0], [.7, .06, .28], '#d9d5c4');
   return p.finish();
 }
-// A pedestal traffic signal on a street corner: three lamps in a hood.
 function trafficSignal() {
   const p = new Parts();
   p.cylinder([0, 2.2, 0], .07, .1, 4.4, iron, 6);
@@ -78,7 +76,7 @@ function stopSign() {
   p.cylinder([0, 1.4, 0], .055, .07, 2.8, galvanised, 6);
   p.cylinder([0, 2.8, 0], .7, .7, .08, '#e9e2cd', 8, [Math.PI / 2, Math.PI / 8, 0]);
   p.cylinder([0, 2.8, .05], .62, .62, .03, '#b74635', 8, [Math.PI / 2, Math.PI / 8, 0]);
-  // Continuous vector strokes avoid the old disconnected pixel-box lettering.
+  // S, T, O, P as vector outlines.
   const glyphs = [
     { outline: [[0,0],[5,0],[5,4],[1.3,4],[1.3,5.7],[5,5.7],[5,7],[0,7],[0,2.7],[3.7,2.7],[3.7,1.3],[0,1.3]] },
     { outline: [[1.85,0],[3.15,0],[3.15,5.7],[5,5.7],[5,7],[0,7],[0,5.7],[1.85,5.7]] },
@@ -93,7 +91,6 @@ function stopSign() {
   });
   return p.finish();
 }
-// A promenade bench facing the water.
 function bench() {
   const p = new Parts();
   for (const z of [-.8, .8]) {
@@ -104,7 +101,6 @@ function bench() {
   p.box([.3, .84, 0], [.07, .42, 1.9], timber);
   return p.finish();
 }
-// A bus shelter: a flat roof on two posts with a glass back and a stop sign.
 function busShelter() {
   const p = new Parts();
   for (const z of [-1.7, 1.7]) p.box([.6, 1.25, z], [.1, 2.5, .1], iron);
@@ -115,7 +111,7 @@ function busShelter() {
   p.cylinder([-.9, 1.4, 1.6], .05, .05, 2.8, iron, 5);
   return p.finish();
 }
-// A four-metre run of quay railing, laid along z.
+// Four metres of railing, laid along z.
 function railing() {
   const p = new Parts();
   p.box([0, 1.02, 0], [.07, .09, 4], iron);
@@ -123,14 +119,12 @@ function railing() {
   for (const z of [-2, -1, 0, 1, 2]) p.box([0, .52, z], [.05, 1.04, .05], darkIron);
   return p.finish();
 }
-// A bollard by the water and a bin by the bench.
 function bollard() {
   const p = new Parts();
   p.cylinder([0, .42, 0], .12, .14, .84, darkIron, 6);
   p.cylinder([0, .88, 0], .1, .13, .1, galvanised, 6);
   return p.finish();
 }
-// A round manhole cover in the road.
 function manhole() {
   const p = new Parts();
   p.cylinder([0, .015, 0], .52, .52, .03, '#35383b', 10);
@@ -153,7 +147,6 @@ function waterTank() {
   return p.finish();
 }
 
-// A small riverside coffee stand, with a pitched metal roof and a serving hatch.
 function kiosk() {
   const p = new Parts();
   p.box([0, .14, 0], [4, .28, 4.8], '#b0aaa0');
@@ -176,8 +169,7 @@ function litterBin() {
   return p.finish();
 }
 
-// Pruned street trees: the same faceted geometry as the other routes, with a
-// narrower, upright crown that fits between the shopfronts and the kerb.
+// Narrow, upright crowns fit between the shopfronts and the kerb.
 function streetTree(variant) {
   const trunk = new Parts(), crown = new Parts();
   trunk.beam([0, -.04, 0], [.025, .66, 0], .048, '#ffffff', 5);

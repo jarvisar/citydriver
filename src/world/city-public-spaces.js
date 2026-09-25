@@ -70,7 +70,6 @@ function pondGarden(c, p, random) {
   path(c, [[58, 87], [56, 96]], 3.3, paving);
   entrancePath(c, [[58, 87], [58, 79.55]], 3.3, paving, [58, 74], [58, 79.55]);
   pool(c, 58, 54, 41, 32, stone, false, true);
-  // A straight timber viewing deck meets the gently lobed shoreline.
   c.structure(58, 74, () => {
     c.box(58, G + .65, 72, 17, .4, 10, '#a18b6d'); c.solid(58, 72, 17, 10);
     for (const [s, h] of [[78.9, .28], [77.65, .56]]) c.box(58, G + h / 2, s, 5, h, 1.25, stone);
@@ -102,15 +101,14 @@ function meadow(c, p, random) {
   path(c, [[53, 16], [56, 32], [56, 54]], 3, p.path);
   path(c, [[65, 96], [61, 77], [56, 54]], 3, p.path);
   entrancePath(c, [[56, 32], [67, 27], [69.25, 27]], 3, p.path, [79, 27], [69.25, 27], Math.PI / 2);
-  // An open lawn is the focal point; dense planting is kept at the edges.
+  // Planting stays at the edges to leave an open lawn.
   grove(c, [[23, 26], [35, 23], [25, 38], [85, 72], [89, 86], [74, 88], [24, 83], [36, 89]], random);
   pergola(c, 79, 27, 18, 10);
   benchBay(c, points, 4.5, 37, 66, p.path);
   benchBay(c, points, 4.5, 72, 43, p.path);
   benchBay(c, [[65, 96], [61, 77], [56, 54]], 3, 65.5, 79, p.path);
   ribbonBed(c, curvedPath([[23, 69], [28, 73], [34, 76], [41, 77], [48, 74]], 2), 3.2, p.flower, p.stone);
-  // The inside of this tight bend has a shorter radius: keep bed panels
-  // broad enough to hold soil and flowers, even as the walk gains detail.
+  // Tight inner bend: keep bed panels broad enough to hold soil and flowers.
   ribbonBed(c, offsetPath(points.slice(20, 29).filter((_, i) => i % 2 === 0), 8), 3.2, p.flower, p.stone);
 }
 function terrace(c, p, random) {
@@ -143,7 +141,6 @@ function pergolaSquare(c, p, random) {
   for (const x of [45, 67]) bed(c, x, 53, 4, 27, p.flower, p.stone);
 }
 function forum(c, p, random) {
-  // Three sides of shallow seating frame an open performance court.
   c.surface(56, G + .04, 51, 41, .05, 34, p.path);
   c.rigid(56, 56, () => {
     for (let i = 0; i < 4; i++) {

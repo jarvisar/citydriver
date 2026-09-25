@@ -27,8 +27,7 @@ export class Input {
       onControllerConnection(connected);
     }, undefined, () => { this.clear(); onKonami(); });
     window.addEventListener('keydown', e => {
-      // Native mixer sliders own their arrow, Home and End keys. Editing a
-      // volume must not also accelerate the car or swallow keyboard access.
+      // Form controls keep their own keys; editing a volume must not also drive the car.
       if (e.target.matches?.('input, select, textarea') && !['Escape', 'KeyP'].includes(e.code)) return;
       // Let menu buttons keep their native keyboard activation.
       if (e.target.closest?.('button') && ['Space', 'Enter'].includes(e.code)) return;

@@ -1,16 +1,12 @@
 import * as THREE from 'three';
 
-// Three.js renders every shadow caster with one shared MeshDepthMaterial, so a
-// scene that mixes plain meshes, instanced meshes and per-instance colours
-// re-derives that material's program on nearly every shadow draw call. Handing
-// each signature its own material lets the renderer keep a cached program.
-// The renderer still overwrites side, alphaTest and the maps from the caster's
-// own material before drawing, so each variant only has to agree on those.
-// Instanced walkers also carry a per-instance morph texture, which is part of
-// the program too.
+// Three.js shares one MeshDepthMaterial across shadow casters, so mixing plain,
+// instanced and instance-coloured meshes recompiles its program on nearly every
+// shadow draw. One material per signature keeps each program cached. The
+// renderer still copies side, alphaTest and maps from the caster's material;
+// the walkers' per-instance morph texture is part of the program too.
 //
-// PCF shadows sample the map's depth attachment and never read its colour, so
-// the depth pass skips colour writes entirely.
+// PCF shadows read only the depth attachment, so colour writes are skipped.
 const shadowSide = { [THREE.FrontSide]: THREE.BackSide, [THREE.BackSide]: THREE.FrontSide, [THREE.DoubleSide]: THREE.DoubleSide };
 const depthMaterials = new Map();
 

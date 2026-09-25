@@ -22,7 +22,6 @@ body[data-driving-help-expired=true] :is(.controls, #stick-help) { display: none
 body[data-controller=true] :is(.touch-controls, .touch-hint) { display: none; }
 body[data-controller=true] .controller-hint { display: block; }
 
-/* Shared polish: readable panels and comfortable controls on every screen. */
 .icon-button, .chooser-heading .icon-button { width: 44px; height: 44px; flex-shrink: 0; }
 .journey-button, .start-button { min-height: 44px; }
 .journey-button { font-size: 12px; }
@@ -109,7 +108,6 @@ body[data-controller=true] .controller-hint { display: block; }
   .touch-controls { left: calc(16px + var(--safe-left)); right: calc(16px + var(--safe-right)); bottom: calc(20px + var(--safe-bottom)); }
 }
 
-/* The touch stick controls screen direction and speed together. */
 #touch-stick { position: relative; display: block; flex: 0 0 auto; width: 120px; height: 120px; border: 1px solid #ffffffb0; border-radius: 50%; background: #f9f8eebf; backdrop-filter: blur(12px); pointer-events: auto; touch-action: none; box-shadow: 0 3px 16px #183f3618; }
 .stick-guide { position: absolute; inset: 15px; border: 1px dashed #25473e55; border-radius: 50%; pointer-events: none; }
 .stick-thumb { position: absolute; left: calc(50% - 24px); top: calc(50% - 24px); width: 48px; height: 48px; border: 1px solid #25473e30; border-radius: 50%; background: var(--cream); box-shadow: 0 3px 10px #183f3626; transform: translate(var(--stick-x, 0px), var(--stick-y, 0px)); pointer-events: none; }
@@ -163,10 +161,8 @@ body[data-journey=jungle] #touch-stick.active .stick-thumb { background: #a9d48f
   .chooser-card-title { font-size: 13px; }
 }
 
-/* Graphics, sound and fullscreen live in the pause overlay, the one panel
-   every input method can reach: the pause button on a touchscreen, P or
-   Escape on a keyboard, and Start / Menu on a controller. The switch rows
-   share one style wherever they sit. */
+/* Graphics, sound and fullscreen live in the pause overlay because every input
+   method can reach it. */
 .graphics-panel { width: 340px; max-width: 100%; margin: 4px 0 18px; text-align: left; }
 .graphics-panel h3 { font-size: 9px; font-weight: 700; letter-spacing: 2.1px; text-transform: uppercase; margin: 0 0 10px; opacity: .72; }
 .graphics-levels { display: flex; flex-wrap: wrap; gap: 6px; }

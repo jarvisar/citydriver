@@ -1,49 +1,38 @@
-# Driving feel
+# Handling
 
-The controller has grip driving and a deliberate powerslide. Speed-dependent
-turning radius, separate chassis/travel headings, and a bounded slip angle supply
-the handling; no suspension solver, tire model, or extra dependency is involved.
+The driving model is arcade style with normal grip driving and a powerslide. The car tracks its facing direction and travel direction separately, with a limit on how far apart they can get. There is no suspension or tire simulation. Keyboard, controller, VR, and the touch stick all use the same controller.
 
-- Steering reaches 90% in about 38 ms; release takes about 26 ms. Countersteer
-  changes direction on the first simulation tick instead of unwinding old input.
-  Overlapping keyboard directions favor the newest press, ignoring key repeat.
-- Small analog movements favor precision. The controller deadzone is 12%, with
-  the remaining stick range remapped continuously. Full lock fits slow city
-  junctions; high speed progressively widens the turning circle.
-- Launch torque is up to 22% stronger on tarmac, fading out by 12 m/s. Top speeds
-  and each car's grip/off-road differences remain defined by `src/cars.js`.
-- Above 8 m/s, tap Drift while steering to start a slide. Keep gas and steering
-  into the corner to sustain it after releasing the button. Holding Drift also
-  works. Center, countersteer, lift, or brake to recover; a fresh tap starts the
-  next slide. Slides end below 6 m/s and cannot start in reverse.
-- Slide angle stays within 0.55 radians (about 32 degrees). Sliding tires scrub
-  some speed; ordinary steering regains grip quickly. Brake beats gas in both
-  modes. Straight handbraking stops and holds the car even with gas/boost held.
-- The chase camera follows small turns more quickly while retaining a bounded
-  U-turn orbit. In a slide it looks partly along travel to keep the exit visible.
-  Tire audio follows actual slip after the handbrake button is released.
-- Collisions use the travel direction. Taxi drift tips and skid marks follow
-  the sustained slide; the existing scoring and boost rules are retained.
+## Steering
 
-Keyboard, gamepad, XR, and the chase-view touch stick share this controller.
-Overhead touch keeps screen-relative navigation and its stop-on-release behavior.
-The driving HUD and README describe the tap-and-steer controls.
+- Steering reaches 90% in about 38 ms and returns to center in about 26 ms. Countersteering switches direction immediately.
+- If two steering keys are held, the newest one wins.
+- The controller deadzone is 12%. Small stick movements are more precise.
+- Full lock is tight enough for slow city corners. The turning circle gets wider as speed goes up.
+- Launch torque is up to 22% stronger on pavement and fades out by 12 m/s. Top speed, grip, and off-road speed for each car are in `src/cars.js`.
 
-## City corners and car differences
+## Drifting
 
-Side streets are 13 m wide, avenues 18 m, and boulevards 22 m. Full-lock radius
-is `hypot(lowSpeedRadius, speed² / corneringCapacity)`. This continuously blends
-parking lock into a speed limit on cornering; no abrupt steering cutoff occurs.
-Cornering capacity is an intentionally generous arcade `32 × grip` m/s².
+- Above 8 m/s, tap Drift while steering to start a slide. Holding Drift also works.
+- Keep the gas down and keep steering into the corner to hold the slide.
+- Straighten out, countersteer, let off the gas, or brake to recover.
+- Slides end below 6 m/s and can't start in reverse.
+- The slide angle maxes out at about 32 degrees.
 
-Low-speed radius can differ independently of grip: the Micro gets a 3.2 m
-parking radius, the Formula cars 3.6 m, and the truck 5.4 m. Both Formula
-variants now have the strongest grip in the fleet (2.25 / 2.2 versus the taxi's
-1.4). Grip also increases tire recovery quadratically, keeping normal Formula
-turns within one degree of sideways slip throughout the tested speed range.
-Drifting remains a deliberate input, including on the Formula cars.
+Brake always overrides gas. Handbraking in a straight line stops and holds the car, even with gas or boost held.
 
-Steady full-lock radii in metres, on tarmac (not diameters):
+In a slide, the chase camera looks partly toward the direction of travel so the exit stays in view.
+
+## Turning Radius
+
+Side streets are 13 m wide, avenues 18 m, and boulevards 22 m. The full-lock radius is:
+
+```
+hypot(lowSpeedRadius, speed² / (32 × grip))
+```
+
+This blends from the parking radius at low speed into a cornering limit at high speed. Most cars use the default low-speed radius. The Micro uses 3.2 m, the Formula cars 3.6 m, and the truck 5.4 m.
+
+Full-lock radius in metres on pavement:
 
 | Car | 10 m/s (22 mph) | 15 m/s (34 mph) | 20 m/s (45 mph) |
 | --- | ---: | ---: | ---: |
@@ -55,58 +44,18 @@ Steady full-lock radii in metres, on tarmac (not diameters):
 | Micro | 4.05 | 6.43 | 10.42 |
 | Truck | 6.72 | 10.51 | 16.91 |
 
-The Formula's previous 20 m/s radius was 17.3 m. It now holds a much tighter
-line at the same speed. A 50 m/s turn still needs about 35 m of radius; lift or
-brake before a sharp junction. Full throttle during a turn increases speed and
-widens the arc. The controller does not steer toward roads or brake for corners.
+At 50 m/s a turn still needs about 35 m, so brake before tight corners. The game doesn't steer or brake for you.
 
-## Input timing
+## Timing
 
-The existing 120 Hz fixed step is retained. Input is read each simulation tick;
-gamepads are polled before simulation each display frame. Rendering interpolates
-between ticks, adding 8.33 ms of simulation history. Steering and grip response
-were shortened without changing the fixed-step loop or predicting through walls.
-Device, event scheduling, rendering, GPU, and display delays are additional; these
-figures describe the controller, not measured end-to-end latency.
+Physics runs at a fixed 120 Hz. Input is read every tick, and controllers are polled before each frame. Rendering interpolates between ticks.
 
-## Research and choices
+## Tests
 
-- [KidsCanCode: Car steering](https://kidscancode.org/godot_recipes/3.x/2d/car_steering/index.html)
-  separates acceleration, steering and traction for a compact arcade controller.
-  Separate facing/travel headings fit this game's existing collision system.
-- [Livio De La Cruz: Implementing Racing Games](https://www.gamedeveloper.com/design/implementing-racing-games-an-intro-to-different-approaches-and-their-game-design-trade-offs)
-  discusses building arcade mechanics directly versus simulating wheels.
-  Explicit control over the slide and recovery suits narrow city streets.
-- [Glenn Fiedler: Fix Your Timestep](https://gafferongames.com/post/fix_your_timestep/)
-  explains fixed simulation, interpolation and CPU headroom. Keep those properties
-  rather than making driving depend on display refresh rate.
-- [MDN: Using the Gamepad API](https://developer.mozilla.org/en-US/docs/Web/API/Gamepad_API/Using_the_Gamepad_API)
-  recommends fetching current controller state in the animation loop.
-- [Three Fields Entertainment on Dangerous Driving](https://www.unrealengine.com/developer-interviews/three-fields-entertainment-explains-how-they-evolved-burnout-arcade-racing-formula-dangerous-driving)
-  describes measuring handling and matching corners to it. Here the city's
-  existing geometry sets the targets for each car's radius curve.
-- [GRIP programmer Rob Baker on predictable handling](https://blog.playstation.com/archive/2018/08/01/defy-gravity-and-blast-along-ceilings-at-700mph-in-arcade-racer-grip-combat-racing-out-on-ps4-6th-november/)
-  prioritizes predictable grip over aerodynamic fidelity. Formula grip here is
-  strong at city speeds too, without a downforce simulation or sudden grip change.
+```sh
+npm test
+npm run test:handling
+node scripts/handling-sweep.mjs
+```
 
-The tap-to-slide behavior, thresholds and response rates are tuning choices for
-this game, not settings copied from those references.
-
-## Verification
-
-Run `npm test` for all-car steering, tap/hold slides, exit controls, braking,
-collisions, camera response, sound, touch, gamepad and refresh-rate coverage.
-Scripted steering/drift paths are identical across 30–240 Hz display rates.
-The footprint trials cover all 22 cars, three street widths, four approach
-directions, both turns, and two speeds: 1,056 corners including the street exit.
-Side-street trials use 15 m/s for road cars, 10 m/s for heavy trucks, and 25 m/s
-for Formula cars. Wider streets use 18 / 10 / 28 m/s respectively; all also run
-at 6 m/s. These are constant-speed handling trials, not full-throttle guarantees.
-
-With a dev server running, `npm run test:handling` exercises real keyboard events,
-overlapping corrections, 264 city corners with scenery collision, and a tapped
-slide. `node scripts/handling-sweep.mjs` prints every car's radius across speeds.
-Both save reports in `.artifacts/handling/`; the browser check also saves an image. Set
-`TEST_URL` for a non-default port. CPU figures exclude rendering and are not
-input latency measurements. Physical controller/touch feel still needs human
-playtesting; automated checks establish response, recovery and consistency.
+`npm test` covers steering, drifting, braking, collisions, camera, sound, touch, and controller input for every car at 30-240 Hz. `test:handling` needs the dev server running and drives real keyboard input through 264 city corners. `handling-sweep.mjs` prints each car's turning radius at different speeds. Reports go to `.artifacts/handling/`.

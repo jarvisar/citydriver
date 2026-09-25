@@ -12,9 +12,8 @@ export function applyWalkerHop(walker, matrix, time) {
   if (time >= walker.hopStart + PEDESTRIAN_HOP_SECONDS) { delete walker.hopStart; return; }
   const t = (time - walker.hopStart) / PEDESTRIAN_HOP_SECONDS;
   if (t <= 0) return;
-  // Zero velocity at both ends, a single clean arc, and exactly one turn.
-  // Rotate around the character's middle, not their feet: the center stays
-  // over the same patch of pavement instead of orbiting sideways.
+  // Zero velocity at both ends, one arc, exactly one turn. Rotate around the
+  // character's middle, not their feet, so they don't orbit sideways.
   const eased = t * t * t * (t * (t * 6 - 15) + 10);
   const lift = PEDESTRIAN_HOP_HEIGHT * 16 * t * t * (1 - t) * (1 - t);
   center.set(0, PEDESTRIAN_PIVOT, 0).applyMatrix4(matrix);
@@ -42,8 +41,8 @@ export function holdWalkerTravel(walker, partner, time) {
   const hold = walker.travelHold ?? partner?.travelHold ?? { at: time, until: time };
   hold.until = Math.max(hold.until, time + PEDESTRIAN_HOP_SECONDS);
   walker.travelHold = hold;
-  // A partner briefly waits beside the hop, preserving their pairing without
-  // a chase/catch-up animation or a teleport when the character lands.
+  // The partner waits too, so the pair stays together without a catch-up
+  // animation or teleport.
   if (partner) partner.travelHold = hold;
 }
 

@@ -2,15 +2,13 @@ import * as THREE from 'three';
 import { N8AOPass } from 'n8ao';
 import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 
-// N8AO shades at exactly half the size of the depth it is given, the one ratio
-// its depth-aware upsampling is built for. That depth follows the drawing
-// buffer, which the graphics presets already scale, so a cheaper preset is
-// cheaper AO too, with no second upsampler of our own to pay for at native size.
+// N8AO shades at half the size of its depth input, the only ratio its
+// depth-aware upsampling supports. The depth follows the drawing buffer, so
+// cheaper presets give cheaper AO without a second upsampler.
 //
-// `maxPixelRatio` stops the depth at that many device pixels per CSS pixel. A
-// dense phone screen would otherwise pay for AO detail it cannot show; the
-// finished mask is filtered up the rest of the way, which softens it by less
-// than a CSS pixel. Displays at or under the limit keep exact silhouettes.
+// `maxPixelRatio` caps depth resolution in device pixels per CSS pixel so dense
+// phone screens don't pay for AO detail they cannot show. The mask is filtered
+// up the rest of the way, softening it by under a CSS pixel.
 export const AO_QUALITY = {
   high: { maxPixelRatio: 1.5 },
   low: { maxPixelRatio: 1 },
@@ -24,12 +22,10 @@ export class AmbientOcclusion {
     this.size = new THREE.Vector2();
     this.hidden = [];
     this.pass = new N8AOPass(scene, camera, 2, 2);
-    // N8AO's noise is fixed to the screen, so while the world scrolls beneath it
-    // whatever noise survives denoising reads as crawling shade. Measured at
-    // fixed world points (scripts/ao-motion-test.mjs), samples and a wide denoise
-    // radius are what quiet it; more resolution, or N8AO's sharper radius-6
-    // presets, make it worse. Every preset shares these, so changing level never
-    // recompiles the AO shaders mid-drive.
+    // N8AO's noise is screen-fixed, so residual noise crawls as the world
+    // scrolls. Measured with scripts/ao-motion-test.mjs: more samples and a wide
+    // denoise radius quiet it; more resolution or N8AO's radius-6 presets make
+    // it worse. Shared by every preset so level changes never recompile shaders.
     Object.assign(this.pass.configuration, {
       aoRadius: 2.4, distanceFalloff: 1, intensity: 2,
       aoSamples: 32, denoiseSamples: 16, denoiseRadius: 12, denoiseIterations: 2,
@@ -38,13 +34,12 @@ export class AmbientOcclusion {
     });
     this.setQuality('high');
     this.pass.setDisplayMode('AO');
-    // Match AO and depth sampling at silhouettes to avoid pulling background
-    // occlusion into a foreground pixel before the denoiser checks its depth.
+    // Nearest filtering keeps background occlusion from bleeding into foreground
+    // pixels at silhouettes before the denoiser checks depth.
     for (const target of [this.pass.writeTargetInternal, this.pass.readTargetInternal, this.pass.accumulationRenderTarget]) {
       target.texture.minFilter = target.texture.magFilter = THREE.NearestFilter;
     }
-    // Draw geometry once more for depth alone. N8AO derives its normals from
-    // depth, so nothing reads this pass's colour and no fragment is shaded.
+    // Depth-only prepass; N8AO derives normals from depth, so colour is unused.
     this.depthMaterial = new THREE.MeshBasicMaterial({ colorWrite: false, fog: false });
     this.pass.beautyRenderTarget.texture.type = THREE.UnsignedByteType;
     this.aoTarget = new THREE.WebGLRenderTarget(2, 2, { depthBuffer: false });
@@ -77,8 +72,7 @@ export class AmbientOcclusion {
     // Bound once: this runs over every visible object on every rendered frame.
     this.hideOverlay = object => {
       if (!object.isMesh) return;
-      // Background layers still draw; they just stay out of the AO prepass,
-      // which is a second pass over the whole scene's geometry.
+      // Opted-out meshes still draw in the colour pass, just not the AO prepass.
       if (object.userData.ambientOcclusion === false) {
         this.hidden.push(object);
         object.visible = false;
@@ -131,7 +125,7 @@ export class AmbientOcclusion {
       // Foam, mist, flakes and other overlays must not become opaque AO casters.
       scene.traverseVisible(this.hideOverlay);
       renderer.shadowMap.autoUpdate = false;
-      // The color pass already updated every transform. AO uses the same pose.
+      // The colour pass already updated every transform.
       scene.matrixWorldAutoUpdate = false;
       scene.overrideMaterial = this.depthMaterial;
       scene.background = null;

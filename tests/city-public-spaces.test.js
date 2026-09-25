@@ -130,8 +130,7 @@ test('every public-space design keeps rigid structures, road clearance and stabl
 
 test('large round silhouettes stay rounded within a small shared geometry budget', () => {
   const circle = ellipsePoints(0, 0, 49, 49);
-  // The widest circular paving must deviate by less than 22 cm from a circle.
-  // The old octagon missed by almost two metres at this scale.
+  // The widest circular paving, which must stay within 22 cm of a true circle.
   for (let i = 0; i < circle.length; i++) {
     const a = circle[i], b = circle[(i + 1) % circle.length];
     assert.ok(24.5 - Math.hypot((a[0] + b[0]) / 2, (a[1] + b[1]) / 2) < .22);

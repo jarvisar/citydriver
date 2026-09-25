@@ -5,8 +5,7 @@ export { cityWalker, WALKER_COLORS, WALKER_LOOKS, WALKER_STYLES, WALKER_SKIN, WA
 
 function canalBoat() {
   const p = new Parts();
-  // A clipped stern and pointed bow read as a hull even from the low camera.
-  // Two tiny extrusions stay inside the existing merged boat instance.
+  // Hull and deck extrusions stay inside the merged boat instance.
   const outline = [[-1.5,6.5],[1.5,6.5],[2,5.7],[2,-4.8],[1.2,-6],[0,-6.65],[-1.2,-6],[-2,-4.8],[-2,5.7]];
   const shape = new THREE.Shape(outline.map(([x, z]) => new THREE.Vector2(x, z)));
   const hull = new THREE.ExtrudeGeometry(shape, { depth: .9, bevelEnabled: false, steps: 1 });

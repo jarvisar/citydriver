@@ -1,39 +1,31 @@
-# Taxi fleet
+# Taxi Fleet
 
-Completed fares and tips go into a saved fleet balance. Restarting keeps completed earnings; unfinished fares pay nothing. Buying a cab doesn't change your run score or best score. Old best scores aren't converted into fleet money.
+Completed fares and tips go into your fleet balance, which is saved locally. Restarting a run keeps the money from completed fares. Buying a taxi doesn't affect your score or best score.
 
-Open **Pause → Taxi fleet** during a run or **Taxi fleet** on the results screen. Purchases select the cab for the next run. You can save directly for Formula or switch back to an owned cab.
+Open **Pause → Taxi fleet** during a run or **Taxi fleet** on the results screen. Buying a taxi selects it for the next run. You can also switch back to a taxi you already own.
 
-All three taxis are free in the Free Drive garage. Using one there doesn't unlock it for taxi runs.
+All three taxis are free to drive in the free drive garage, but that doesn't unlock them for taxi runs.
 
 ## Stats
 
-| Cab | Price | Speed (m/s / mph) | Acceleration | Braking | Grip | Off-road speed |
+| Taxi | Price | Top speed (m/s / mph) | Acceleration | Braking | Grip | Off-road speed |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| Taxi | Included | 40 / 89 | 21 | 32 | 1.40 | 28 |
+| Taxi | Included | 40 / 89 | 21 | 32 | 1.4 | 28 |
 | GT Taxi | $1,500 | 46 / 103 | 29 | 34 | 1.55 | 28 |
-| Formula Taxi | $4,500 | 50 / 112 | 40 | 36 | 1.70 | 28 |
+| Formula Taxi | $4,500 | 50 / 112 | 40 | 36 | 2.2 | 28 |
 
-Acceleration and braking use m/s²; off-road speed uses m/s. Grip is relative to the original wagon. Fares, boost, timers, and passenger capacity are the same for every taxi.
+Acceleration and braking are in m/s². Off-road speed is in m/s. Grip is relative to the default wagon.
 
-Formula has two seats, with the first-person camera in the left seat. All cabs carry one passenger.
+Fares, boost, timers, and passenger capacity are the same for every taxi. The Formula Taxi has two seats, and the first-person camera sits in the left one.
 
-## Measurements
+Straight-line times without boost:
 
-Normal fares pay about $118–348 before tips and early-arrival bonuses. A seeded sample of 15 fares delivered with half the timer left had a median payout of $293: about six fares for GT, then sixteen more for Formula.
-
-Straight-road measurements at 120 Hz without boost:
-
-| Cab | 300 m from rest | 0–60 mph | Braking from 67 mph |
+| Taxi | 300 m from rest | 0-60 mph | Braking from 67 mph |
 | --- | ---: | ---: | ---: |
 | Taxi | 8.68 s | 1.51 s | 12.08 m |
 | GT Taxi | 7.48 s | 1.04 s | 11.45 m |
 | Formula Taxi | 6.73 s | 0.73 s | 10.88 m |
 
-Actual fare pace depends on the route and driving.
-
 ## Tests
 
-`npm test` checks handling and saved balances. With a dev server, run `npm run test:taxi`, `npm run test:fleet`, and `npm run test:browser`.
-
-Fleet reports and desktop/touch screenshots go to `.artifacts/fleet/`.
+`npm test` checks handling and saved balances. With the dev server running, use `npm run test:taxi`, `npm run test:fleet`, and `npm run test:browser`. Fleet screenshots go to `.artifacts/fleet/`.

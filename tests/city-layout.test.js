@@ -108,7 +108,6 @@ test('horizontal rivers bend, meet vertical rivers without dams, and have north-
     const center = cityLayout(5.5 * B, 3.5 * B);
     let banks = 0;
     for (const batch of c.batches.values()) for (const item of batch.items) {
-      // The old bank slabs would span and obstruct the crossing channel.
       if (item.p[1] !== 20.85) continue;
       banks++;
       cityItemMatrix(item, c.east, c.start, matrix).invert();

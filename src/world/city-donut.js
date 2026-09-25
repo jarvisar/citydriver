@@ -7,8 +7,8 @@ export const DONUT_TUBE = 3.3;
 const sections = 40, rows = 6, glazeTube = DONUT_TUBE + .2;
 export const donutDough = new THREE.TorusGeometry(DONUT_RADIUS, DONUT_TUBE, 10, sections);
 
-// A front-facing layer of icing with uneven inner and outer edges. Its lip
-// returns to the dough, so the frosting never looks like a floating decal.
+// Front-facing icing with uneven edges. Its lip wraps back to the dough so it
+// does not read as a floating decal.
 const positions = [], indices = [];
 function point(a, b, tube) {
   const r = DONUT_RADIUS + tube * Math.cos(b);

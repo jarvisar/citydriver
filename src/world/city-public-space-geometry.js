@@ -19,8 +19,7 @@ export function curvedPath(points, subdivisions = 3) {
 
 export const roundDisk = new THREE.CylinderGeometry(1, 1, 1, ROUND_SEGMENTS);
 const circle = ellipsePoints(0, 0, 2, 2);
-// A quiet, asymmetric shoreline, still convex so clearance reservations stay
-// exact. A few broad lobes read as landscape rather than a regular polygon.
+// Asymmetric shoreline, still convex so clearance reservations stay exact.
 export const pondOutline = ellipsePoints(0, 0, 2, 2, 32).map(([x, s]) => [x * (.92 + .08 * s), s * (.96 + .04 * x)]);
 
 function basinGeometry(outline) {
@@ -58,6 +57,5 @@ export const basinRim = basinGeometry(circle);
 export const pondRim = basinGeometry(pondOutline);
 export const basinWater = waterGeometry(circle);
 export const pondWater = waterGeometry(pondOutline);
-// Twelve fabric panels and a shallow peak replace the old flat umbrella puck.
 export const canopy = new THREE.ConeGeometry(1, 1, 12);
 export const planet = new THREE.IcosahedronGeometry(1, 1);

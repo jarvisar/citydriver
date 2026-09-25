@@ -15,8 +15,7 @@ function streamingAttribute(attribute) {
 }
 
 function changedRange(attribute, start, count) {
-  // More than one streaming update may happen before a draw. Keep their union
-  // until Three.js uploads it, rather than losing an earlier pending change.
+  // Several updates can land before a draw; upload their union.
   let end = start + count;
   for (const range of attribute.updateRanges) {
     start = Math.min(start, range.start); end = Math.max(end, range.start + range.count);
@@ -47,8 +46,7 @@ export function* packDistantSteps(chunk) {
       matrix.fromArray(batch.matrices, i * 16);
       batch.boundingSphere.union(sphere.copy(batch.geometry.boundingSphere).applyMatrix4(matrix));
     }
-    // Construction objects and layout frames are no longer needed. Keep the
-    // compact, block-local transforms for the next update to this tile.
+    // Drop construction data; later tile updates need only the packed arrays.
     delete batch.items;
     yield;
   }

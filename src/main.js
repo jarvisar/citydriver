@@ -61,26 +61,24 @@ const carStorageKey = 'citydriver-car';
 const journeyStorageKey = 'citydriver-journey';
 let carId = DEFAULT_CAR;
 try { const saved = localStorage.getItem(carStorageKey); if (saved && CARS[saved]) carId = saved; } catch { /* Storage is optional. */ }
-// One colour dresses the whole garage and follows the player from car to car.
-// It lasts the visit and is not stored: the fleet's own finishes are the thing
-// worth keeping, and Default hands them straight back.
+// Garage paint applies to every car for this visit only and is not stored;
+// Default restores each car's own finish.
 let paint = null;
 const toast = (message, tone = '') => {
   const element = $('#toast');
   // Taxi feedback shares the instruction slot, keeping notifications off the road.
   const parent = gameMode === 'taxi' && started && !paused ? $('.taxi-task-copy') : $('#app');
   if (element.parentElement !== parent) parent.append(element);
-  // Taxi arrivals take their rating's colour: Speedy green, Normal yellow, Slow red.
+  // The tone colours taxi arrivals by rating.
   element.textContent = message; element.dataset.tone = tone; element.classList.add('show'); clearTimeout(toastTimer);
   toastTimer = setTimeout(() => element.classList.remove('show'), 2200);
 };
 
 async function boot() {
   try {
-    // `?ao=0` still forces the soft shading off, whatever the quality level is.
+    // `?ao=0` forces soft shading off at any quality level.
     const graphics = new Graphics({ ambientOcclusion: new URLSearchParams(window.location.search).get('ao') === '0' ? false : null });
-    // How much of the route stays built is a quality setting too, so it has to
-    // be in place before the first world is streamed.
+    // The resident window is a quality setting; it must be set before the first world streams.
     setResidentWindow(graphics.settings.chunks);
     // The stylesheet leaves costly HUD effects out of the lighter levels.
     document.documentElement.dataset.graphics = graphics.levelId;
@@ -119,8 +117,8 @@ async function boot() {
     // The menu cruises in a cab; starting either mode applies its own saved car.
     const vehicle = new DrivingController(JOURNEYS[journey].route, savedJourneys[journey], 'taxi'); const audio = new DriveAudio();
     const refreshAudioMixer = setupAudioMixer(audio);
-    // Free driving starts on for now, while off-road collision is being tried
-    // out. The hidden code only changes the paint.
+    // Free driving is on by default while off-road collision is trialled; the
+    // hidden code only changes the paint.
     vehicle.toggleFreeDriving();
     vehicle.setAppearance(journey);
     vehicle.setLights(weather.state.lightLevel);
@@ -128,10 +126,8 @@ async function boot() {
     const journeyDialog = $('#journey-dialog'), carDialog = $('#car-dialog'), pauseOverlay = $('#pause-overlay');
     const fleetDialog = $('#taxi-fleet-dialog');
     const openChooser = () => [journeyDialog, carDialog, fleetDialog].find(dialog => dialog.open) ?? null;
-    // The pause screen is a menu too: it is up whenever the drive is paused
-    // with no chooser over it, and the controller walks it the same way.
+    // Pause and results screens take controller menu navigation like the choosers.
     const openPauseMenu = () => !$('#taxi-results').hidden ? $('#taxi-results') : paused && !pauseOverlay.hidden ? pauseOverlay : null;
-    // The title screen is a menu of its own until a drive begins.
     const openWelcomeMenu = () => !started && !paused && !$('#welcome').classList.contains('hidden') ? $('#welcome') : null;
     scene.add(vehicle.car);
     const traffic = new Traffic(scene, vehicle.route, vehicle.s, journey);
@@ -265,14 +261,12 @@ async function boot() {
       const current = '<span class="chooser-current">CURRENT CAR</span>';
       $('.car-options').innerHTML = CAR_IDS.map(id => {
         const entry = CARS[id];
-        // The plain row stands for whichever car the road brings: no portrait
-        // and no meters, so it sits above the fleet as a single line.
+        // The plain entry (whatever car the route brings) is a one-line row with no portrait or meters.
         if (entry.plain) return `<button type="button" class="chooser-card car-card car-card-plain" data-car="${id}" aria-current="false">`
           + `<span class="chooser-card-title">${entry.name}</span>${current}</button>`;
         const meters = carMeters(id).map(({ label, level }) =>
           `<span class="car-meter"><span>${label}</span><span class="car-meter-track"><span style="width:${level}%"></span></span></span>`).join('');
-        // The portrait is drawn in whatever the garage is wearing, so the grid
-        // doubles as the preview: one colour repaints the whole fleet at once.
+        // Portraits use the garage paint, so the grid doubles as the paint preview.
         return `<button type="button" class="chooser-card car-card" data-car="${id}" aria-label="${entry.name}" aria-current="false" style="--car-paint:${cardPaint(id)}">`
           + carArt(id)
           + `<span class="chooser-card-copy"><span class="chooser-card-title">${entry.name}</span>`
@@ -286,16 +280,14 @@ async function boot() {
         ...PAINTS.map(({ name, color }) => `<button type="button" class="paint-swatch" role="radio" aria-checked="false" data-paint="${color}" style="--swatch:${color}" aria-label="${name}" title="${name}"><span class="paint-chip" aria-hidden="true"></span></button>`)].join('');
       for (const swatch of paintSwatches.querySelectorAll('[data-paint]')) {
         swatch.addEventListener('click', () => applyPaint(swatch.dataset.paint));
-        // A row of bare colours says nothing on its own, so the one under the
-        // pointer or the keyboard focus names itself beside the heading.
+        // Name the hovered or focused swatch beside the heading.
         for (const event of ['pointerenter', 'focus']) swatch.addEventListener(event, () => { $('#paint-current').textContent = swatch.getAttribute('aria-label'); });
         for (const event of ['pointerleave', 'blur']) swatch.addEventListener(event, showPaintName);
       }
       paintInput.addEventListener('input', () => applyPaint(paintInput.value));
     }
-    // With no garage colour set, every car shows the finish it arrived in. The
-    // default car has none of its own, so it shows whatever the road it is on
-    // would give it.
+    // Without garage paint each car shows its own finish; the plain car has
+    // none, so it takes its route's paint.
     const ownPaint = id => (carEntry(id).plain ? ROUTE_PAINT[journey] ?? ROUTE_PAINT.coast : carEntry(id).paint);
     const cardPaint = id => paint ?? ownPaint(id);
     const paintCards = () => { for (const card of carDialog.querySelectorAll('[data-car]')) card.style.setProperty('--car-paint', cardPaint(card.dataset.car)); };
@@ -312,9 +304,6 @@ async function boot() {
       paintInput.value = paint ?? ownPaint(carId);
       showPaintName();
     }
-    // Repainting needs no new scenery either: the colour lands on the car where
-    // it stands and on every card at once, and the drive carries on. Default
-    // clears it, and the fleet goes back to its own finishes.
     function applyPaint(value) {
       const color = value === DEFAULT_PAINT ? null : readPaint(value);
       if (value !== DEFAULT_PAINT && !color) return;
@@ -329,7 +318,6 @@ async function boot() {
       $('#change-car').setAttribute('aria-label', started && gameMode === 'taxi' ? 'Garage: free drive only' : `Garage: ${carEntry(carId).name}`);
       updatePaintUi();
     }
-    // Swapping cars needs no new scenery, so the drive simply carries on.
     function chooseCar(id) {
       if (started && gameMode === 'taxi') return;
       carDialog.close();
@@ -360,8 +348,8 @@ async function boot() {
       if (id === journey && !regenerate) { journeyDialog.close(); return; }
       if (!openChooser()) journeyWasPaused = paused;
       changingJourney = true; paused = true; input.clear(); frameClock.suspend();
-      // Building and compiling the next route says nothing about how it runs,
-      // and the new route may afford a level the last one could not.
+      // Load-time frame costs say nothing about how the new route runs, and it
+      // may afford a higher level than the last one.
       graphics.relax();
       audio.setPaused(true);
       $('#journey-transition').classList.add('active'); journeyDialog.close(); carDialog.close();
@@ -430,9 +418,8 @@ async function boot() {
         if (name === 'menuConfirm') confirmMenuFocus(chooser);
         return;
       }
-      // The pause screen is not modal, so it takes the menu actions and leaves
-      // the drive's own shortcuts — the garage, the routes, the next scene — to
-      // the handling below. B closes it the way it closes a chooser.
+      // The pause screen is not modal: it takes menu actions only and leaves
+      // drive shortcuts to the handling below.
       const pauseMenu = openPauseMenu();
       if (pauseMenu && name.startsWith('menu')) {
         if (name === 'menuClose') { if (taxi.status !== 'over') setPaused(false); }
@@ -502,7 +489,7 @@ async function boot() {
     }
     const input = new Input(action, connected => {
       toast(connected ? controlHelpDismissed() ? 'Controller connected' : 'Controller connected · RT / R2 to drive' : 'Controller disconnected');
-      // Show the focus ring straight away, so the title screen reads as a menu.
+      // Focus Start so the title screen reads as a controller menu.
       if (connected && openWelcomeMenu() && !$('#welcome').contains(document.activeElement)) $('#start').focus();
       if (!connected && started && !paused) setPaused(true);
     }, () => {
@@ -540,8 +527,7 @@ async function boot() {
       },
     });
     $('#change-journey').addEventListener('click', openJourneys);
-    // The route button rides the title screen's stack and leads the toolbar
-    // for the drive, however the menu comes and goes.
+    // The route button lives in the title screen's stack on the menu and in the toolbar while driving.
     function placeJourneyButton() {
       const button = $('#change-journey'), onMenu = !$('#welcome').classList.contains('hidden');
       for (const name of ['start-button', 'menu-secondary']) button.classList.toggle(name, onMenu);
@@ -681,8 +667,7 @@ async function boot() {
       pixelDensity.style.setProperty('--control-level', `${(densityPercent - 50) * 2}%`);
       pixelDensityValue.textContent = `${densityPercent}%${settings.customDensity ? (densityPercent === 100 ? ' · Native' : '') : ' · Preset limit'}`;
       pixelDensity.setAttribute('aria-valuetext', `${densityPercent}% of native resolution${settings.customDensity ? '' : ', capped by the preset'}`);
-      // The drawing buffer is the thing the quality level actually changes, so
-      // show it: it explains a softer picture without any further digging.
+      // Show the drawing buffer size, which is what quality levels actually change.
       graphicsStatus.textContent = `${graphics.auto ? 'Auto · ' : ''}${settings.label} · ${renderer.domElement.width} × ${renderer.domElement.height} · soft shading ${settings.ambientOcclusion ? 'on' : 'off'}`;
     }
     graphics.onChange((settings, reason) => {
@@ -705,8 +690,7 @@ async function boot() {
       updateHud(); needsRender = true;
     });
     function updateHud() {
-      // Physics uses meters; convert only the displayed measurement. The drive
-      // itself shows nothing, so this is read on the pause screen.
+      // Physics uses meters; convert only for display (miles, on the pause screen).
       const distance = mileageFormat.format(vehicle.distance / 1609.344);
       // Replacing unchanged text still invalidates layout, including while paused.
       if (hud.distance.textContent !== distance) hud.distance.textContent = distance;
@@ -765,8 +749,7 @@ async function boot() {
     const simulate = dt => {
       let state = started ? input.state : {};
       if (autodrive.enabled && (state.forward || state.brake || state.left || state.right || state.handbrake || state.touchStick)) action('autodrive');
-      // Cruise behind the welcome menu without toggling the player's setting
-      // or showing a notification. Starting hands control straight to input.
+      // Cruise behind the welcome menu without touching the player's autodrive setting.
       if (!started || autodrive.enabled) state = autodrive.update(vehicle, traffic, started ? vehicle.stats.topSpeed : MENU_CRUISE_SPEED, dt);
       if (state.touchStick) {
         if (rendering.camera.isPerspectiveCamera) {

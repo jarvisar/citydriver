@@ -20,18 +20,14 @@ export class ThirdPersonCamera {
     this.camera.aspect = aspect;
     // Preserve enough horizontal room for the car on narrow phones.
     this.baseFov = THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(Math.PI / 8) / Math.min(aspect, 1)));
-    // Fog and the sun's shadow are fitted to the lens, and both have to cover
-    // the frame the car will have at full speed rather than the narrower one it
-    // has standing still, so say how wide this lens ever gets.
+    // Fog and the sun's shadow are fitted to the widest this lens gets at full speed.
     this.camera.userData.widestFov = this.baseFov * RUSH_FOV;
     this.camera.fov = this.baseFov * (1 + (RUSH_FOV - 1) * this.rush);
     this.camera.updateProjectionMatrix();
   }
   snap() { this.initialized = false; this.rush = 0; }
   update(car, dt) {
-    // Speed is a thing you see, not a number in the corner. Past two fifths of
-    // the car's top speed the lens opens up and the chase seat slides back, so
-    // a boulevard at full throttle feels quick and a junction crawl does not.
+    // Past two fifths of top speed the lens widens and the camera pulls back.
     const rush = THREE.MathUtils.clamp(car.userData.speedRush ?? 0, 0, 1);
     this.rush = this.initialized ? THREE.MathUtils.damp(this.rush, rush, 3.5, dt) : rush;
     const fov = this.baseFov * (1 + (RUSH_FOV - 1) * this.rush);
@@ -64,9 +60,8 @@ export class ThirdPersonCamera {
     this.forward.set(Math.sin(this.heading), 0, -Math.cos(this.heading));
     const distance = 14 + 2.2 * this.rush;
     this.camera.position.copy(car.position).addScaledVector(this.forward, -distance);
-    // A lower chase position and a higher, farther aim show more of the road
-    // and horizon, with the car sitting in the lower part of the frame.
-    // A tall machine lifts the camera with it, so the road stays in view over its roof.
+    // A low camera aimed high and far shows more road, with the car low in frame.
+    // chaseLift raises it for tall vehicles so the road stays visible over the roof.
     const lift = car.userData.chaseLift ?? 0;
     this.camera.position.y = this.height + 4.5 + lift - Math.sin(this.pitch) * distance;
     this.target.copy(car.position).addScaledVector(this.forward, 7);

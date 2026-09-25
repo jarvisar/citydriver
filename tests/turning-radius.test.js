@@ -21,8 +21,8 @@ test('all radius curves widen smoothly, preserve reverse symmetry and retain fin
   }
 });
 
-// Fine corrections live in the request curve now rather than in the radius, so
-// a small stick movement is a small steering angle at every speed.
+// Fine corrections live in the request curve, not the radius, so a small stick
+// movement is a small steering angle at every speed.
 test('a small analog movement stays a fine correction', () => {
   assert.ok(steerCurve(.15) < .11 && steerCurve(.15) > .09);
   assert.equal(steerCurve(1), 1);

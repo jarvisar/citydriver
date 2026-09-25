@@ -82,7 +82,7 @@ export const SHOP_BRANDS = {
   ],
 };
 
-// Display name, building lettering, and a distinct invitation for each layout.
+// [display name, building lettering, tagline] per layout.
 export const VENUE_BRANDS = {
   cinema: [['Rivoli Cinema', 'RIVOLI', 'Great stories after dark'], ['Apollo Picturehouse', 'APOLLO', 'Tonight belongs to the big screen'], ['Bijou Cinema', 'BIJOU', 'A little movie magic']],
   hotel: [['Grand Hotel', 'GRAND HOTEL', 'Stay a little longer'], ['Hotel Marigold', 'MARIGOLD', 'Your room in the city'], ['The Wayfarer Hotel', 'WAYFARER', 'Arrive curious, leave rested']],

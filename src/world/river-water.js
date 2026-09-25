@@ -103,8 +103,7 @@ export function createRiverWaterMaterial() {
       }
     `).replace('#include <color_fragment>', `
       #include <color_fragment>
-      // Keep the body color uniform: depth comes from surface lighting, not
-      // mottled pigment or broad patches of procedural noise.
+      // Body colour stays uniform; depth comes from surface lighting.
 
       float northDistance = abs(mod(vRiverAddress.x - ${(RIVER_COLUMN + .5) * 112}.0
         + ${RIVER_PERIOD * 56}.0, ${RIVER_PERIOD * 112}.0) - ${RIVER_PERIOD * 56}.0);
@@ -132,8 +131,8 @@ export function createRiverWaterMaterial() {
       float riverFresnel = 0.035 + 0.4 * pow(1.0 - max(dot(normal, riverView), 0.0), 5.0);
     `).replace('#include <lights_fragment_end>', `
       #include <lights_fragment_end>
-      // Reflect the existing weather-driven hemisphere sky. This gives water
-      // a soft sheen without another scene render or a fixed daytime texture.
+      // Reflect the weather-driven hemisphere light: a soft sheen without an
+      // extra scene render or a fixed sky texture.
       vec3 riverReflection = reflect(-riverView, normal);
       vec3 riverSky = vec3(0.0);
       #if NUM_HEMI_LIGHTS > 0

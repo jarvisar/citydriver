@@ -1,8 +1,9 @@
 import * as THREE from 'three';
 
-// Reuse the car's geometry and world matrices: no render targets or building
+// Shows the car through structures by redrawing its geometry with an inverted
+// depth test, sharing its world matrices: no render targets or building
 // queries. Only structures draw before the silhouette; other scenery and the
-// normal car draw afterward, so trees and vehicles cannot trigger it.
+// car itself draw after, so trees and vehicles cannot trigger it.
 export class CarSilhouette {
   constructor(scene) {
     this.group = new THREE.Group();

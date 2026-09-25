@@ -11,16 +11,13 @@ import { CITY_BLOCK, DISTANT_CITY_RADIUS } from './world/city-grid.js';
 
 export function fitFogDistance(camera, fog) {
   if (!camera.isPerspectiveCamera || !fog?.isFog) return;
-  // Linear fog has already replaced every pixel with sky at this depth.
-  // Clipping there saves hidden draws without shortening the visible horizon.
+  // Linear fog is fully opaque past fog.far, so clipping there hides nothing visible.
   const far = Math.max(camera.near + 1, Math.ceil(fog.far) + 1);
   if (camera.far !== far) { camera.far = far; camera.updateProjectionMatrix(); }
 }
 
 export function createRendering(canvas, graphics = new Graphics(), { showCarSilhouette = () => true, beforeDraw = () => {} } = {}) {
   stabilizeShadowFiltering();
-  // Multisampling belongs to the context and cannot be changed later, so the
-  // level this page starts on decides it.
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: graphics.antialias, powerPreference: 'high-performance' });
   let canvasWidth, canvasHeight, pixelRatio;
   function resizeCanvas() {
@@ -33,7 +30,6 @@ export function createRendering(canvas, graphics = new Graphics(), { showCarSilh
     canvasWidth = width; canvasHeight = height; pixelRatio = ratio;
   }
   resizeCanvas();
-  // Frame times only describe the scene while it is actually drawing it.
   const recordFrame = (timestamp, active) => graphics.sample(timestamp, active);
   document.addEventListener('visibilitychange', () => graphics.suspend());
   window.addEventListener('blur', () => graphics.suspend());
@@ -41,8 +37,7 @@ export function createRendering(canvas, graphics = new Graphics(), { showCarSilh
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = .94;
   const scene = new THREE.Scene(); scene.background = new THREE.Color('#b8dfe0');
-  // The scene root never moves. Let static city transforms stay cached while
-  // vehicles, cameras and streamed blocks update their own dirty matrices.
+  // The scene root never moves; children still update their own matrices.
   scene.matrixAutoUpdate = false;
   const carSilhouette = new CarSilhouette(scene);
   const drivingFog = new THREE.Fog('#c2e2db', 460, 860);
@@ -61,8 +56,6 @@ export function createRendering(canvas, graphics = new Graphics(), { showCarSilh
   const ambientOcclusion = new AmbientOcclusion(renderer, scene, camera, {
     onReady: () => { if (!document.hidden && !renderer.xr.isPresenting) render(); },
   });
-  // Resolution, sun-shadow detail and the AO budget follow the quality level;
-  // whether AO is on at all is the player's own choice.
   // A new shadow map size only takes effect once the old texture is released.
   function applyQuality(settings) {
     ambientOcclusion.enabled = settings.ambientOcclusion;
@@ -86,19 +79,18 @@ export function createRendering(canvas, graphics = new Graphics(), { showCarSilh
   const weatherSun = new THREE.Vector3();
   const cityFog = { color: '#c9dbe2', near: 390, far: 780, thirdNear: 190, thirdFar: 420 };
   function updateFog() {
-    // Overhead cameras turn distance fog into a wash across the top of the city.
-    // Only perspective views need fog to conceal the distant streaming boundary.
+    // Fog only washes out overhead views; perspective views need it to hide the
+    // streaming boundary.
     if (!activeCamera().isPerspectiveCamera) { scene.fog = null; return; }
     scene.fog = drivingFog;
     const profile = weatherFog ?? cityFog;
-    // Matching the sky exactly lets fully faded terrain disappear without a seam.
+    // Matching the sky exactly avoids a seam where terrain fully fades.
     scene.fog.color.copy(scene.background);
-    // Fog depth is measured along the camera, so a wide lens can see much
-    // farther at the corners. Keep its entire far plane inside the distant
-    // city ring, with room for the chase camera behind the car.
+    // Fog depth is measured along the view axis, so a wide lens sees farther at
+    // the corners. Keep the whole far plane inside the distant city ring, with
+    // room for the chase camera behind the car.
     const loadedDistance = graphics.settings.chunks.ahead >= 5 ? 310 : 205;
-    // A lens that opens up with speed reports the widest it will ever be, so
-    // the horizon stays covered without refitting the fog every frame.
+    // Speed-dependent FOV reports its widest value, so fog needn't refit per frame.
     const lens = activeCamera(), widest = Math.max(lens.userData.widestFov ?? 0, lens.getEffectiveFOV());
     const slope = Math.tan(THREE.MathUtils.degToRad(widest) / 2);
     const horizonDistance = (CITY_BLOCK * DISTANT_CITY_RADIUS - 20) / Math.hypot(1, slope, slope * lens.aspect);
@@ -122,10 +114,8 @@ export function createRendering(canvas, graphics = new Graphics(), { showCarSilh
     previousOrigin = origin; initialized = true;
     const nextHeight = THREE.MathUtils.damp(viewHeight, views[view].height, 4, dt);
     if (Math.abs(nextHeight - viewHeight) > .01) { viewHeight = nextHeight; resize(); }
-    // The car is already interpolated for this frame. Following that position
-    // directly keeps it centered while driving, zooming and rebasing the world.
+    // Already interpolated for this frame, so the car stays centered.
     target.copy(car.position);
-    // A fixed azimuth and elevation keep the miniature city easy to read.
     camera.position.copy(target).add(cameraOffset); camera.lookAt(target);
     camera.userData.focusDistance = cameraOffset.length();
     if (views[view].thirdPerson) { thirdPerson.update(car, dt); target.copy(car.position); }
@@ -135,7 +125,7 @@ export function createRendering(canvas, graphics = new Graphics(), { showCarSilh
   }
   // Zoom only changes the projection; resizing the canvas every zoom frame reallocates its buffers.
   window.addEventListener('resize', () => { graphics.suspend(); resizeCanvas(); resize(); }); resize();
-  // The launcher still calls this when starting or resetting the city.
+  // Called by the launcher when starting or resetting the city.
   function setJourney() {
     weatherFog = null;
     setWeather(sampleCityWeather(0, 'sunset'), 0);
@@ -144,9 +134,8 @@ export function createRendering(canvas, graphics = new Graphics(), { showCarSilh
   setJourney();
   function setWeather(state, dt = 0) {
     if (!state) return;
-    // Weather already changes gradually with the simulation clock. A short
-    // render fade also keeps camera switches and lighting adjustments soft;
-    // a paused redraw (dt=0) displays the selected conditions immediately.
+    // A short fade softens camera switches and lighting changes; dt=0 (a paused
+    // redraw) applies the conditions immediately.
     const blend = !weatherFog || dt <= 0 ? 1 : 1 - Math.exp(-Math.min(dt, 1) * 4);
     weatherFog ??= { color: new THREE.Color(), near: state.fogNear, far: state.fogFar, thirdNear: state.drivingFogNear, thirdFar: state.drivingFogFar };
     scene.background.lerp(state.background, blend);
@@ -172,8 +161,7 @@ export function createRendering(canvas, graphics = new Graphics(), { showCarSilh
   function draw(viewCamera, stereo = false) {
     beforeDraw(viewCamera);
     carSilhouette.update(followedCar, showCarSilhouette() && !stereo && viewCamera.isOrthographicCamera);
-    // Hide the player's exterior for the whole first-person draw, including
-    // shadows and AO. Restore it for other views and after render failures.
+    // Hide the player's car for the whole first-person draw, including shadows and AO.
     const car = views[view].firstPerson ? followedCar : null;
     const visible = car?.visible;
     if (car) car.visible = false;
@@ -189,16 +177,14 @@ export function createRendering(canvas, graphics = new Graphics(), { showCarSilh
       renderer.xr.updateCamera(vrCamera.camera);
       beforeXRRender?.();
       if (!renderer.xr.isPresenting) { draw(activeCamera()); return; }
-      // The AO compositor is a monoscopic screen pass. Render the scene
-      // directly so Three.js draws both headset eyes with their own lenses.
+      // AO is a monoscopic screen pass; render directly so each eye gets its own lens.
       draw(vrCamera.camera, true);
     } else draw(activeCamera());
   }
-  // Fog is part of every material's program, and only the perspective views
-  // draw with it, so compile the scene both ways. Warm-up objects stand in for
-  // materials that are not on screen yet; they are compiled, never drawn.
-  // Otherwise the first chase-camera frame, river or fare stalls the drive
-  // while the browser compiles shaders, which phones feel the most.
+  // Fog is baked into every program and only perspective views use it, so
+  // compile both variants. Warm-up objects cover materials not yet on screen;
+  // they are compiled, never drawn. This avoids shader stalls on the first
+  // chase-camera frame, river or fare, especially on phones.
   function precompile(warmupObjects = []) {
     const warmup = new THREE.Group(), fog = scene.fog, lens = activeCamera(), pending = [];
     for (const object of warmupObjects) warmup.add(object);

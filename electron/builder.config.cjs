@@ -1,6 +1,5 @@
-﻿// electron-builder configuration.
-// Name and description come from the web app's own metadata so the
-// desktop packages follow the web app without a second copy to maintain.
+﻿// Name and description come from the web app's metadata, so there is no
+// second copy to maintain.
 const { execFileSync } = require('node:child_process');
 const { existsSync, mkdirSync, readFileSync, rmSync } = require('node:fs');
 const path = require('node:path');
@@ -13,13 +12,12 @@ const pkg = read('package.json');
 const productName = manifest.short_name;
 const executableName = pkg.name;
 
-// By default electron-builder extracts the Electron zip into release/<target>.tmp
-// and renames it. On Windows, antivirus or search indexing can hold files in a
-// freshly extracted tree open and that rename fails with EPERM (persistently on
-// some machines). Windows hosts therefore stage Electron by copying an already
-// unpacked distribution: node_modules/electron/dist for Windows targets, and a
-// cached extraction of the official zip (same version) for other targets.
-// Other hosts, including CI, use electron-builder's default flow.
+// electron-builder extracts the Electron zip into release/<target>.tmp and
+// renames it; on Windows, antivirus or search indexing can hold the fresh tree
+// open and the rename fails with EPERM. Windows hosts instead copy an unpacked
+// distribution: node_modules/electron/dist for Windows targets, a cached
+// extraction of the same-version zip for others. Other hosts, including CI,
+// use the default flow.
 async function electronDist({ platformName, arch, version }) {
   if (process.platform !== 'win32') return undefined;
   const archName = typeof arch === 'number' ? Arch[arch] : String(arch); // enum in some hooks, name in others

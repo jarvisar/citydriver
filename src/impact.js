@@ -1,17 +1,14 @@
-// Two cars meeting, as rigid rectangles sliding on a flat plane. Each is
+// Car-to-car collisions as rigid rectangles on a flat plane. Each car is
 // { x, z, heading, halfWidth, halfLength, vx, vz, mass? } in the coordinates
-// trafficContact reads. Unless it says what it weighs, a car weighs what its
-// footprint covers, so a van moves a hatchback further than the hatchback
-// moves it. Turning is measured the way heading is: positive swings the nose
-// to the car's own right.
+// trafficContact reads; mass defaults to footprintMass. Spin follows heading:
+// positive swings the nose to the car's right.
 
 const BOUNCE = .2;  // cars crumple far more than they rebound
 // Tonnes: .18 to the square metre puts a hatchback at 1.1 and a van at 1.8.
 export const footprintMass = (width, length) => width * length * .18;
 
-// Where they touch: the middle of whichever corners have gone inside the other
-// car. That is the nose for a square hit, the overlap for an offset one, and
-// the corner itself for a clip.
+// The average of the corners that lie inside the other car, or the midpoint
+// between centres if none do.
 export function contactPoint(a, b) {
   let x = 0, z = 0, count = 0;
   for (const [car, other] of [[a, b], [b, a]]) {
@@ -26,10 +23,9 @@ export function contactPoint(a, b) {
   return count ? { x: x / count, z: z / count } : { x: (a.x + b.x) / 2, z: (a.z + b.z) / 2 };
 }
 
-// The blow itself, along the contact normal (which points from b to a): what
-// each car's velocity and rate of turn change by, or null when they are
-// already coming apart. A hit away from a car's middle spends part of itself
-// turning that car, so it moves the pair less than a square one.
+// Velocity and spin changes for each car along the contact normal (b to a),
+// or null when they are already separating. An off-centre hit spends part of
+// the impulse on rotation.
 export function collisionImpulse(a, b, normal, point) {
   const closing = (a.vx - b.vx) * normal.x + (a.vz - b.vz) * normal.z;
   if (closing >= 0) return null;

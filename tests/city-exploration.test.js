@@ -34,8 +34,8 @@ test('every four-by-four neighbourhood has one reproducible landmark on dry land
 
 test('ordinary building blocks increase by roughly 30 percent while parks and plazas remain varied', () => {
   let previousBuildings = 0, buildings = 0, parks = 0, plazas = 0;
-  // Compare against the former three-by-three landmark / 20% public-space
-  // distribution using identical coordinates, river exclusions and seed.
+  // Baseline: the 3x3 landmark / 20% public-space distribution over the same
+  // coordinates, river exclusions and seed.
   for (let ix = -100; ix < 100; ix++) for (let iz = -100; iz < 100; iz++) {
     const river = cityRiverAxes(ix, iz), block = cityBlock(ix, iz);
     if (river.north || river.east) { assert.equal(block.kind, 'river'); continue; }

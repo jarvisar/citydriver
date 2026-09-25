@@ -112,8 +112,7 @@ try {
     }
   });
   if (!continuity.baseline) {
-    // Subtle color changes are intentional; assert motion without requiring
-    // the stronger contrast of the original water treatment.
+    // The water's color variation is subtle by design, so assert motion, not contrast.
     assert.ok(continuity.motionDifference > .01, 'water actually animates');
     assert.equal(continuity.pausedDifference, 0, 'pausing holds the water still');
     assert.ok(continuity.distantDifference < .1, `detail transitions preserve water: ${JSON.stringify(continuity)}`);

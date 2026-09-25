@@ -17,9 +17,7 @@
 body[data-controller=true] #app :is(.controls, #pause, #change-journey) { display: none !important; }
 .chooser > .controller-hint { margin: 0 0 12px; }
 .chooser-card:focus { outline: 3px solid #568d78; outline-offset: 3px; }
-/* A controller sends no keystroke, so :focus-visible cannot be counted on to
-   show where the ring is. While one is connected, the pause screen draws it
-   on plain focus. */
+/* A controller sends no keystroke, so :focus-visible may not match; draw the ring on plain focus. */
 body[data-controller=true] .pause-overlay button:focus { outline: 2px solid var(--ink); outline-offset: 3px; }
 .journey-button { position: static; }
 .brand { min-width: 0; }
@@ -227,9 +225,7 @@ body[data-journey=jungle] .drive-actions button:hover { background: #2f5136e0; }
   .chooser-options { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
-/* The pause screen carries the readout the drive no longer shows: pinned to
-   its top-left corner where the header's brand would sit, and folded back
-   into the column when the screen is too small for a corner. */
+/* Pinned where the header's brand would sit; folds into the column on small screens. */
 .pause-overlay .location { position: absolute; top: var(--ui-top); left: var(--ui-left); width: max-content; max-width: calc(100% - var(--ui-left) - var(--ui-right)); }
 .pause-overlay .location-title { font-size: 10px; }
 .pause-overlay .location-sub { font-size: 12px; }
@@ -237,8 +233,7 @@ body[data-journey=jungle] .drive-actions button:hover { background: #2f5136e0; }
   .pause-overlay .location { position: static; display: flex; margin: clamp(0px, calc((100dvh - 620px) / 2), 180px) 0 14px; }
   .pause-overlay > h2 { margin-top: 0; }
 }
-/* The drive's own toasts have to clear the pause screen now that sound,
-   fullscreen and the graphics levels are all set from it. */
+/* Toasts from sound, fullscreen and graphics changes must show above the pause screen. */
 #toast { z-index: 4; }
 .drive-actions #pause .play-icon { display: none; }
 .drive-actions #pause[aria-pressed=true] .pause-icon { display: none; }
@@ -248,10 +243,7 @@ body[data-journey=jungle] .drive-actions button:hover { background: #2f5136e0; }
   .drive-actions :is(#view, #reset, #pause) .control-label { display: none; }
 }
 
-/* The joystick's caption is a caption, not a dialog: the copy and its dismiss
-   button share one line instead of the button floating in a band of reserved
-   space above the text. The button keeps a 44px tap target through a halo, so
-   it can look like the small control it is. */
+/* Copy and dismiss button share one line; the ::after halo keeps a 44px tap target. */
 #stick-help {
   display: flex; align-items: center; gap: 8px;
   width: max-content; max-width: min(230px, 62vw);

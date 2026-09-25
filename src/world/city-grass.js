@@ -4,8 +4,7 @@ import { cityLayout } from './city-layout.js';
 import { cityAffinePoint } from './city-layout-render.js';
 import { containsPoint, pathPanels, signedArea } from './city-surfaces.js';
 
-// Three tapered, leaning blades: twelve opaque triangles, shared city material.
-// Solid facets read from every camera angle without alpha textures or animation.
+// Three blades, twelve opaque triangles: no alpha textures or animation.
 const positions = [], colors = [];
 const face = (a, b, c, tint) => {
   positions.push(...a, ...b, ...c);
@@ -75,8 +74,8 @@ export function buildGrassFringe(c) {
   }
   for (const walk of c.features.walkways ?? []) {
     for (const panel of pathPanels(walk.points, walk.width, [16, 16, 96, 96], walk.endSection)) protect(panel.map(worldPoint), .9);
-    // Resample by physical length, rather than placing a clump at every curve
-    // vertex: rounded walks must not silently make the fringe denser.
+    // Resample by length so extra curve vertices on rounded walks do not
+    // make the fringe denser.
     let remaining = 5 + random() * 3;
     for (let i = 1; i < walk.points.length; i++) {
       const a = walk.points[i - 1], b = walk.points[i], dx = b[0] - a[0], ds = b[1] - a[1], length = Math.hypot(dx, ds);

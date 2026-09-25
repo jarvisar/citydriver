@@ -1,5 +1,5 @@
-// Soft shading is opt-in. Keep its code, shaders and render targets out of the
-// normal startup path, and release its GPU resources when it is switched off.
+// AO is opt-in, so its code is loaded lazily and its GPU resources are released
+// when it is switched off.
 export class AmbientOcclusion {
   constructor(renderer, scene, camera, { onReady = () => {}, load = () => import('./ambient-occlusion-pass.js') } = {}) {
     this.renderer = renderer; this.scene = scene; this.camera = camera;

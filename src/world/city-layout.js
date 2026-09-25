@@ -10,8 +10,7 @@ const TAU = Math.PI * 2;
 const fade = t => { t = Math.max(0, Math.min(1, t)); return t * t * t * (t * (t * 6 - 15) + 10); };
 const bell = (distance, inner, outer) => 1 - fade((Math.abs(distance) - inner) / (outer - inner));
 // Physics, traffic and walkers call this tens of thousands of times a second.
-// Hashing an index is cheaper than building a string key to cache the result,
-// and allocates nothing.
+// Hashing an index is cheaper than a string-keyed cache and allocates nothing.
 export function cityLayout(s, u) {
   const river = Math.round((u / B - RIVER_COLUMN - .5) / RIVER_PERIOD), center = (river * RIVER_PERIOD + RIVER_COLUMN + .5) * B;
   const phase = randomAt(river, 9351) * TAU;

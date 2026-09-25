@@ -2,9 +2,8 @@ import * as THREE from 'three';
 import { Parts } from './city-assets.js';
 import { compactGeometry } from './compact-geometry.js';
 
-// Outfit, trim and silhouette are art-directed; skin and hair are selected
-// independently. These are linear colors in the vertex shader, not tinting
-// the entire person with their coat color.
+// Coat, trim and silhouette are chosen together; skin and hair vary
+// independently. The vertex shader colours each body part separately.
 export const WALKER_LOOKS = [
   { name: 'Harbor', coat: '#376f78', trim: '#e9c890', style: 0 },
   { name: 'Marigold', coat: '#c99438', trim: '#f2dfb8', style: 1 },
@@ -38,9 +37,8 @@ export const WALKER_STYLES = ['quiff', 'side-part', 'curls', 'bob', 'bun', 'bald
   'crop-and-beard', 'rounded-curls', 'ponytail', 'beret', 'beanie', 'long-sweep'];
 export const WALKER_COLORS = WALKER_LOOKS.map(look => look.coat);
 
-// Exact channel masks identify cloth, skin, hair and trim. Muted face details
-// have all three channels and keep their own color. No textures or fragment
-// shader branches are needed for the palette.
+// Exact channel masks mark cloth, skin, hair and trim for the vertex shader's
+// palette lookup. Face details use all three channels and keep their colour.
 const cloth = new THREE.Color(1, 0, 0), skin = new THREE.Color(0, 1, 0);
 const hair = new THREE.Color(0, 0, 1), trim = new THREE.Color(1, 1, 0);
 const ink = '#302c32';
@@ -54,7 +52,7 @@ function silhouette(style) {
   const p = new Parts();
   const width = [1, 1.07, .96, 1.04, .93, 1.08, 1.02, 1.08, .96, 1.06, 1.08, .94][style];
   const profile = [[0, .3], [.225, .3], [.255, .36], [.28, .65], [.285, .85], [.255, .98], [.15, 1.085], [.13, 1.12], [0, 1.12]];
-  // Longer flared coats, a compact jumper, and a soft jacket share topology.
+  // Styles only move profile points, so every silhouette shares topology.
   if (style === 3 || style === 8 || style === 11) { profile[1][0] = .29; profile[2][0] = .31; profile[3][0] = .29; }
   if ([1, 5, 7, 10].includes(style)) { profile[0][1] = profile[1][1] = .37; profile[2][1] = .41; }
   if (style === 9) { profile[3][0] = .32; profile[4][0] = .33; }
@@ -75,8 +73,8 @@ function silhouette(style) {
 
   ellipsoid(p, [0, 1.45, 0], [.25, .265, .235], skin, 10, 6);
 
-  // A separate sculpted cap leaves a real forehead. Its boundary goes behind
-  // the temples instead of drawing a horizontal line across the face.
+  // A separate cap leaves a real forehead, with its edge behind the temples
+  // rather than straight across the face.
   const scalp = new THREE.SphereGeometry(1, 10, 5, 0, Math.PI * 2, 0, Math.PI / 2);
   const vertex = scalp.attributes.position, uv = scalp.attributes.uv;
   for (let i = 0; i < vertex.count; i++) {
@@ -108,8 +106,8 @@ function silhouette(style) {
     vertex.setXYZ(i, style === 5 ? 0 : x, style === 5 ? 0 : y, style === 5 ? 0 : z);
   }
   scalp.computeVertexNormals(); p.add(scalp, [0, 1.46, 0], style === 9 || style === 10 ? trim : hair);
-  // Reuse this same small piece for tied hair, a beard or a wool pompom.
-  // The other styles collapse it inside the head, with no extra draw calls.
+  // One piece serves as tied hair, beard or pompom; other styles collapse it
+  // inside the head.
   const extra = {
     4: [[0, 1.72, .12], [.13, .13, .13]],
     6: [[0, 1.28, -.05], [.19, .10, .19]],
@@ -144,9 +142,8 @@ function walkerGeometry() {
     variant.setAttribute('color', new THREE.BufferAttribute(rgba, 4));
   }
   const geometry = variants[0];
-  // Index against ALL silhouettes, so a seam/normal needed by a different
-  // hairstyle cannot be lost. The stock morph path also works in shadow/AO
-  // passes, avoiding a second custom animation or depth implementation.
+  // Index against all silhouettes so no style loses a seam or normal. Stock
+  // morph targets also work in the shadow and AO passes.
   for (let i = 0; i < variants.length; i++) for (const name of ['position', 'normal', 'color']) {
     geometry.setAttribute(`${name}${i}`, variants[i].attributes[name]);
   }
@@ -237,9 +234,8 @@ export function taxiGroupAppearance(seed, passenger) {
   return appearance;
 }
 
-// Pair existing residents rather than increasing the crowd. Shared travel
-// phase/speed keeps them together through culling and streaming; their bob,
-// proportions and wardrobe remain individual. No following AI is needed.
+// Pair existing residents rather than adding more. Shared phase and speed
+// keep them together through culling and streaming without following logic.
 const pairStyles = { masculine: [0, 1, 5, 6], feminine: [3, 4, 8, 11] };
 export function pairWalkers(walkers, seed) {
   for (let i = 0; i + 1 < walkers.length; i += 2) {
@@ -263,8 +259,8 @@ const encoded = new THREE.Color();
 const selection = { morphTargetInfluences: new Array(WALKER_STYLES.length).fill(0) };
 export function setWalkerAppearance(mesh, index, appearance) {
   const { look, skin, hair } = appearance;
-  // Reuse the existing per-instance color buffer for three palette indices.
-  // These and the one-hot shape selection are uploaded only at creation.
+  // The instance colour buffer carries three palette indices. These and the
+  // one-hot shape selection are uploaded only at creation.
   const style = appearance.style ?? WALKER_LOOKS[look].style;
   mesh.setColorAt(index, encoded.setRGB(look + style / 16, skin, hair));
   selection.morphTargetInfluences.fill(0);

@@ -63,8 +63,7 @@ export class GamepadInput {
       this.requireNeutral = blocked || active;
       return;
     }
-    // D-pad directions, then the east and south face buttons (B/A or Circle/Cross).
-    // Menus keep their normal navigation; held buttons count only once.
+    // Konami code: D-pad, then B/A (Circle/Cross). Ignored in menus; a held button counts once.
     if (paused || menu) this.konami.reset();
     else {
       const presses = buttons.flatMap((down, index) => down && pressed(index) && index < 17 ? [index] : []);
@@ -116,9 +115,7 @@ export class GamepadInput {
     if (pause) { this.onAction('pause'); return; }
     if (nextJourney) { this.onAction('nextJourney'); return; }
     if (paused) {
-      // Paused, the D-pad and sticks move the pause screen's focus ring rather
-      // than the car, so resume, the garage and the graphics settings are all
-      // reachable without a keyboard or a touchscreen.
+      // Paused, the D-pad and sticks move the pause screen's focus ring.
       if (menu !== 'pause') return;
       if (previous) this.onAction('menuPrevious');
       else if (next) this.onAction('menuNext');

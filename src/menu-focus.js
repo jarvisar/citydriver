@@ -1,6 +1,5 @@
-// Controller navigation for every menu: the title screen, the pause screen, the
-// results card and the choosers. Anything focusable that is laid out and
-// enabled is reachable, so new controls need no list to join.
+// Controller navigation for every menu. Anything focusable that is laid out and
+// enabled is reachable, so new controls need no registration.
 const FOCUSABLE = 'button, select, input:not([type="hidden"]), a[href], [tabindex]:not([tabindex="-1"])';
 const DIRECTIONS = { menuUp: [0, -1], menuDown: [0, 1], menuPrevious: [-1, 0], menuNext: [1, 0] };
 
@@ -10,9 +9,9 @@ export function menuTargets(root) {
     && element.checkVisibility?.({ visibilityProperty: true }) !== false);
 }
 
-// Left and right change a slider or a list in place, since each fills its own
-// row. The custom paint well sits in a row of swatches, so left and right pass
-// it by and A turns its hue instead: no native picker is ever needed.
+// Left/right adjust a slider or select in place, since each fills its own row.
+// The colour input sits among swatches, so left/right pass it and A rotates its
+// hue instead of opening a native picker.
 function adjust(element, step, { colour = false } = {}) {
   if (element.matches('input[type="range"]')) {
     if (element.matches('[data-audio-channel]')) element.value = Math.max(0, Math.min(100, Number(element.value) + step * 5));

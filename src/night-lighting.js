@@ -4,8 +4,8 @@ import { PAVEMENT_LEVEL } from './world/city-grid.js';
 const STREET_LIMIT = 96, HEADLIGHT_LIMIT = 25, RANGE = 145;
 const up = new THREE.Vector3(0, 1, 0), lensColor = new THREE.Color('#fff1c8');
 
-// Small CPU-generated masks, shared by every instance. No lights, render
-// targets, bloom, shadow maps, or extra work in the city's surface shaders.
+// Night lighting is faked with additive decals using these small CPU-generated
+// masks, so it adds no lights or shader work to the city's materials.
 function lightMask(headlight) {
   const size = 64, data = new Uint8Array(size * size * 4);
   for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {

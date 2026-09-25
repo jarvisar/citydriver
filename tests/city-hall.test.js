@@ -18,7 +18,7 @@ test('City Hall replaces one existing POI 4–6 blocks from the actual seeded sp
   assert.ok(distance >= 4 && distance <= 6, `distance ${distance}`);
   assert.equal(cityBlock(ix, iz).landmark, 'cityhall');
   assert.deepEqual(cityRiverAxes(ix, iz), { north: false, east: false });
-  // Reconstruct the pre-replacement allocation independently.
+  // Recompute the site's original allocation independently of the source.
   const rx = Math.floor(ix / 4), rz = Math.floor(iz / 4);
   let x = Math.floor(randomAt(rx, rz + 7200) * 4), z = Math.floor(randomAt(rx, rz + 7201) * 4);
   if (cityRiverAxes(rx * 4 + x, rz * 4 + z).north) x = (x + 1) % 4;

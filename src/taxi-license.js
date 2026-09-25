@@ -1,7 +1,6 @@
-// End-of-shift taxi licences, after Crazy Taxi's results screen. Each class
-// asks for twice the cash of the one before, which tracks how earnings grow
-// with skill: a first shift lands around Class E, a strong one in Class A,
-// and only a shift that keeps its clock alive for many minutes reaches the top.
+// End-of-shift licences. Each class doubles the cash of the one before, which
+// tracks how earnings grow with skill: a first shift lands around Class E, a
+// strong one in Class A, and only a many-minute shift reaches the top.
 export const TAXI_LICENSES = [
   { id: 'none', badge: '–', name: 'No license', min: 0 },
   { id: 'e', badge: 'E', name: 'Class E', min: 250 },

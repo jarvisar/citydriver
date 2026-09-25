@@ -83,8 +83,7 @@ export function buildRivers(c) {
       }
       b.solid(x, (start + end) / 2, .3, end - start, true);
     }
-    // Alternate formal quays and planted embankments. A continuous path stays
-    // beside the road while small green wedges soften the edge of the water.
+    // Alternate formal quays and planted embankments.
     if ((c.plan.seed % 4 !== 0) && (!confluence || axis === 'north')) {
       for (const x of [22, 90]) for (const [start, end] of confluence ? [[16, 26], [86, 96]] : [[18, 94]]) {
         b.surface(x, G + .018, (start + end) / 2, 9, .036, end - start, '#799566');

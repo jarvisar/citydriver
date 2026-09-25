@@ -44,7 +44,7 @@ function clockSquare(c, design) {
     c.box(56, G + 36, 56, 12, 7, 12, '#637e79');
     c.box(56, G + 40, 56, 15, 1, 15, '#b9ccad');
     if (v === 2) {
-      // Open belfry: a different crown with a smaller, taller roof.
+      // Open belfry.
       for (const dx of [-5, 5]) for (const ds of [-5, 5]) c.box(56 + dx, G + 44, 56 + ds, .8, 7, .8, '#e3cdab');
       c.item('detail-bell', bell, c.materials.props, [56, G + 44, -56], [3, 3.5, 3]);
       pitchedRoof(c, 56, 56, 14, 14, G + 47.5 - 1.6 * Math.tan(.36), '#537b76');
@@ -282,8 +282,7 @@ export function buildLandmark(c) {
 }
 
 export function buildDestinationSigns(c, type) {
-  // Open supports leave each board's cutout silhouette visible. They share the
-  // ordinary solid batch and retain the existing roadside collision footprint.
+  // Open supports leave each board's cutout silhouette visible.
   for (const [x, s, yaw] of [[71, 18, 0], [94, 70, Math.PI / 2]]) {
     c.rigid(x, s, () => {
       for (const side of [-1, 1]) c.box(x + Math.cos(yaw) * side * 1.65, G + 1.6,

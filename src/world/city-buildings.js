@@ -99,8 +99,8 @@ export function shopSignMaterial(name, aspect = name.endsWith(' TOWER') ? .25 : 
   let map = null;
   if (globalThis.document) {
     const vertical = name.endsWith(' TOWER');
-    // Match the physical panel's proportions with roughly the same texel
-    // budget as the old 512 x 128 texture. Materials are shared across sites.
+    // Match the panel's proportions within a 64K-texel budget. Materials are
+    // shared across sites.
     const canvas = document.createElement('canvas');
     canvas.width = Math.round(Math.min(1024, Math.sqrt(65536 * aspect)));
     canvas.height = Math.round(canvas.width / aspect);
@@ -224,8 +224,7 @@ function storefront(c, b, baseHeight) {
         f.add(offset + spacing * .25 + .45, G + 1.8, .3, .06, .45, .08, '#e5d0a0');
         if ((b.variation + i) % 3 !== 0 && b.type !== 'office') {
           const canopyWidth = spacing - .7;
-          // Adjacent fabric panels form the canopy, including its hanging edge;
-          // no thin stripe boxes intersect the slab along its sides.
+          // Stripes are adjacent panels, not thin boxes overlapping one slab.
           const stripes = !c.distant && b.variation % 2 === 0 ? 8 : 1;
           for (let stripe = 0; stripe < stripes; stripe++) {
             const along = offset + ((stripe + .5) / stripes - .5) * canopyWidth;
@@ -288,7 +287,6 @@ function roofDetails(c, b, x, s, w, d, roof) {
 
 function signatureRoof(c, b, x, s, w, d, roof) {
   if (b.roofType === 'mansard') {
-    // A steep copper/slate skirt and inset cap distinguish the old-town houses.
     const rise = 4.2;
     mansardRoof(c, x, s, w, d, roof, rise, b.roof);
     c.box(x, roof + rise + .12, s, w * .7 + .2, .24, d * .7 + .2, b.roof);
@@ -358,7 +356,7 @@ function buildBuilding(c, b) {
   else if (b.roofType === 'sawtooth') {
     sawtoothRoof(c, b, roof);
   } else roofDetails(c, b, x, s, width, depth, roof);
-  // One rear fire escape adds depth without covering every facade in trim.
+  // At most one fire escape, on a rear or side facade.
   const escapeSide = [b.x < 56 ? 1 : 0, 2, 3].find(side => b.openSides[side]);
   if (!c.distant && b.type === 'brick' && b.variation === 1 && escapeSide !== undefined) {
     const f = facade(c, b.x, b.s, b.width, b.depth, escapeSide);

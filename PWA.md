@@ -1,32 +1,32 @@
-# Offline installation
+# Offline Install
 
-Open the pause menu and choose **Install Citydriver**. If your browser can't show an install prompt, the button displays instructions. On iPhone or iPad, use Safari's **Share → Add to Home Screen**.
+Citydriver can be installed as a Progressive Web App (PWA) and played offline.
 
-Load the game fully while online before playing offline. Hosting requires HTTPS; localhost also works.
+Open the pause menu and click **Install Citydriver**. If your browser doesn't support the install prompt, the button shows instructions instead. On iPhone or iPad, use Safari's **Share → Add to Home Screen**.
 
-## Test locally
+Let the game fully load while online before playing offline. Hosting requires HTTPS, but localhost also works.
+
+## Testing Locally
 
 ```sh
 npm run build
 npm run preview
 ```
 
-Open the preview URL and wait for the city to load before disconnecting. City generation, the garage, audio, and rendering work offline.
+Open the preview URL and wait for the city to load before disconnecting. `npm run dev` doesn't register a service worker, so use the preview build for this.
 
-`npm run dev` shows install help but doesn't register a service worker.
-
-## Updates and hosting
-
-Close all game tabs to let a downloaded update take effect. Old Citydriver caches are removed within the same scope.
-
-The build supports subdirectories. To match GitHub Pages:
+To test with the same base path as GitHub Pages:
 
 ```sh
 npm run build -- --base=/citydriver/
 npm run preview
 ```
 
-## Assets and tests
+## Updates
+
+Close all Citydriver tabs to apply a downloaded update. Old caches are removed automatically.
+
+## Icons & Tests
 
 ```sh
 npm run pwa:icons
@@ -34,4 +34,4 @@ npm run pwa:screenshots
 npm run test:pwa
 ```
 
-These commands generate icons, capture desktop/mobile screenshots, and test installation, offline driving, and cache updates at root and subdirectory URLs. Set `CHROME_PATH` if Chrome is outside the default location.
+These generate the app icons, capture the desktop and mobile screenshots, and test installing, offline driving, and updates. Set `CHROME_PATH` if Chrome isn't in the default location.

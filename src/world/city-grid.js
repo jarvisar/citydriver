@@ -90,8 +90,7 @@ export function nearestCityStreet(s, u) {
 }
 
 const DISTRICTS = ['Old town', 'Garden quarter', 'Midtown', 'Warehouse district', 'Market district', 'Civic quarter'];
-// Together with four-block landmark spacing, this yields about 30% more
-// ordinary blocks. Preserve the original 65/35 park-to-plaza mix.
+// Public-space blocks split 65/35 between parks and plazas.
 const PARK_CHANCE = PUBLIC_SPACE_CHANCE * .65;
 export function cityDistrict(s, u) {
   const { ix, iz } = cityCell(s, u);

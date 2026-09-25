@@ -2,8 +2,8 @@ import * as THREE from 'three';
 import { Rainfall } from './rainfall.js';
 import { Snowfall } from './snowfall.js';
 
-// A complete cycle takes fourteen minutes of driving. This clock belongs to
-// the game, so pausing or hiding the tab also pauses the sky and precipitation.
+// A full cycle takes fourteen minutes on the game clock, so pausing or hiding
+// the tab also pauses the weather.
 export const WEATHER_INTERVAL = 105;
 export const WEATHER_TRANSITION = 22;
 // Shuffle once per game load so sampling the clock stays stable while driving.
@@ -61,8 +61,8 @@ function mixState(from, to, amount, result) {
   return result;
 }
 
-// Pure sampling also makes a restored game clock and low frame rates agree.
-// Each phase holds its conditions before fading into the next phase.
+// A pure function of time, so a restored clock and low frame rates agree.
+// Each phase holds before fading into the next.
 export function sampleCityWeather(time, mode = 'auto', result = emptyState()) {
   time = Number.isFinite(time) ? Math.max(0, time) : 0;
   if (mode !== 'auto' && !Object.hasOwn(WEATHER_PRESETS, mode)) mode = 'auto';
@@ -116,8 +116,8 @@ export class CityWeather {
   }
   update(time, vehicle, origin = 0) {
     const nextTime = Number.isFinite(time) ? Math.max(0, time) : this.time;
-    // Starting a fresh district rewinds the game clock. A manual crossfade
-    // from the previous drive must not wait for that old timestamp to recur.
+    // A new district rewinds the game clock; don't leave a manual crossfade
+    // waiting for the old timestamp to come round again.
     if (nextTime < this.time) this.transitionStart = -Infinity;
     this.time = nextTime;
     sampleCityWeather(this.time, this.mode, this.targetState);

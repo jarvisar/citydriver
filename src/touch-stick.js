@@ -49,8 +49,8 @@ export class TouchStick {
   clear() { if (this.engaged || this.pointer !== null) this.release(); this.engaged = false; }
 }
 
-// In the chase view the stick controls the car, independent of camera rotation.
-// Use the existing analog driving physics for gradual steering and brake/reverse.
+// Chase view: the stick maps straight onto the car's analog controls,
+// independent of camera rotation.
 export function thirdPersonDrivingInput(stick) {
   return {
     forward: Math.max(0, stick.y), brake: Math.max(0, -stick.y),

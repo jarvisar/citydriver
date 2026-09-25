@@ -63,8 +63,7 @@ export function addSurfacePolygon(c, points, y, height, color, kind = 'solid') {
   if (!c.batches.has(key)) c.batches.set(key, { geometry: kind === 'water' ? riverWaterGeometry : flat ? surfaceTopGeometry : surfaceGeometry, material: c.materials[kind], items: [] });
   const items = c.batches.get(key).items;
   // Clip paving after mapping the curved streets: separate tessellations can
-  // overlap slightly even when their logical footprints meet exactly. This is
-  // construction-only work; the resulting pieces use the usual instance batch.
+  // overlap slightly even when their logical footprints meet exactly.
   c.surfaceLayers ??= new Map();
   const level = (y + height / 2).toFixed(5);
   if (!c.surfaceLayers.has(level)) c.surfaceLayers.set(level, []);

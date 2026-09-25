@@ -10,16 +10,15 @@ export const TRAFFIC_MODELS = [
   { name: 'van', width: 2.08, length: 5.15, cabin: [1.93, 1.35, 3.95], cabinZ: .32 },
 ];
 
-// Chooser-only: a low, short-cabin coupe. It is never spawned into traffic and
-// is not any route's own car, so the roads keep their ordinary-looking fleet.
+// Chooser-only coupe; never spawned into traffic.
 export const SPORTS_MODEL = { name: 'sports', width: 1.94, length: 4.2, cabin: [1.6, .56, 1.84], cabinZ: .3, drop: .2 };
 
 export const TRAFFIC_COLORS = ['#d8c7a0', '#e9e5d9', '#577f96', '#829789', '#b34e43', '#d2a345', '#58636a', '#b7c4c9', '#796c8c', '#397e7b'];
 
 export const WHEEL = { radius: .43, width: .25, hubRadius: .21, hubWidth: .26, y: .44 };
 
-// Build one body shape as four merged geometries. Traffic bakes its wheels into
-// the details mesh; a driven car asks for them separately so they can turn.
+// One body shape as four merged geometries. Traffic bakes its wheels into the
+// details mesh; a driven car gets them separately so they can turn.
 export function vehicleGeometry(spec, { separateWheels = false } = {}) {
   const parts = { paint: [], details: [], headlights: [], taillights: [] };
   const wheels = [];
@@ -36,8 +35,8 @@ export function vehicleGeometry(spec, { separateWheels = false } = {}) {
   const box = (size, location, category = 'paint', color) => add(new THREE.BoxGeometry(...size), location, category, color);
   const { width: w, length: l, cabin: [cw, ch, cl], cabinZ: cz, name, drop = 0 } = spec;
   const roofY = 1.22 + ch;
-  // Clip the four corners without adding subdivisions to the long body sides.
-  // The short bevels catch light while keeping the original flat-panel style.
+  // Clip the four corners without subdividing the long sides; the short bevels
+  // catch light while keeping the flat-panel style.
   const corner = .12;
   const outline = new THREE.Shape();
   outline.moveTo(-w / 2 + corner, -l / 2);
@@ -57,7 +56,7 @@ export function vehicleGeometry(spec, { separateWheels = false } = {}) {
   }
   deck.computeVertexNormals();
   add(deck, [0, 1.24, 0], 'paint');
-  // Slightly sloped glass keeps the silhouettes in the player's faceted style.
+  // Sloped glass, matching the player car's faceted style.
   const glass = new THREE.BoxGeometry(cw, ch, cl);
   const vertices = glass.attributes.position;
   for (let i = 0; i < vertices.count; i++) if (vertices.getY(i) > 0) {
@@ -68,7 +67,7 @@ export function vehicleGeometry(spec, { separateWheels = false } = {}) {
   add(glass, [0, 1.22 + ch / 2, cz], 'details', '#344e55');
   box([cw * .94 + .08, .1, cl - .24], [0, roofY + .025, cz + .06]);
   for (const side of [-1, 1]) {
-    // Follow the sloped glass edges: vertical posts left the windshield looking
+    // Pillars follow the sloped glass; vertical posts made the windshield look
     // like a dark box perched on the doors.
     for (const [end, rake] of [[-1, .24], [1, -.12]]) {
       const pillar = new THREE.BoxGeometry(.085, ch + .02, .1), p = pillar.attributes.position;
@@ -124,7 +123,7 @@ export function vehicleGeometry(spec, { separateWheels = false } = {}) {
   }
   if (name === 'wagon') for (const x of [-.65, .65]) box([.065, .11, 2.35], [x, roofY + .14, cz], 'details', '#46514f');
   if (name === 'sports') {
-    // A splitter, skirts and a rear wing read as quick from the miniature view.
+    // Splitter, skirts and wing so it reads as quick even at small sizes.
     box([w * .9, .1, .4], [0, .63, -l / 2 - .12], 'details', '#2f3a3c');
     for (const side of [-1, 1]) box([.1, .2, l * .44], [side * (w / 2 - .02), .62, .1], 'details', '#2f3a3c');
     for (const x of [-.55, .55]) box([.09, .3, .13], [x, 1.42, l / 2 - .3]);
@@ -141,8 +140,8 @@ export function vehicleGeometry(spec, { separateWheels = false } = {}) {
   return { ...merged, wheels };
 }
 
-// Merge each model into four meshes, with shared geometry across the small fleet.
-// Only the paint material belongs to an individual car.
+// Geometry and materials are shared across the fleet; only the paint material
+// is per car.
 export function createTrafficModels() {
   const material = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: .76, flatShading: true, ...extra });
   const details = material('#ffffff', { vertexColors: true });
@@ -150,10 +149,9 @@ export function createTrafficModels() {
   const taillights = material('#a5382e', { emissive: '#e12e18', emissiveIntensity: .25 });
   const templates = TRAFFIC_MODELS.map(spec => {
     const { paint, details: trim, headlights: front, taillights: rear } = vehicleGeometry(spec);
-    // Each car casts its whole shadow in one draw instead of four. The trim
-    // and lamp triangles follow the paint's in one buffer: the colour pass
-    // draws only the paint's range, and the shadow pass all of it. The same
-    // triangles reach the shadow map either way.
+    // One shadow draw per car instead of four: trim and lamp triangles follow
+    // the paint's in one buffer. The colour pass draws only the paint range;
+    // the shadow pass draws all of it.
     const paintCount = paint.index.count, outline = trim.clone();
     outline.deleteAttribute('color');
     const body = mergeGeometries([paint, outline, front, rear]);

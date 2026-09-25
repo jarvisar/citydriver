@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import { compactGeometry } from './compact-geometry.js';
 
-// Reusable closed solids replace stacks of overlapping boxes at sloped ends.
-// All roof pieces keep the building's rigid frame at both detail levels.
+// Closed solids for sloped ends, rather than stacks of overlapping boxes.
+// Roof pieces keep the building's rigid frame at both detail levels.
 const triangle = new THREE.Shape();
 triangle.moveTo(-.5, 0); triangle.lineTo(.5, 0); triangle.lineTo(.5, 1); triangle.closePath();
 export const roofWedge = new THREE.ExtrudeGeometry(triangle, { depth: 1, steps: 1, bevelEnabled: false });
@@ -38,10 +38,9 @@ export function pitchedRoof(c, x, s, width, depth, eave, color, gable = null, pi
     c.box(x + side * run / 2, center, s, run / Math.cos(pitch), thickness, depth, color, 'solid', 0, -side * pitch);
     if (trim) for (const end of [-1, 1]) c.box(x + side * run / 2, center - .04, s + end * (depth / 2 + .03), run / Math.cos(pitch), thickness + .12, .16, trim, 'solid', 0, -side * pitch);
   }
-  // A small raised ridge covers the panel meeting line without coplanar faces.
+  // A raised ridge covers the panel seam and caps the fascia ends, extending
+  // past the trims so no faces are coplanar.
   if (ridge) {
-    // The ridge also caps the two fascia ends. Its front/back extend beyond
-    // those trims, so their crossing never exposes competing coplanar faces.
     const top = eave + rise + thickness / Math.cos(pitch) + .1;
     c.box(x, top - .35, s, .5, .7, depth + .3, color);
   }
@@ -58,18 +57,17 @@ export function butterflyRoof(c, b, roof) {
   const run = (width - gutter) / 2, rise = Math.min(3.2, Math.max(1.6, w * .09));
   const pitch = Math.atan2(rise, run), low = roof + .9, thickness = .38;
   const trim = '#ded1b2', sideWall = .28, endWall = .26;
-  // The roof starts above the wall, including its LOWEST point at the gutter.
-  // Glazed end infills and a continuous fascia explain the deliberate V shape.
-  // Keep the backing inside the enclosure: full-width faces would overlap
-  // the glazing and side walls, causing z-fighting as the camera moves.
+  // The whole roof sits above the wall, gutter included. The backing stays
+  // inside the enclosure; full-width faces would z-fight with the glazing
+  // and side walls.
   c.box(x, roof + .4, s, w - 2 * sideWall, .8, d - 2 * endWall, b.wall);
   for (const side of [-1, 1]) {
     const cx = x + side * (gutter / 2 + run / 2), center = low + rise / 2 + thickness / (2 * Math.cos(pitch));
     c.box(cx, center, s, run / Math.cos(pitch), thickness, depth, b.accent, 'solid', 0, side * pitch);
     for (const end of [-1, 1]) {
       c.box(cx, center - .06, s + end * (depth / 2 + .03), run / Math.cos(pitch), .58, .2, trim, 'solid', 0, side * pitch);
-      // The infill top meets the roof underside; its lower edge joins the wall.
-      // Stop at the inner side-wall face so the corner has only one exterior.
+      // The glazed infill spans wall to roof underside and stops at the inner
+      // side-wall face, so the corner has only one exterior.
       const wallRun = (w - gutter) / 2 - sideWall, h = wallRun * Math.tan(pitch);
       const wx = x + side * (gutter / 2 + wallRun / 2), ws = s + end * (d / 2 - endWall / 2);
       wedge(c, wx, ws, low, wallRun, h, endWall, '#668e91', side < 0);
@@ -83,7 +81,6 @@ export function butterflyRoof(c, b, roof) {
     c.box(x + side * (w / 2 - sideWall / 2), (roof + eave) / 2, s, sideWall, eave - roof, d, b.wall);
     c.box(x + side * (width / 2), low + rise + .13, s, .22, .52, depth + .2, trim);
   }
-  // A shallow, narrow drainage channel replaces the old exposed black trough.
   c.box(x, low + .02, s, gutter + .14, .18, depth + .14, '#768e8e');
   for (const side of [-1, 1]) c.box(x + side * (gutter / 2 - .08), low + .215, s, .12, .21, depth + .14, '#a9b9af');
   for (const end of [-1, 1]) {

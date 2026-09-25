@@ -56,14 +56,11 @@ function finishBatchMesh(mesh, { castShadow, receiveShadow, ambientOcclusion }, 
   return mesh;
 }
 
-// Lamps, benches, bins, signals, trees and roof details come in batches of a
-// handful each, and every batch costs a draw call, plus one more in the shadow
-// pass. Small batches that share a material and lighting therefore draw as one
-// merged mesh per block, with each instance's transform and colour written
-// into its vertices the way the instancing shader applies them. Batches of
-// many instances stay instanced: one draw already covers them, and sharing
-// one geometry keeps their memory small. Batches that change after building
-// never merge.
+// Every batch costs a draw call, plus one in the shadow pass, and most props
+// come a handful at a time. Small batches sharing a material and lighting merge
+// into one mesh per block, with transforms and colours baked into the vertices
+// as the instancing shader would apply them. Large batches stay instanced to
+// share geometry memory; batches that change after building never merge.
 const MERGE_INSTANCE_LIMIT = 32, MERGE_VERTEX_LIMIT = 6000;
 const LIVE_BATCHES = new Set(['residents', 'signal-lens', 'canal-boat', 'water']);
 const mergedMaterials = new WeakMap(), unitColors = new WeakMap();
@@ -96,15 +93,13 @@ function* mergeBatchSteps(entries, east, start) {
     vertexCount += geometry.attributes.position.count * items.length;
     indexCount += (geometry.index ?? geometry.attributes.position).count * items.length;
   }
-  // Directions and colours need far less than single precision: 16-bit
-  // normals turn by a few thousandths of a degree, and 16-bit colours stay
-  // well inside one step of the 8-bit screen.
+  // 16-bit normals are off by a few thousandths of a degree, and 16-bit
+  // colours stay well inside one step of the 8-bit screen.
   const position = new Float32Array(vertexCount * 3), normal = new Int16Array(vertexCount * 3), color = new Uint16Array(vertexCount * 3);
   const index = vertexCount > 65535 ? new Uint32Array(indexCount) : new Uint16Array(indexCount);
   const f = Math.fround;
   let vertex = 0, next = 0;
-  // Which batches the mesh holds, with the transforms baked into it, for tools
-  // and tests; a few kilobytes a block.
+  // Baked batches and transforms, for tools and tests; a few kilobytes a block.
   const record = {};
   for (const [batchKey, { geometry, items }] of entries) {
     const matrices = record[batchKey] = new Float32Array(items.length * 16);
@@ -146,14 +141,13 @@ function* mergeBatchSteps(entries, east, start) {
   geometry.setIndex(new THREE.BufferAttribute(index, 1));
   const mesh = new THREE.Mesh(geometry, mergedMaterials.get(batches[0].material));
   mesh.name = 'citydriver-merged'; mesh.userData.batches = record;
-  // Merged geometry belongs to its block alone. Blocks dispose every batch the
-  // way an InstancedMesh disposes, event included.
+  // Merged geometry belongs to this block alone; dispose it the way an
+  // InstancedMesh does, event included.
   mesh.dispose = () => { geometry.dispose(); mesh.dispatchEvent({ type: 'dispose' }); };
   return mesh;
 }
 
-// Every batch a block renders, instanced or merged, with its instance
-// transforms. For tools and tests; the game itself never needs to look.
+// Every batch a block renders, instanced or merged. For tools and tests only.
 export function* blockBatches(group) {
   for (const mesh of group.children) {
     if (mesh.isInstancedMesh) yield { name: mesh.name.slice('citydriver-'.length), mesh, count: mesh.count, matrixAt: (i, target) => mesh.getMatrixAt(i, target) };
@@ -202,11 +196,8 @@ function* renderBatchSteps(group, batches, east = 0, start = 0) {
 
 function resources() {
   const standard = options => new THREE.MeshStandardMaterial({ roughness: .9, flatShading: true, ...options });
-  // Everything used to sit at roughness .9, so masonry, asphalt, painted
-  // steel and foliage all answered the sun in exactly the same way. Spreading
-  // these apart is what separates one material from another. Metalness stays
-  // at zero outside the glass: there is no environment map for metal to
-  // reflect, so it would only darken the surface.
+  // Metalness stays zero outside the glass: there is no environment map for
+  // metal to reflect, so it would only darken the surface.
   const result = {
     solid: standard({ color: '#ffffff' }),
     road: standard({ color: '#666c70', roughness: .6 }),
@@ -214,7 +205,7 @@ function resources() {
     lit: new THREE.MeshBasicMaterial({ color: '#ffffff', toneMapped: false }),
     clock: new THREE.MeshBasicMaterial({ color: '#ffffff', vertexColors: true, toneMapped: false }),
     water: createRiverWaterMaterial(),
-    // Lamp posts, signals, benches and bins: painted steel, not stucco.
+    // Lamp posts, signals, benches and bins.
     props: standard({ color: '#ffffff', vertexColors: true, roughness: .62 }),
     residents: createWalkerMaterial(),
     bark: standard({ color: '#625548', vertexColors: true, roughness: .97 }),
@@ -251,8 +242,8 @@ export class CitydriverChunk {
     if (!deferred) this.buildUntil();
   }
   buildUntil(deadline = Infinity) {
-    // Prefetch can stop between roads, individual buildings and mesh batches.
-    // Startup and urgently needed collision blocks drain the same recipe.
+    // Prefetch can stop between steps; startup and urgent collision blocks
+    // drain the same generator to completion.
     while (this.construction && performance.now() < deadline) {
       if (this.construction.next().done) this.construction = null;
     }
@@ -296,8 +287,7 @@ export class CitydriverChunk {
     try { return build(); } finally { this.layoutAnchor = previousAnchor; this.layoutPlacement = previousPlacement; this.followLayout = previousFollow; }
   }
   structure(x, s, build, placement = null) {
-    // Separate architecture from scenery sharing its materials. These batches
-    // draw before the car silhouette; everything else keeps its normal order.
+    // Architecture gets its own batches so it draws before the car silhouette.
     const previous = this.buildingStructure;
     this.buildingStructure = true;
     try { return this.rigid(x, s, build, placement); }
@@ -372,8 +362,8 @@ export class CitydriverChunk {
       buildRiverGround(this);
       return;
     }
-    // Streets and pavement cover the full block with shared edges. A second
-    // buried slab is unnecessary now that the ground no longer has tile gaps.
+    // Streets and pavement cover the full block with shared edges, so there
+    // are no gaps to hide under a buried slab.
     this.surface((west.halfWidth + 112 - east.halfWidth) / 2, 24.06, (south.halfWidth + 112 - north.halfWidth) / 2, 112 - west.halfWidth - east.halfWidth, .12, 112 - south.halfWidth - north.halfWidth, '#acafa8');
     if (this.distant) return;
     // Thin paving seams keep sidewalks legible at a low camera angle.
@@ -389,7 +379,7 @@ export class CitydriverChunk {
   buildFurniture() {
     if (this.plan.kind === 'river') return;
     const { west, east, south, north } = blockStreets(this.ix, this.iz);
-    // Keep the existing furniture placement unless the wider curb needs room.
+    // Fixed insets, pushed back only where a wider street needs the room.
     const lampInset = profile => Math.max(10.6, profile.halfWidth + .6);
     const treeInset = profile => Math.max(11.6, profile.halfWidth + 1.6);
     const streetTree = (x, s) => {
@@ -411,7 +401,7 @@ export class CitydriverChunk {
     this.prop('bin', binX, 43); this.post(binX, 43, .36);
   }
   buildLife() {
-    // Residents stay on the pavement; they never wander into driving lanes.
+    // Residents stay on the pavement, never in driving lanes.
     const random = seededRandom(this.plan.seed + 912), river = this.plan.kind === 'river';
     const sides = this.plan.rivers.north && this.plan.rivers.east ? 4 : 2;
     this.walkers = Array.from({ length: this.plan.landmark ? 10 : 4 }, (_, i) => ({
@@ -481,8 +471,8 @@ export class CitydriverChunk {
   }
   finish() { for (const _ of this.finishSteps()) { /* synchronous tools/startup */ } }
   *finishSteps() {
-    // Record the exact rigid lamp placement, including curved streets and
-    // bridge furniture. Lighting reuses these points without scene traversal.
+    // Lamp positions for lighting, including curved streets and bridges, so it
+    // never has to traverse the scene.
     this.features.lamps = (this.batches.get('lamp')?.items ?? []).map(item => {
       const matrix = cityItemMatrix(item, this.east, this.start, transform.matrix);
       const point = new THREE.Vector3(-1.75, 7.36, 0).applyMatrix4(matrix);
@@ -620,8 +610,8 @@ export class CitydriverWorld {
     if (Number.isFinite(budgetMs) && !this.pending.length) this.prefetchDistant(cell, ds, du, deadline);
   }
   requiredChunk(ix, iz, distant) {
-    // If the car reaches an unfinished block, finish its remaining work rather
-    // than throwing away the work already done. Collision coverage is urgent.
+    // Finish a half-built prefetch block rather than discarding it; collision
+    // coverage is urgent.
     const chunk = this.prefetchBuild?.chunk;
     if (chunk && chunk.ix === ix && chunk.iz === iz && chunk.distant === distant) {
       this.prefetchBuild = null; chunk.buildUntil(); return chunk;
@@ -629,14 +619,12 @@ export class CitydriverWorld {
     return new CitydriverChunk(ix, iz, this.materials, distant);
   }
   prefetchDistant(cell, ds, du, deadline) {
-    // Prepare both sides of the detail transition and the next skyline strip.
-    // Work resumes within the frame budget, completing at most one block per
-    // frame. Packed distant caches own no GPU objects.
+    // Prepare both sides of the detail transition and the next skyline strip,
+    // at most one block per frame. Packed distant caches own no GPU objects.
     const p = cityLogical(this.s, this.u), x = p.u - cell.ix * CITY_BLOCK, z = p.s - cell.iz * CITY_BLOCK;
-    // Rendering can run faster than fixed-step physics. A repeated position is
-    // not a turn: keep preparing the same strip instead of disposing and
-    // rebuilding it on alternating frames. Predict in logical street space,
-    // since a curved northbound road also moves east/west in world space.
+    // Rendering can outpace fixed-step physics, so a repeated position keeps
+    // the last direction rather than rebuilding the strip every other frame.
+    // Predict in logical street space: curved roads also move east/west.
     if (ds || du) {
       const previous = cityLogical(this.s - ds, this.u - du);
       this.prefetchDirection.x = Math.abs(p.u - previous.u) > 1e-6 ? Math.sign(p.u - previous.u) : 0;
@@ -649,9 +637,8 @@ export class CitydriverWorld {
       this.prefetchTarget = key; this.prefetchPending = []; this.prefetchDetailPending = [];
       this.prefetchBuild?.chunk.dispose(); this.prefetchBuild = null;
       this.prefetchDemotionPending = [];
-      // Prepare the whole next detail strip, including the outer detail at
-      // higher quality. Basic needs at most five blocks; High needs thirteen.
-      // They own buffers, so retire unused entries when the driver turns away.
+      // The next detail strip: at most five blocks on Basic, thirteen on High.
+      // They own buffers, so drop unused entries when the driver turns away.
       const detailWanted = new Set();
       if (dx || dz) for (let ix = cell.ix + dx - this.radius; ix <= cell.ix + dx + this.radius; ix++) {
         for (let iz = cell.iz + dz - this.radius; iz <= cell.iz + dz + this.radius; iz++) {
@@ -664,8 +651,8 @@ export class CitydriverWorld {
       for (const [index, chunk] of this.prefetchedDetails) if (!detailWanted.has(index)) {
         chunk.dispose(); this.prefetchedDetails.delete(index);
       }
-      // The trailing detail strip also changes level at a crossing. Without
-      // preparing it, all of its distant models are regenerated in that frame.
+      // The trailing strip is demoted at a crossing; without this its distant
+      // models would all be generated in that one frame.
       const demotionWanted = new Set();
       if (dx || dz) for (const chunk of this.chunks.values()) {
         if (Math.abs(chunk.ix - cell.ix - dx) <= this.radius && Math.abs(chunk.iz - cell.iz - dz) <= this.radius) continue;
@@ -738,10 +725,9 @@ export class CitydriverWorld {
       chunk.animate(time, signalTime, visible, contacts);
     }
   }
-  // Stand-ins for every shared material, shaped like the colored instanced
-  // batches that use them, so a river or landmark streaming in later does not
-  // stall the drive on shader compilation. They are compiled, never drawn.
-  // Residents need morph targets and already walk every block.
+  // Compiled, never drawn, so a river or landmark streaming in later does not
+  // stall on shader compilation. Residents are skipped: they need morph
+  // targets and every block already has them.
   warmupObjects() {
     return Object.entries(this.materials).filter(([key]) => key !== 'residents').map(([key, material]) => {
       // Merged furniture is a plain mesh with vertex colours.

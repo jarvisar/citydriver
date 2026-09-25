@@ -34,7 +34,6 @@ test('every car builds a solid, steerable model', () => {
       assert.ok([...position.array].every(Number.isFinite), `${id} has a broken mesh`);
     });
     assert.ok(meshes >= 8, `${id} is missing bodywork`);
-    // Wheels rest on the ground the car is placed on.
     const box = new THREE.Box3().setFromObject(model.car);
     assert.ok(Math.abs(box.min.y) < .05, `${id} floats or sinks: ${box.min.y}`);
     model.disposeModel();
@@ -72,7 +71,6 @@ test('the coastal wagon keeps the original handling and every car stays close to
     assert.ok(Math.abs(stats.acceleration / base.acceleration - 1) < .15, `${id} acceleration is too far from the original`);
     assert.ok(Math.abs(stats.grip - 1) < .12, `${id} handling is too far from the original`);
   }
-  // The coupe is allowed to feel quick, and the racer quicker again.
   const sports = carStats('sports'), formula = carStats('formula');
   assert.ok(sports.topSpeed > base.topSpeed * 1.13 && sports.topSpeed < base.topSpeed * 1.25);
   assert.ok(sports.acceleration > base.acceleration * 1.15);
@@ -115,7 +113,6 @@ test('each special is the best in the garage at one thing and pays for it', () =
   // The microcar is the slowest car here and the nimblest with number plates.
   assert.ok(CAR_IDS.every(id => id === 'micro' || carStats(id).topSpeed > micro.topSpeed));
   assert.ok(micro.grip > best('grip', [...road, 'sports']) && micro.grip < carStats('formula').grip && micro.braking > best('braking'));
-  // Every one of them can still hold the top speed on its card against the air.
   for (const id of SPECIALS) assert.ok(Math.abs(flatOut(id, 60).speed - carStats(id).topSpeed) < .01, `${id} cannot reach its top speed`);
 });
 
@@ -123,12 +120,10 @@ test('the specials are their own shapes, on their own wheels', () => {
   const bounds = id => { const model = createCar(id), box = new THREE.Box3().setFromObject(model.car); model.disposeModel(); return box; };
   for (const id of SPECIALS) {
     const box = bounds(id), { width, length, wheels, eye } = CARS[id].shape;
-    // The collision box is the footprint the model actually has.
     assert.ok(Math.abs(box.max.x - box.min.x - width) < .12, `${id} is ${(box.max.x - box.min.x).toFixed(2)} m wide, not ${width}`);
     assert.ok(Math.abs(box.max.z - box.min.z - length) < .12, `${id} is ${(box.max.z - box.min.z).toFixed(2)} m long, not ${length}`);
     assert.ok(Math.abs(box.max.x + box.min.x) < .01, `${id} is not symmetrical`);
     assert.ok(wheels.front.z < 0 && wheels.rear.z > 0);
-    // First person looks out from inside the model, above the wheels.
     assert.ok(eye[1] > wheels.front.radius * 2 - .3 && eye[1] < box.max.y && Math.abs(eye[2]) < length / 2, `${id} has its driver outside the car`);
     const car = new DrivingController(straightRoute, {}, id);
     assert.deepEqual(car.car.userData.driverEye.toArray(), eye);
@@ -160,14 +155,11 @@ test('loose ground takes the speed instead of the game capping it', () => {
     // Full throttle balances on the off-road figure: the number on the card is
     // where the physics settles, not a limit clamped on top of it.
     assert.ok(Math.abs(trace.at(-1) - stats.offRoad) < .35, `${id} settled at ${trace.at(-1)}, not ${stats.offRoad}`);
-    // It gets there over seconds, not in the frame that crosses the line.
     assert.ok(trace[0] > entry - .6, `${id} lost ${(entry - trace[0]).toFixed(1)} m/s in one frame`);
     assert.ok(trace[60] > stats.offRoad + .5 && trace[60] < trace[10], `${id} does not ease down`);
-    // And never pulls harder than the car's own brakes while it is doing it.
     for (let i = 1; i < trace.length; i++) {
       assert.ok((trace[i - 1] - trace[i]) * 60 < stats.braking, `${id} decelerates harder than it brakes`);
     }
-    // Back on the road, the full top speed is available again.
     car.u = 2.4;
     for (let i = 0; i < 60 * 30; i++) car.update(1 / 60, { forward: true });
     assert.ok(Math.abs(car.speed - stats.topSpeed) < .35, `${id} could not recover its road speed`);
@@ -183,7 +175,6 @@ test('loose ground takes the speed instead of the game capping it', () => {
 
 test('the edge of the road is a ramp, not a line', () => {
   const stats = carStats('auto');
-  // Two wheels on the verge costs real speed, but nothing like leaving.
   const settled = at => {
     const car = new DrivingController(straightRoute, {}, 'auto');
     for (let i = 0; i < 60 * 102; i++) { if (i > 60 * 90) car.u = at; car.update(1 / 60, { forward: true }); }
@@ -193,7 +184,6 @@ test('the edge of the road is a ramp, not a line', () => {
   assert.ok(Math.abs(settled(4.6) - stats.topSpeed) < .35, 'the shoulder itself is still road');
   assert.ok(verge < stats.topSpeed - 1 && verge > open + 3, `the verge (${verge}) should sit between road and open ground`);
   assert.ok(Math.abs(open - stats.offRoad) < .35);
-  // Riding the line is steady rather than flickering between two surfaces.
   const car = new DrivingController(straightRoute, {}, 'auto');
   for (let i = 0; i < 60 * 90; i++) car.update(1 / 60, { forward: true });
   const speeds = [];
@@ -207,7 +197,6 @@ test('the edge of the road is a ramp, not a line', () => {
 });
 
 test('loose ground costs grip as well as speed', () => {
-  // Same car, same speed, same lock: the only difference is the surface.
   const turnIn = at => {
     const car = new DrivingController(straightRoute, {}, 'auto');
     car.u = at; car.speed = 20; car.update(0, {});
@@ -304,10 +293,8 @@ test('one colour dresses the whole garage and follows the car swap', () => {
     assert.ok(wears(car, blue), `${id} ignored the garage colour`);
     assert.equal(car.paintColor, blue);
   }
-  // And it stays on through a route change, kit and all.
   for (const journey of Object.keys(JOURNEYS)) { car.setAppearance(journey); assert.ok(wears(car, blue)); }
-  // Clearing it hands every car the finish it arrived in back. The default
-  // car's own finish is the route's, so put it back on the coast road first.
+  // The default car's own finish is the route's, so reset to the coast road first.
   car.setAppearance('coast');
   for (const id of CAR_IDS) {
     car.setCar(id); car.setPaint(null);

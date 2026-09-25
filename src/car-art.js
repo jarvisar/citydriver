@@ -1,16 +1,13 @@
 import { carEntry } from './cars.js';
 
-// A side profile drawn from the same numbers the model is built from, so each
-// card shows the car the player will actually be driving.
+// Chooser side profiles, drawn from the same dimensions as the 3D models.
 const SCALE = 47, GROUND = 130, CENTER = 140;
 const PAINT = 'var(--car-paint)', GLASS = '#3d5b63', TIRE = '#2b3434', HUB = '#bfc4b9', TRIM = '#b9bfb4';
 const CARBON = '#2e3538', VISOR = '#161b1d', SUIT = '#e7e3d5';
 
-// Drawing helpers in the car's own metres: z runs from the nose at the right to
-// the tail at the left, y up from the road. A lowered shell drops with `drop`.
-// A car with road-car proportions fills the card at the shared scale; a long,
-// low one is drawn a little larger and sat higher so it is framed rather than
-// stranded along the bottom edge.
+// Drawing helpers in the car's metres: z runs from the nose (right) to the tail
+// (left), y up from the road; `drop` lowers the shell. Cars that are not
+// road-car proportioned pass their own scale and ground to fill the card.
 function pen({ drop = 0, scale = SCALE, ground = GROUND } = {}) {
   const px = z => (CENTER - z * scale).toFixed(1);
   const py = y => (ground - (y - drop) * scale).toFixed(1);
@@ -42,14 +39,13 @@ function roadCarParts(entry) {
   const parts = [
     shadow(l * .55),
     slab(-l / 2, l / 2, .565, cabinY, PAINT, 5),
-    // Cabin, then a smaller glass house inside it, keeps the faceted look.
+    // Painted cabin with an inset glass house, for the faceted look.
     shape2d([[cz - cabinLength / 2, cabinY], [cz - cabinLength / 2 + .24, roofY], [cz + cabinLength / 2 - .12, roofY], [cz + cabinLength / 2, cabinY]], PAINT),
     shape2d([
       [cz - cabinLength / 2 + glassInset, cabinY + glassInset], [cz - cabinLength / 2 + .24 + glassInset, roofY - glassInset],
       [cz + cabinLength / 2 - .12 - glassInset, roofY - glassInset], [cz + cabinLength / 2 - glassInset, cabinY + glassInset],
     ], GLASS),
     slab(-l / 2, l / 2, .6, .72, TRIM, 2),
-    // Lamps at each end.
     slab(-l / 2 - .02, -l / 2 + .16, .9, 1.12, '#ffeec2', 2),
     slab(l / 2 - .16, l / 2 + .02, .9, 1.1, '#c4483a', 2),
   ];
@@ -67,49 +63,40 @@ function roadCarParts(entry) {
       slab(cz + cabinLength / 2 - 1.875, cz + cabinLength / 2 - .125, 1.467, 1.512, '#697773', 0),
     );
   }
-  // The wheels stand outboard of the bodywork, so they sit over it.
+  // Wheels sit outboard of the body, so they are drawn over it.
   parts.push(wheel(-wheelZ), wheel(wheelZ));
   parts.push(...accessories(entry, { ...draw, l, cz, cabinLength, roofY, radius }));
   return parts;
 }
 
-// The open-wheeler shares no bodywork with the road cars, so it draws its own
-// silhouette back to front: wings, floor, engine cover, then the tub and the
-// driver, with the exposed slicks laid over the lot.
+// The formula car shares no bodywork with the road cars. Parts are layered
+// back to front, with the exposed slicks drawn last.
 function formulaParts(entry) {
   const { slab, shape2d, disc, shadow } = pen({ scale: 50, ground: 112 });
   const radius = entry.shape.wheelRadius, wheelZ = entry.shape.wheelZ;
   const wheel = z => disc(z, radius, radius, TIRE) + disc(z, radius, radius * .44, HUB);
   return [
     shadow(2.55),
-    // Rear wing: from the side it is one tall endplate on a central pylon, with
-    // the upper flap showing as a lighter band across it.
     slab(2.06, 2.24, .52, .96, CARBON, 1),
     slab(1.98, 2.52, .9, 1.34, CARBON, 3),
     slab(2.02, 2.48, 1.14, 1.2, '#4a5457', 1),
-    // Front wing and its endplate, at the other end of the flat carbon floor.
     slab(-2.56, -2, .14, .26, CARBON, 1),
     slab(-2.64, -2.46, .08, .4, CARBON, 2),
     slab(-1.55, 2.2, .08, .22, CARBON, 1),
     slab(2.02, 2.42, .08, .4, CARBON, 2),
-    // Engine cover falling away behind the airbox.
     shape2d([[.95, .62], [.95, .98], [2.1, .56], [2.1, .28], [.95, .28]], PAINT),
     shape2d([[.42, .66], [.55, 1.12], [1, 1.12], [1.15, .62]], PAINT),
     shape2d([[.45, .75], [.55, 1.06], [.67, 1.06], [.58, .75]], VISOR),
-    // Nose cone tapering back into the tub, with the sidepod alongside and a
-    // dark sill so the two do not read as one slab of paint.
+    // The dark sill keeps the nose and sidepod from reading as one slab.
     shape2d([[-2.6, .3], [-2.6, .48], [-1.45, .62], [-.9, .66], [-.9, .26], [-1.62, .24]], PAINT),
     shape2d([[-.9, .22], [-.9, .66], [-.62, .72], [-.55, .8], [.42, .82], [.56, .74], [1.1, .68], [1.1, .2]], PAINT),
     slab(-1.05, 1.25, .22, .58, PAINT, 4),
     slab(-1.1, 2.1, .18, .3, CARBON, 1),
     shape2d([[-1.04, .32], [-1, .55], [-.8, .55], [-.86, .32]], VISOR),
-    // Cockpit opening inside the raised surround, the driver down in it, and
-    // the halo hoop over the top.
     shape2d([[-.5, .66], [-.44, .78], [.34, .79], [.4, .67]], VISOR),
     disc(-.02, .92, .18, SUIT),
     slab(-.27, -.06, .84, .96, VISOR, 1),
     shape2d([[-.72, .66], [-.62, 1.02], [.5, 1.02], [.5, .95], [-.53, .95], [-.62, .66]], CARBON),
-    // Running lamp in the nose, rain light on the rear wing.
     slab(-2.64, -2.5, .34, .46, '#ffeec2', 2),
     slab(2.18, 2.32, 1, 1.14, '#c4483a', 2),
     wheel(-wheelZ), wheel(wheelZ),
@@ -117,9 +104,7 @@ function formulaParts(entry) {
   ];
 }
 
-// The specials are drawn one by one from their models' own measurements, each
-// at the scale that frames it. A raked cabin is a painted frame with a smaller
-// glass house inside it.
+// Specials are drawn from their models' measurements, each at its own scale.
 const LAMP = '#ffeec2', TAIL = '#c4483a', ENGINE = '#59625f', SEAT = '#3a4441', SHOCK = '#d9a441', AMBER = '#e0a23a', CANVAS = '#e9e2cb', LEATHER = '#8a5a3a';
 const cabin = ({ shape2d }, front, rear, bottom, top, rake = .24, inset = .08) => [
   shape2d([[front, bottom], [front + rake, top], [rear - rake / 2, top], [rear, bottom]], PAINT),
@@ -132,7 +117,7 @@ const SPECIAL_ART = {
     const draw = pen({ scale: 54, ground: 124 }), { slab, shape2d, shadow } = draw;
     return [
       shadow(1.9),
-      // Cage first, so the tub and the engine sit in front of its feet.
+      // Cage first, so the tub and engine overlap its feet.
       slab(.64, .72, .83, 1.79, CARBON, 1),
       shape2d([[-.94, .9], [-.86, .9], [-.62, 1.79], [-.7, 1.79]], CARBON),
       shape2d([[.64, 1.79], [.72, 1.79], [1.4, 1], [1.3, 1]], CARBON),
@@ -175,7 +160,6 @@ const SPECIAL_ART = {
       slab(.07, .93, 1.55, 1.65, PAINT, 2),
       slab(-1.79, -.17, .6, 1.12, PAINT, 3),
       slab(-1.3, -.7, 1.11, 1.37, TRIM, 2), slab(-1.28, -.85, 1.37, 1.53, CARBON, 2),
-      // Header stubs down the bonnet side, into the pipe along the sill.
       ...[0, 1, 2, 3].map(i => disc(-1.45 + i * .28, .84, .06, TRIM)),
       slab(-1.35, .65, .55, .69, TRIM, 3),
       slab(-1.93, -1.78, .55, 1.21, TRIM, 2),
@@ -234,7 +218,6 @@ function accessories(entry, draw) {
   ];
   const rack = (front, rear) => slab(front, rear, roofY, roofY + .09, '#3a4441', 1);
   switch (entry.trim ?? entry.shape.name) {
-    // A round bale lying across the rack shows its wrapped end from the side.
     case 'plains': return [
       rack(cz - .9, cz + .9),
       disc(cz + .05, roofY + .51, .42, '#d8b566'),
@@ -242,7 +225,6 @@ function accessories(entry, draw) {
       disc(cz + .05, roofY + .51, .08, '#d8b566'),
       slab(cz - .5, cz + .6, roofY + .09, roofY + .14, '#6b5a3c', 1),
     ];
-    // A bicycle stands on the rack for the city: two wheels and a frame.
     case 'city': {
       const wheel = z => `<circle cx="${px(z)}" cy="${py(roofY + .42)}" r="${size(.32)}" fill="none" stroke="#2f3336" stroke-width="2.2"/>`;
       const tube = (a, b) => `<line x1="${px(a[0])}" y1="${py(a[1])}" x2="${px(b[0])}" y2="${py(b[1])}" stroke="#c9453f" stroke-width="2.4" stroke-linecap="round"/>`;
@@ -268,7 +250,7 @@ function accessories(entry, draw) {
       slab(cz - .8, cz - .1, roofY + .06, roofY + .38, '#5f6b3f', 2),
       slab(cz + .15, cz + .9, roofY + .06, roofY + .42, '#c9b48b', 5),
     ];
-    // The default car carries an empty rack: its kit changes with the scenery.
+    // The default car's kit follows the journey, so its card shows only the rack.
     case 'classic': return [rack(cz - .9, cz + .9)];
     case 'wagon': return [rack(cz - 1.1, cz + 1.1)];
     case 'pickup': return [

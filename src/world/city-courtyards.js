@@ -87,7 +87,6 @@ export function buildCourtyard(c, architecture, placement) {
   c.features.courtyard = plan;
   for (const walk of plan.walks) {
     c.recordPath(walk.points, walk.width);
-    // A light border gives the passage a finished edge without a raised curb.
     for (const panel of pathPanels(walk.points, walk.width + .5)) c.polygon(panel, G + .018, .02, '#c6c0ad');
     for (const panel of pathPanels(walk.points, walk.width)) c.polygon(panel, G + .033, .02, '#929e99');
   }
@@ -103,8 +102,7 @@ export function buildCourtyard(c, architecture, placement) {
       c.box(x, G + .04, s, 8.4, .08, 8.4, '#b8b8a9');
       c.box(x, G + .24, s, 7.4, .48, 4.4, '#c8bfaa', 'solid', yaw);
       c.box(x, G + .49, s, 6.9, .06, 3.9, '#809269', 'solid', yaw);
-      // Keep one compact tree centered in its bed; the surrounding planting
-      // supplies detail without adding another overlapping canopy.
+      // One tree per bed; a second canopy would overlap.
       c.tree(x, s, scale);
       const [bx, bs] = point(0, -side * 3.3);
       const benchYaw = yaw + side * Math.PI / 2;

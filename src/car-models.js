@@ -2,8 +2,8 @@ import * as THREE from 'three';
 import { vehicleGeometry, WHEEL } from './traffic-models.js';
 import { stableShadowDepth } from './world/shadow-depth.js';
 
-// Drive one of the road-car shapes. The bodywork is the same merged geometry
-// traffic uses, with the wheels left loose so they can steer and spin.
+// Player car from a traffic shape: the same merged bodywork, with the wheels
+// kept separate so they can steer and spin.
 export function createShapeCar(entry) {
   const { paint: paintGeometry, details: trimGeometry, headlights: frontGeometry, taillights: rearGeometry, wheels: placements } =
     vehicleGeometry(entry.shape, { separateWheels: true });
