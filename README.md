@@ -124,7 +124,7 @@ Run `npm run benchmark` or `npm run benchmark:cpu` for performance numbers. See 
 
 ## GitHub Pages
 
-In **Settings → Pages**, set **Source** to **GitHub Actions**. The workflow tests pull requests and deploys `main` to `citydriver.ajarvis.co`, served from the root. A fork served from `<user>.github.io/citydriver/` needs `--base=/citydriver/` added to the build step in `main.yml`.
+In **Settings → Pages**, set **Source** to **GitHub Actions**. The workflow tests pull requests and deploys `main` to `citydriver.jarvisar.com`, served from the root. A fork served from `<user>.github.io/citydriver/` needs `--base=/citydriver/` added to the build step in `main.yml`.
 
 Commit `package-lock.json` when dependencies change. If `npm ci` complains about missing lockfile entries, run:
 
