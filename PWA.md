@@ -15,7 +15,7 @@ npm run preview
 
 Open the preview URL and wait for the city to load before disconnecting. `npm run dev` doesn't register a service worker, so use the preview build for this.
 
-To test with the same base path as GitHub Pages:
+To test from a subfolder:
 
 ```sh
 npm run build -- --base=/citydriver/
